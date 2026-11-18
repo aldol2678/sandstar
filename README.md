@@ -8,7 +8,7 @@
 - 개발·릴리스 절차: [docs/OPERATIONS.md](docs/OPERATIONS.md)
 - 운영 소스 이관 체크리스트: [docs/SOURCE_IMPORT.md](docs/SOURCE_IMPORT.md)
 
-> **복구 상태 (2026-11-19):** PR #4 및 #5를 `main`에 병합하여 타이틀 브리지, 출처·해시가 기록된 QA 게임 소스 아카이브, 무결성 확인 스크립트를 보존했습니다. **게임 소스 아카이브는 Cloudflare 운영 Worker v20과 일치한다고 검증된 소스가 아닙니다.** GitHub 병합은 게임 배포나 운영 정본 채택과 별개입니다.
+> **복구 상태 (2026-11-19):** PR #4 및 #5를 `main`에 병합하여 타이틀 브리지, 출처·해시가 기록된 QA 게임 소스 아카이브, 무결성 확인 스크립트를 보존했습니다. **게임 소스 아카이브는 Cloudflare 운영 Worker v21과 일치한다고 검증된 소스가 아닙니다.** v20은 직전 배포 이력이며 v21은 2026-11-19 07:07 KST 새로 배포된 버전입니다. GitHub 병합은 게임 배포나 운영 정본 채택과 별개입니다.
 
 ## 개발 운영 원칙
 
@@ -26,6 +26,11 @@
 - `tools/verify-import.mjs`: 읽기 전용 무결성 검사, `--write` 시에만 QA HTML 재조립
 - `docs/SOURCE_PROVENANCE.md`: 원본 출처와 미검증 사항
 
+## 운영 응답 증거 (미검증 아카이브)
+
+- [운영 HTTP 스냅샷 분석](docs/LIVE_HTTP_V21_COMPARISON.md): 운영 v21 배포 확인 후 별도 채집한 HTML과 기존 QA 후보의 정적 비교 (Draft PR #7, `main` 미병합)
+- `recovered/live-http-20261119/`: 공개 사이트에서 관측한 HTML 11조각. **Wrangler 원본 소스가 아님**
+
 ## 다음 단계
 
-[운영 소스 이관](docs/SOURCE_IMPORT.md)에서 Worker v20 실소스 동등성 검증을 마친 뒤 게임 통합·QA 작업을 진행합니다. 라이선스 및 배포 권한이 확인되지 않은 음원·폰트·이미지 원본이나 인증정보는 업로드하지 않습니다.
+[운영 소스 이관](docs/SOURCE_IMPORT.md)에서 Worker v21 실소스 동등성 검증을 마친 뒤 게임 통합·QA 작업을 진행합니다. 라이선스 및 배포 권한이 확인되지 않은 음원·폰트·이미지 원본이나 인증정보는 업로드하지 않습니다.
