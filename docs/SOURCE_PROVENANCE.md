@@ -30,3 +30,11 @@
 참조: [게임 QA 원본](https://drive.google.com/file/d/13cA0OYYVChEwR8YaC5h8twJ4S2QHvXbr/view), [타이틀 브리지](https://drive.google.com/file/d/1NEkOq_42-e3wr1ZCfS_7Z7ort4aUrVeF/view), [배포 기록](https://drive.google.com/file/d/1htuBHGC5--VriwvAaqYj4W65JcLNgkS0/view).
 
 **2026-11-19 갱신:** GitHub PR #4·#5를 `main`에 병합하고 14개 분할 조각·타이틀 브리지·manifest·운영 문서의 경로 readback 확인. `main` HEAD `50239836d7bd879405fa22003cc021e44e0156a4`. 그러나 Cloudflare Worker v20 실소스/동등성 인증, CI, Cloudflare 재배포, 사용자 세이브 변경은 수행하지 않음. GitHub 보관본을 운영 정본으로 간주하지 않음.
+
+## 2026-11-19 추가 관측
+
+Cloudflare `sandstar`의 가장 최근 읽기 확인 배포는 **v21** (`032cf8b8-ed7b-4ce7-8228-bef1038331f7`, 100% 트래픽)로 업데이트됨. v20은 역사적 비교 대상으로 보존. 실제 v21 Wrangler 소스는 미확보. 공개 HTTP HTML을 Firecrawl `rawHtml`로 11개 blob (합계 12,019,476바이트) 보관한 작업은 [Draft PR #7](https://github.com/aldol2678/sandstar/pull/7)에서 추적. 이 응답은 별도 타이틀 브리지를 거쳐 변형됐을 수 있어 **운영 Worker v21과 동일하지 않음**. `/healthz`의 최신 응답, 실사용자 세이브 및 Android 검증은 이 수집만으로 확인하지 못함.
+
+### 최신성 추가 정정: v22
+
+2026-11-19 07:19:41 KST 새 배포를 별도 readback 확인: `sandstar` v22 (`949c7699-9455-4617-a585-c9c55105ab06`), deployment `29144a6c-373e-4763-8a85-237c2305a873` 당시 100%. Draft PR #7의 HTML은 **v21 배포 시점 관측**이며 정확한 immutable Worker 매핑이 확인되지 않았고, v22 운영 원본이 아님. v22 Wrangler 업로드 소스 미확보.

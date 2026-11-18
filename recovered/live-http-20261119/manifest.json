@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "captured_at_date": "2026-11-19",
+  "classification": "Public HTTP HTML snapshot from Firecrawl; NOT Cloudflare Worker source",
+  "source_url": "https://sandstar.aldol.app/?source-audit=snapshot-20261119",
+  "capture_format": "rawHtml",
+  "scraper_maxAge": 0,
+  "html_characters": 11995033,
+  "files": [
+    {
+      "path": "recovered/live-http-20261119/parts/part-01.txt",
+      "characters": 1100000,
+      "git_blob_sha": "e9da99d51e84552ac83f52159eb73b0dfd1888b5"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-02.txt",
+      "characters": 1100000,
+      "git_blob_sha": "6581652882b5d584b528c769e30a05bcc0a305bb"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-03.txt",
+      "characters": 1100000,
+      "git_blob_sha": "f1493f0c74b28365e656c779697806fe1f5d1a88"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-04.txt",
+      "characters": 1100000,
+      "git_blob_sha": "6870bce64188727075bfcbe58e432e0ce497186b"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-05.txt",
+      "characters": 1100000,
+      "git_blob_sha": "81049818b85a9c1a6e712fb710a14779687f1648"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-06.txt",
+      "characters": 1100000,
+      "git_blob_sha": "271eff32403037f37e376528e84a463937aa8b49"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-07.txt",
+      "characters": 1100000,
+      "git_blob_sha": "76b96119b7e93c586360411d587fc1a76c4f9eef"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-08.txt",
+      "characters": 1100000,
+      "git_blob_sha": "341298cc23f73ae275579738ef6b69e9ba36fa4a"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-09.txt",
+      "characters": 1100000,
+      "git_blob_sha": "7893ea2ea3e56089488491935f93d540d743d675"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-10.txt",
+      "characters": 1100000,
+      "git_blob_sha": "6e3efdcef86f7196025d8e5f8d7548a6b82414a2"
+    },
+    {
+      "path": "recovered/live-http-20261119/parts/part-11.txt",
+      "characters": 995033,
+      "git_blob_sha": "abc502436baf3b3f0af1de869b2c633e68bc125c"
+    }
+  ],
+  "cloudflare_version_context": {
+    "worker": "sandstar",
+    "version_number": 21,
+    "version_id": "032cf8b8-ed7b-4ce7-8228-bef1038331f7",
+    "source": "wrangler"
+  },
+  "markers": {
+    "ssTitleArt": true,
+    "ssContinue": true,
+    "ssNew": true,
+    "ssSettings": true,
+    "ssM1Act": true,
+    "sandstar-p1-world-v1:official-m25d": false,
+    "M25D-UI1-20261118": false
+  },
+  "disclaimers": [
+    "Snapshot of publicly served HTML after route/HTMLRewriter. Not raw Worker source.",
+    "Source file vs Worker v21 and any static assets remain unverified.",
+    "No Cloudflare deployment or CI was run."
+  ],
+  "html_utf8_bytes": 12019476,
+  "notes": [
+    "GitHub tree readback: 11 archived HTML part blobs totaling 12,019,476 bytes.",
+    "Cloudflare API script content endpoints did not provide raw Wrangler source, so archive remains observed public HTTP HTML only.",
+    "An independent live HTTP fetch measured 11,998,630 bytes, which differs from scraper rawHtml; do not claim raw HTTP byte equivalence."
+  ]
+}
