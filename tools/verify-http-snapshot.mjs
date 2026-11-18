@@ -14,7 +14,7 @@ function checkParts(parts) {
   const buffers = [];
   for (const part of parts) {
     const bytes = readFileSync(resolve(root, part.path));
-    const gitObject = Buffer.concat([Buffer.from('blob ' + bytes.length + '\\0'), bytes]);
+    const gitObject = Buffer.concat([Buffer.from('blob ' + bytes.length + '\0'), bytes]);
     if (hash(gitObject, 'sha1') !== part.git_blob_sha) {
       throw new Error('Git blob hash mismatch: ' + part.path);
     }
