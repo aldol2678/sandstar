@@ -4,7 +4,7 @@
 
 ## 직접 확인한 사실
 
-- 비공개 GitHub: `aldol2678/sandstar`. 이 브랜치를 만들기 전 `main`에는 최초 `README.md`만 존재했으며 게임 소스, 기존 Issue, PR이 없었음.
+- 비공개 GitHub: `aldol2678/sandstar`. 최초 `main`은 README만 존재했으나, **2026-11-19 PR #4(운영 문서)와 PR #5(소스 아카이브)를 squash 병합**하고 `main` 파일 readback 확인. 당시 HEAD `50239836d7bd879405fa22003cc021e44e0156a4`, 검수 대상 14조각·타이틀 브리지·source-manifest·verify-import 도구가 존재함. **이는 운영본 소스 동등성 검증을 의미하지 않음.**
 - Cloudflare 본게임 Worker: `sandstar`. 2026-11-19 00:54:26 KST에 배포된 Worker **버전 20**, version ID `6ff911f0-e9ae-450d-90f9-bd3d8ec59213`, deployment ID `f48a0478-2ef4-4025-88e0-448e93d71c87`, 당시 100% 트래픽.
 - 타이틀 삽입용 별도 Worker: `sandstar-title-bridge`. 기존 배포의 version ID `7726327c-7759-4066-961a-6bc691730e43`. 이 Worker의 HTMLRewriter 타이틀 주입과 본게임 Worker는 별도 자산.
 - 2026-11-19 00:41 KST경 라이브 `/healthz`는 `status=ok`, `build=M25D-UI1-20261118`을 반환했음. **Worker 버전 20의 내부 게임 패치 내용이나 소스 동등성을 이 응답만으로 확정할 수 없음.**
