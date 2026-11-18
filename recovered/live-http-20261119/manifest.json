@@ -82,5 +82,11 @@
     "Snapshot of publicly served HTML after route/HTMLRewriter. Not raw Worker source.",
     "Source file vs Worker v21 and any static assets remain unverified.",
     "No Cloudflare deployment or CI was run."
+  ],
+  "html_utf8_bytes": 12019476,
+  "notes": [
+    "GitHub tree readback: 11 archived HTML part blobs totaling 12,019,476 bytes.",
+    "Cloudflare API script content endpoints did not provide raw Wrangler source, so archive remains observed public HTTP HTML only.",
+    "An independent live HTTP fetch measured 11,998,630 bytes, which differs from scraper rawHtml; do not claim raw HTTP byte equivalence."
   ]
 }
