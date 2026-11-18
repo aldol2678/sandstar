@@ -29,4 +29,4 @@
 
 참조: [게임 QA 원본](https://drive.google.com/file/d/13cA0OYYVChEwR8YaC5h8twJ4S2QHvXbr/view), [타이틀 브리지](https://drive.google.com/file/d/1NEkOq_42-e3wr1ZCfS_7Z7ort4aUrVeF/view), [배포 기록](https://drive.google.com/file/d/1htuBHGC5--VriwvAaqYj4W65JcLNgkS0/view).
 
-GitHub main 병합·CI 실행·Cloudflare 재배포·사용자 저장 데이터 변경은 수행하지 않음.
+**2026-11-19 갱신:** GitHub PR #4·#5를 `main`에 병합하고 14개 분할 조각·타이틀 브리지·manifest·운영 문서의 경로 readback 확인. `main` HEAD `50239836d7bd879405fa22003cc021e44e0156a4`. 그러나 Cloudflare Worker v20 실소스/동등성 인증, CI, Cloudflare 재배포, 사용자 세이브 변경은 수행하지 않음. GitHub 보관본을 운영 정본으로 간주하지 않음.
