@@ -1,0 +1,13 @@
+{
+  "worker": "sandstar-title-bridge",
+  "route": "sandstar.aldol.app/",
+  "script_bytes": 659846,
+  "script_sha256": "264797d9303ce719d39f994beffa50b924472d59c167034ea4f118e609aec369",
+  "base_sha256": "a4390853678d44349ae0b24ada7f4455e5590d97826a74dc0a329515812226c1",
+  "art_bytes": {
+    "pc": 155252,
+    "mobile_landscape": 174186,
+    "mobile_portrait": 159472
+  },
+  "release_marker": "20261118-p0"
+}
