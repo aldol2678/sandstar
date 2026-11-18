@@ -1,0 +1,2079 @@
+DQJm4ghFY7JMDIQQKMHCTAyIn2ZtCQ+enXv9WveELprePgPn++LV4F9TkxAQAAAAAAAAAAAAAAAAAAAABd6d3bhdxPE1n49LImvfxAyMnxUe1j2T4PiTY92pWdv79LtOTJq8EmSesEgPKGiVcFiKG8tvjY40JDBNI2ezkFxKCu7GuIQNKmdwJoKA/IMdgK8GjxpnH/l9m74HNriEDKJp4LGDnsFUBSeT7EstN3ejkFcFxFSKIhglCb7Akgrby29w8m01m2tXFNRETzyzXcd6jBKwGsK88KGtNPqE2RHroWlJf3g8sX3AjqEct0kcxLScBxzjbHcYpA2qboZeDWxvWoGkL2EfYEWKaLZH65xn3a3qIhAh+buBEkgIYIQm2OJgEwHVUz6ATAdLQa8QSA8u6Tnb/P3Kbti0gCQHlFLC8EBz0FaNKXheBgbwRVsbVxTXPFr6xxWPqQ6eArAKajZqIkgJWFIBLhPmIJYE157v64Vvm3uhCMUgG0E0Fr4PuwEBRfBOLDGDdoiEBbeIBu3qaNXfo1bAIAAAAAAAAAAMA+XwGRWgaMOHyWlAAAAABJRU5ErkJggg==';
+const ANIM_FALLBACK='idle';
+let animName='idle',animClock=0,landClock=0,animWasGrounded=null;
+function resetSpriteAnimation(){animName='idle';animClock=0;landClock=0;animWasGrounded=null;}
+function updateSpriteAnimation(dt){
+ if(!p||paused)return;
+ const grounded=Boolean(p.grounded);
+ if(animWasGrounded===false&&grounded&&!rope.active)landClock=.235;
+ animWasGrounded=grounded;
+ if(!grounded)landClock=0;
+ else landClock=Math.max(0,landClock-dt);
+ let desired='idle';
+ if(rope.active)desired='rope_climb';
+ else if(!grounded&&airLeapControl&&p.vy<3.5)desired='rope_leap';
+ else if(!grounded&&p.vy<-.45)desired='jump';
+ else if(!grounded&&p.vy>.45)desired='fall';
+ else if(landClock>0)desired='land';
+ else if(Math.abs(p.vx)>.48)desired='walk';
+ if(desired!==animName){animName=desired;animClock=0;}
+ else animClock+=dt;
+}
+function currentMinerFrame(){
+ const clip=MINER_SPRITE_INFO.animations[animName]||MINER_SPRITE_INFO.animations[ANIM_FALLBACK];
+ const frames=clip.frames;
+ const duration=Math.max(.02,clip.frame_duration_ms/1000);
+ const position=rope.active&&rope.attached&&animName==='rope_climb'?0:Math.floor(animClock/duration);
+ return frames[clip.loop?position%frames.length:Math.min(frames.length-1,position)];
+}
+function currentMiningDirection(){
+ if(stickActive&&stickDir)return [stickDir.dx,stickDir.dy];
+ if(holdTarget){let dx=holdTarget.x+.5-p.x,dy=holdTarget.y+.5-(p.y-PLAYER_CENTER_FROM_FEET);return [Math.sign(dx),Math.sign(dy)];}
+ return [p.facing||1,0];
+}
+function isMiningAnimationActive(){return (stickActive||Boolean(holdTarget)||input.act)&&Boolean(miningTarget())&&!rope.active;}
+function minerVisualFacing(){
+ if(!isMiningAnimationActive())return p.facing||1;
+ const dx=currentMiningDirection()[0];return dx===0?(p.facing||1):Math.sign(dx);
+}
+function drawEquipmentOverlay(x,foot){
+ if(!isMiningAnimationActive() || (!minerToolsReady && !forgeAppearanceReady))return;
+ const toolId=Object.prototype.hasOwnProperty.call(MINER_TOOL_INFO.tools,game.tool)?game.tool:'pickaxe';
+ const tool=MINER_TOOL_INFO.tools[toolId];
+ const index=Math.floor(performance.now()/tool.frame_duration_ms)%tool.frames;
+ const vec=currentMiningDirection();
+ const dx=vec[0],dy=vec[1];
+ const facing=minerVisualFacing();
+ const a=Math.atan2(dy,Math.abs(dx)||.05);
+ // Mirror the tool toward the target side, then rotate toward the selected upward/downward axis.
+ ctx.save();
+ ctx.translate(x+(dx||facing)*T*.27,foot-T*.58+dy*T*.13);
+ ctx.rotate(a*facing);
+ ctx.scale(facing,1);
+ ctx.imageSmoothingEnabled=false;
+ const useForgeArt=toolId==='pickaxe'&&forgeAppearanceReady;
+ const toolAtlas=useForgeArt?forgeAppearanceImage:minerToolImage;
+ const toolRow=useForgeArt?forgeAppearanceTier(game.pickaxeForge?.rank||0):tool.row;
+ if((useForgeArt||minerToolsReady)) ctx.drawImage(toolAtlas,index*32,toolRow*40,32,40,-T*.4,-T*.64,T*.8,T);
+ ctx.restore();
+}
+function drawPlayer(){
+ if(!minerSpriteReady){
+  const px=Math.round(p.x*T-camera.x),feet=Math.round(p.y*T-camera.y);
+  ctx.save();ctx.translate(px,feet);ctx.scale(PLAYER_DRAW_SIZE/42,PLAYER_DRAW_SIZE/42);ctx.translate(-px,-feet);
+  drawPlayerLegacy();ctx.restore();return;
+ }
+ const x=Math.round(p.x*T-camera.x), foot=Math.round(p.y*T-camera.y);
+ const index=currentMinerFrame(), fw=MINER_SPRITE_INFO.frame_width, fh=MINER_SPRITE_INFO.frame_height, cols=MINER_SPRITE_INFO.columns;
+ // A sprite frame's pivot is centered on the player collision footprint.
+ ctx.save();
+ ctx.translate(x,foot);
+ ctx.scale(minerVisualFacing()<0?-1:1,1);
+ ctx.imageSmoothingEnabled=false;
+ // Grounded, dark single-pixel contour improves legibility on pale and dark rock alike.
+ // It does not scale the sprite beyond its one-tile footprint.
+ ctx.shadowColor='#091d28';ctx.shadowBlur=0;ctx.shadowOffsetX=1;ctx.shadowOffsetY=1;
+ ctx.drawImage(minerSpriteImage,(index%cols)*fw,Math.floor(index/cols)*fh,fw,fh,-PLAYER_DRAW_SIZE/2,-PLAYER_DRAW_SIZE,PLAYER_DRAW_SIZE,PLAYER_DRAW_SIZE);
+ ctx.shadowOffsetX=0;ctx.shadowOffsetY=0;
+ ctx.restore();
+ // Stowed pickaxe remains visible on the right side when not actively mining.
+ // Purely visual: no collision, movement, reach or miningRate changes.
+ if(game.tool==='pickaxe'&&forgeAppearanceReady&&!isMiningAnimationActive()){
+  const tier=forgeAppearanceTier(game.pickaxeForge?.rank||0);
+  ctx.save();ctx.translate(x,foot);ctx.scale(minerVisualFacing()<0?-1:1,1);ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(forgeAppearanceImage,0,tier*40,32,40,-5,-35,30,37);ctx.restore();
+ }
+ drawEquipmentOverlay(x,foot);
+ if(isMiningAnimationActive()){
+  const dir=currentMiningDirection(),a=performance.now()/110;
+  const fx=Math.round(x+dir[0]*T*.43),fy=Math.round(foot-T*.55+dir[1]*T*.36);
+  ctx.save();ctx.globalAlpha=.65+.25*(.5+.5*Math.sin(a));ctx.fillStyle='#fff0a8';
+  ctx.fillRect(fx-1,fy-3,2,6);ctx.fillRect(fx-3,fy-1,6,2);ctx.restore();
+ }
+}
+
+// 2.15-C: scan glows ONLY existing ore tiles within radius; never increases mining reach.
+function drawAffinityRadar(){if(ssRegion==='life_forest_01')return;
+ const radius=pickaxeScanRadius();if(!radius)return;
+ const px=p.x,py=p.y-PLAYER_CENTER_FROM_FEET;
+ const phase=.55+.30*Math.sin(performance.now()/390);
+ ctx.save();ctx.strokeStyle='#d3b9ff';ctx.fillStyle='#f1deff';ctx.lineWidth=1.4;
+ for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+  const x=Math.floor(px)+dx,y=Math.floor(py)+dy;
+  if(Math.hypot(x+.5-px,y+.5-py)>radius+1e-9)continue;
+  if(!visionVisible(x,y)||!ORES.has(tile(x,y)))continue;
+  const sx=Math.round(x*T-camera.x),sy=Math.round(y*T-camera.y);
+  if(sx<-T||sy<-T||sx>viewW||sy>viewH)continue;
+  ctx.globalAlpha=phase;ctx.strokeRect(sx+2,sy+2,T-4,T-4);
+  ctx.fillRect(sx+T/2-1,sy+3,2,5);ctx.fillRect(sx+T/2-3,sy+5,6,2);
+ }
+ ctx.restore();
+}
+
+// SANDSTAR 2.18-H3 RopeArt-P1: five original DURI sprites, rope tile from P1 seam-verified pack.
+// Art only: rope firing, raycasting, swing physics, mining HUD, mobility and save schema are untouched.
+const DURI_ROPE_ASSET_URLS=Object.freeze({
+ "normal":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABOElEQVR4nJXOT0vCcBzH8c9+++Wczsk0ZsPSQAmK8FBg7RFEp55Ct85Bl27dOtRj6FzQE+gUBNE/CsogpSBQzDItnC6Zm1uPYIfv9/p58+ILhFwpLTin26XgeCsXpCLiXljHwgY9FUXeUPDaHKA/Eg/COh42rJczvN21UW9ZcAGH/EEhE2E3Tw0kYhEoYrBCBqoN2//o2JjLq1AlHJKBs7u2V8ylYWgyggACGfiyxlgtTcMZM/QdtkMGzHmNxWSOh5cWbF+4JgNrS5P8ufaJrjUCRxAnA67r4bbSRHEmCU3yd8nA+WPHSyZkFAwFUY5NMnBV7fnLi1lwzvDn4YgM6FoUhayKWr2HX0fYJwMb5hRv/wzx1rAwhjAkA7O6xC7u36HEJ6CKMMnAZeXb7w1clBd0JCX/JKz7B/lhZdNpab4TAAAAAElFTkSuQmCC",
+ "wire":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABXUlEQVR4nGNgwAH+Pc7///Fhx//+eJm/pU68+3CpY8ElcenCa4aLW1czGMgzMnEzczsyMHzGqo4JlwG/H59n8EtyZJDWU/u36+S7S7jU4TTAOMCL4T2zOsPyhWcZTNV5fuNSh9MLk+tWMTAz/2LQ0ORhenzvuzHJBryQiGLg5hFk+MjM/ufa8abFuNTh9IKmqhqDg70Dw4O7t1iUBH4nkuyCmzdvMGzeupPh67dvDJz/eH4wMHwhzYCffxkZ3H18GH78+P3n5Ly963Gpw+kFA20VBgFeLobVy5cxqUiwauNSh9sLB2YxcPGxMYQ4KzP9vM6hx8DwiTQX1LS6Mbg6GTK8P77uH9u/v09xqcNpwIn1+xge7lvJEBemwPTm8z9pkg1QlGRgCKpIZzj/mOXfncffd5BsgKCJDcPeTTcY7py6weRizOdCsgHHl+5gYHpzjiEm3oDh1I1vv3CpAwCxQHO6NMsDHAAAAABJRU5ErkJggg==",
+ "anchor":"data:image/png;base64,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",
+ "hook":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFbElEQVR4nO2WWUxUVxjH/+femcswMyzCILLYSFAbKbIrttKaVAQrtQREEWSLbVPTxKRPfbDV1rSxBUVsjLRxa7XusriAcQOVTVMVI4SlaNhcwAmrMjN37tx7Tx/otBMUcAi8NP0n9+mc7/x/33fOd84F/tcExbAsACB0fujHO3N3Sps2fUX9/fw3AAAhZGrNrQZhIWFrbtfepderKmhySsp9jVqjnVpnG/OQgJA19+rr6JGTJ8wBAQEPAaim3hzD5ixhNfsP/EovXys3LI2OllydXaNt4ewRM4HZJGZZzJaFi98W6uob1IODg88GXwyWE0JAKbUbQDHW4MiMqEzBEOKyNmvdl1cuXxK7nnbDSev0SmPb2LHARq2ANSPbDwA4zkFsrG/kjx7+nffymgGKVy9uGzfW1owKQCkFp1T6qtWOfhqNZhbDMAQALBbL0O7cXT6QcdjT2xtDBoMwMpZlWUaj0czSaNR+CpadaVcFrLSREZEJZ0rOPdqel9eakp7e5u3lmwQAFBRGwdjHcdyAUqmERRBEYLgM1tjZ/nM2fvr5hrZtOdmt50tLOyMXLkqyHR+7AhRYErVkbcHZwiKFSt1zp7bWWHD0xFa9vrvQugAhBBSywmQyQafTuWscNT62CXR0dOQf2ntwc1NTk1Hl4tJz9OSx01FR76a8qhIvAXi46cK3bf/hePXNW/yRQ7/pli2L4T5MiJ8vWAQFpRQgw9tj4nlGp9NhXmCgq1KpjPoHjFLwZpOcsCph9uqkNdze/HxdRVUV/2NO9jFXF9fwcQEy12cVM0pOyMvNlcsuXNpRUnxGkZqRlpicuu4WALUsyQAAWZQsZrMAUZIgSVI/AMiyDAAOGRmZZcnpaZn5e/Yorl28smN33i4RDCNkrV9fPNLvpTZ0dnH2LL9axt2/ey+GF/gbxQUF+3p7e+8mp6eFWsyWuqLCU1EAzFonp3hCCDRaLVxcnTcaDEM3ZVB18trUstiPVgZkf7+Nr6msiuQFvq6/v//8hdLSG27u0zzHBWhuaeHaOzrKeIGvZBgGJjPfUlF+PVSmclNqVqZ/YlJCV1FhIZ7puyFJIhxVKqjUDnHxqxIHYz9YAVd3N+zbk4/qispws8XcSAiBIApV166Wlb3hN2vp+AD1jXld+u5TAGRrD5sE08Oa65XzVJzDn1u+2yrGLI+VHz9+wh06sJ+RJQnL41bKPr4zhTlvzmXysnO4msqqEKs5AFBQubOt42vjkLFupN9rXd7Ww+Wscpr7VmhQg6NWpVidkiabTEZGkmRIkiiXnC1meAMvNNc3hQ3xLxomejWPKzXn6O01w7Nh8XtR9HhhkfTTzz9LCxYtoJ4e0++plI46e9cb8y0YKUIIjILpqaVHjNBNf36/panRr729HV2Pnzb39vZFirL40q04qQDDZwKwiBaTeaCrq/Nm0ZyefgNgNnWKsigQYJSXYXTZ9xxbgxgCFSMpPJyUcFLKYCGxDJnQUvZVAAAoHa6EaJFZKgGEsJBkUSFTeUIAdmH/3VYk+v3Yb+aGBAcPUINoZs1icGjY4qDAkM9s5kw+gLWtfL18g5I/SflW6TBDof/DTWF84KnQ+Hhzq1JX/6JVO00fbr3Xh3htAGtPx8XH5Qh9JjGxJB5F+qs4rb+CkOJgwcNbJ0RGLPwCGD4jkw5g1ZDJ4Nyn72PChRCAKKGmWsQ+X4pHTzoYwSJobWEnFcC6t021jcdYb445HlQgNpsaUWu+g4qEarhP0ylaW9vO2ZmPHZv1r5Tx8Ym1kUvfCRx6NCAKkgDvgJmKwoMnLlbXVK8AGfU3cdIAwIJ1DouIyAsMn59h5s24XX1754OHzZsJIcKU3P//af0FE7p+yTxuuSQAAAAASUVORK5CYII=",
+ "coil":"data:image/png;base64,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"
+});
+const duriRopeArtImages=Object.fromEntries(Object.entries(DURI_ROPE_ASSET_URLS).map(([key,src])=>{const img=new Image();img.src=src;return [key,img]}));
+const DURI_ROPE_SKIN_KEY='sandstar-rope-art-skin-v1';
+let duriRopeSkin='normal';
+try{if(localStorage.getItem(DURI_ROPE_SKIN_KEY)==='wire')duriRopeSkin='wire'}catch(_){}
+function duriArtReady(name){const im=duriRopeArtImages[name];return !!(im&&im.complete&&im.naturalWidth>0)}
+function duriDrawRopeSprite(name,cx,cy,size,angle=0){
+ if(!duriArtReady(name))return false;
+ const im=duriRopeArtImages[name];
+ ctx.save();ctx.imageSmoothingEnabled=false;
+ ctx.translate(Math.round(cx),Math.round(cy));ctx.rotate(angle);
+ ctx.drawImage(im,-size/2,-size/2,size,size);ctx.restore();return true;
+}
+function duriDrawCable(ax,ay,bx,by){
+ const name=duriRopeSkin==='wire'?'wire':'normal';
+ if(!duriArtReady(name))return false;
+ const im=duriRopeArtImages[name],dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy);
+ if(!Number.isFinite(len)||len<2)return false;
+ const tile=T,angle=Math.atan2(dy,dx)-Math.PI/2;
+ ctx.save();ctx.translate(ax,ay);ctx.rotate(angle);ctx.imageSmoothingEnabled=false;
+ // Segment in world pixels, independent of frame timing; avoid slicing over zero-sized remnants.
+ for(let at=0;at<len;at+=tile){
+  const h=Math.min(tile,len-at),sourceH=Math.min(16,16*h/tile);
+  ctx.drawImage(im,0,0,16,sourceH,-tile/2,at,tile,h);
+ }
+ ctx.restore();return true;
+}
+function duriSetRopeSkin(skin){
+ if(skin!=='normal'&&skin!=='wire')return false;
+ duriRopeSkin=skin;try{localStorage.setItem(DURI_ROPE_SKIN_KEY,skin)}catch(_){}
+ return true;
+}
+window.__sandstarDuriRopeArt={ready:()=>Object.fromEntries(Object.keys(DURI_ROPE_ASSET_URLS).map(n=>[n,duriArtReady(n)])),getSkin:()=>duriRopeSkin,setSkin:duriSetRopeSkin,source:'DURI P0 alpha-corrected originals + P1 16px seam-verified cable',hasVisualOnly:true};
+
+function drawRope(){
+ // 2.18-H1: preview includes vertical aim, and active transfer previews.
+ if(ropePointerAim&&(ropePointerAim.gesture==='aim'||ropePointerAim.gesture==='transfer')){
+  const direction=ropePointerAim.direction;
+  const a=ropePreviewAnchor;
+  const usable=ropeGestureTargetValid(direction,a);
+  const originX=p.x*T-camera.x,originY=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+  const vec=ROPE_FIRE_DIRECTIONS[direction]||ROPE_FIRE_DIRECTIONS.up;
+  const tx=(a?a.faceX:p.x+vec[0]*9)*T-camera.x,ty=(a?a.faceY:p.y-PLAYER_CENTER_FROM_FEET+vec[1]*9)*T-camera.y;
+  ctx.save();ctx.lineWidth=2.6;ctx.strokeStyle=usable?'#b9f4d1':'#f2a68d';ctx.globalAlpha=.94;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(originX,originY);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);
+  if(!usable||!duriDrawRopeSprite('hook',tx,ty,20)){ctx.fillStyle=usable?'#b9f4d1':'#f2a68d';ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.fill();}
+  ctx.strokeStyle='#173846';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tx-3,ty);ctx.lineTo(tx+3,ty);if(!usable){ctx.moveTo(tx,ty-3);ctx.lineTo(tx,ty+3);}ctx.stroke();ctx.restore();
+ }
+ else if(!rope.active&&ropeCandidate&&ropeGrabCooldown<=0){
+  const a=ropeCandidate,x=Math.round(a.faceX*T-camera.x),y=Math.round(a.faceY*T-camera.y);
+  const px=Math.round(p.x*T-camera.x),py=Math.round((p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y);
+  ctx.save();ctx.strokeStyle='#b9f4d1';ctx.globalAlpha=.72;ctx.lineWidth=1.5;
+  ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);ctx.stroke();ctx.setLineDash([]);
+  if(!duriDrawRopeSprite('anchor',x,y,18)){ctx.fillStyle='#173a3cdd';ctx.fillRect(x-6,y-6,12,12);
+  ctx.strokeStyle='#e5ffd2';ctx.strokeRect(x-6,y-6,12,12);
+  ctx.fillStyle='#b9f4d1';ctx.fillRect(x-2,y-2,4,4);}ctx.restore();
+ }
+ if(rope.active&&rope.attached&&ropeAim!==0&&remainingRopeLeaps()>0){
+  // The arc is an approximate directional aim hint, not a collision prediction.
+  const x0=p.x*T-camera.x,y0=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+  const vx=ropeAim*4.65,vy=-mobilityDerived().ropeLeapImpulse;
+  ctx.save();ctx.fillStyle='#ddf9bd';ctx.globalAlpha=.77;
+  for(let t=.13;t<.75;t+=.12){const xx=x0+vx*t*T, yy=y0+(vy*t+11.5*t*t)*T;
+   ctx.fillRect(Math.round(xx)-2,Math.round(yy)-2,4,4)}ctx.restore();
+ }
+ if(ropeSnap&&ropeSnap.life>0){
+  const f=1-ropeSnap.life/ropeSnap.maxLife;
+  const x1=ropeSnap.ax*T-camera.x,y1=ropeSnap.ay*T-camera.y;
+  const x2=ropeSnap.bx*T-camera.x,y2=ropeSnap.by*T-camera.y;
+  const midX=(x1+x2)/2,midY=(y1+y2)/2;
+  ctx.save();ctx.strokeStyle='#f6df9c';ctx.lineWidth=3;
+  ctx.globalAlpha=Math.min(1,ropeSnap.life/.16);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(midX-7*f,midY-11*f);ctx.moveTo(midX+7*f,midY+11*f);ctx.lineTo(x2+12*f,y2+18*f);ctx.stroke();ctx.restore();
+ }
+ if(!rope.active||!rope.anchor)return;let a=rope.anchor;
+ let x=a.faceX*T-camera.x,y=a.faceY*T-camera.y,px=p.x*T-camera.x,py=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+ ctx.save();
+ if(!duriDrawCable(x,y,px,py)){
+  // Safe fallback if data URI image decoding is disabled on a browser.
+  ctx.lineWidth=4;ctx.strokeStyle='#253b47';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(px,py);ctx.stroke();
+  ctx.lineWidth=2;ctx.strokeStyle='#f3de9e';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(px,py);ctx.stroke();
+ }
+ if(!duriDrawRopeSprite('anchor',x,y,24)){
+  ctx.fillStyle='#d7e8de';ctx.fillRect(Math.round(x-4),Math.round(y-4),8,8);
+  ctx.fillStyle='#f4cf8f';ctx.fillRect(Math.round(x-2),Math.round(y-2),4,4);
+ }
+ const rlen=Math.hypot(px-x,py-y);
+ if(rlen>18)duriDrawRopeSprite('hook',x+(px-x)/rlen*14,y+(py-y)/rlen*14,14,Math.atan2(py-y,px-x)+Math.PI/2);
+ ctx.restore();}
+function drawParticles(dt){for(let i=particles.length-1;i>=0;i--){let o=particles[i];o.x+=o.vx*dt;o.y+=o.vy*dt;o.vy+=160*dt;o.life-=dt;if(o.life<=0){particles.splice(i,1);continue}ctx.globalAlpha=Math.min(1,o.life*2);ctx.fillStyle=o.color;ctx.fillRect(Math.round(o.x-camera.x),Math.round(o.y-camera.y),5,5)}ctx.globalAlpha=1}
+// Reach guide reflects the same SP-upgraded radius used by mining collision checks.
+// Only visible while the player is actively aiming/mining or briefly after an interaction.
+function drawMineReach(){
+ if(!(stickActive||input.act||holdTarget||rangeHintTime>0))return;
+ const cx=Math.round(p.x*T-camera.x),cy=Math.round((p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y);
+ const a=(stickActive||input.act||holdTarget)?0.65:Math.min(.65,rangeHintTime/.65*.55);
+ ctx.save();ctx.globalAlpha=a;
+ ctx.strokeStyle='#e5f7d4';ctx.lineWidth=1.5;ctx.setLineDash([3,5]);ctx.beginPath();ctx.arc(cx,cy,effectiveMineReach()*T,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+ // Markers move as the character's mine-reach stat increases.
+ ctx.fillStyle='#f9de91';for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])ctx.fillRect(Math.round(cx+dx*effectiveMineReach()*T)-2,Math.round(cy+dy*effectiveMineReach()*T)-2,4,4);
+ ctx.restore();
+}
+function drawCornerTarget(sx,sy,color){
+ const margin=2,corner=6,l=sx+margin,t=sy+margin,r=sx+T-margin,b=sy+T-margin;
+ ctx.save();ctx.strokeStyle='#142732';ctx.lineWidth=4;ctx.beginPath();
+ ctx.moveTo(l+corner,t);ctx.lineTo(l,t);ctx.lineTo(l,t+corner);ctx.moveTo(r-corner,t);ctx.lineTo(r,t);ctx.lineTo(r,t+corner);
+ ctx.moveTo(l,b-corner);ctx.lineTo(l,b);ctx.lineTo(l+corner,b);ctx.moveTo(r-corner,b);ctx.lineTo(r,b);ctx.lineTo(r,b-corner);ctx.stroke();
+ ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.restore();
+}
+function drawHighlight(){
+ const t=miningTarget()||hover;
+ if(t&&canReach(t.x,t.y)&&tile(t.x,t.y)){
+  const sx=Math.round(t.x*T-camera.x),sy=Math.round(t.y*T-camera.y);
+  drawCornerTarget(sx,sy,'#fff0a8');
+  if(holdLast===key(t.x,t.y)&&holdProgress>0){
+   const progress=Math.min(1,holdProgress/tileHP(tile(t.x,t.y))),crack=Math.min(4,Math.floor(progress*5));
+   // Inside the target tile so the indicator never covers another tile.
+   ctx.fillStyle='#102638';ctx.fillRect(sx+3,sy+3,T-6,4);
+   ctx.fillStyle=progress>.75?'#ffe49d':'#b3f2d5';ctx.fillRect(sx+3,sy+3,Math.round((T-6)*progress),4);
+   ctx.strokeStyle='#fff4cb';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sx+T/2,sy+8);ctx.lineTo(sx+T/2+crack*2,sy+12+crack);
+   ctx.lineTo(sx+T/2-2-crack,sy+14+crack*1.2);ctx.stroke();
+  }
+ }
+ if(invalidReach&&invalidReach.life>0){
+  const sx=Math.round(invalidReach.x*T-camera.x),sy=Math.round(invalidReach.y*T-camera.y);
+  ctx.save();ctx.globalAlpha=Math.min(1,invalidReach.life/.25);drawCornerTarget(sx,sy,'#ff9c8f');ctx.restore();
+ }
+}
+function drawMiningImpact(){
+ // Brief pixel-star impact feedback; no new physics, collision or extra reach.
+ for(const [f,broken] of [[miningHitFX,false],[miningBreakFX,true]]){
+  if(!f||f.life<=0)continue;
+  const t=1-f.life/f.maxLife,cx=Math.round((f.x+.5)*T-camera.x),cy=Math.round((f.y+.5)*T-camera.y);
+  const radius=broken?Math.round(4+10*t):Math.round(2+4*t);
+  ctx.save();ctx.globalAlpha=(1-t)*(broken?.95:.7);ctx.fillStyle=broken?'#fff3b6':'#effff2';
+  for(const [x,y] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   ctx.fillRect(cx+x*radius-2,cy+y*radius-2,4,4);
+   if(broken)ctx.fillRect(cx+x*(radius+4)-1,cy+y*(radius+4)-1,2,2);
+  }
+  ctx.restore();
+ }
+}
+
+// 2.18-C drawTime replaced by per-tile three-state visibility mask.
+function drawFloatTexts(){ctx.save();ctx.font='bold 12px system-ui';ctx.textAlign='center';for(const o of floatTexts){ctx.globalAlpha=Math.min(1,o.life*1.4);let x=o.x-camera.x,y=o.y-camera.y;ctx.lineWidth=3;ctx.strokeStyle='#183044';ctx.strokeText(o.v,x,y);ctx.fillStyle=o.color;ctx.fillText(o.v,x,y)}ctx.restore()}
+function draw(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;ctx.save();if(shake>.05){ctx.translate((Math.sin(frame*2.2)*shake)|0,(Math.cos(frame*1.9)*shake)|0)}drawSky();drawWorld();drawLivingWorld();ssM17DrawObjectMarker();ssM1DrawWorldMarkers();ssM16DrawPortalPrompt();farmWorldDrawForestPortal();archWorldDrawForestPortal();ssM1DrawStoryNPCs();drawAffinityRadar();drawArtifactLens();drawRope();drawParticles(0);drawMineReach();drawHighlight();drawMiningImpact();drawMiningPixels();drawFloatTexts();drawVisibilityMask();drawPlayer();ctx.restore()}
+function resize(){let box=cv.getBoundingClientRect();viewW=box.width;viewH=box.height;dpr=Math.min(window.devicePixelRatio||1,2);cv.width=Math.ceil(viewW*dpr);cv.height=Math.ceil(viewH*dpr);ctx.imageSmoothingEnabled=false;}
+function loop(now){let dt=Math.min(.045,Math.max(0,(now-last)/1000));last=now;frame++;if(farmWorldActive){farmWorldTick(dt);requestAnimationFrame(loop);return;}if(archWorldActive){archWorldTick(dt);requestAnimationFrame(loop);return;}if(t25Tick(dt,now)){requestAnimationFrame(loop);return;}ssGuideTick(now);ssMineNoticeTick(now);if(!paused){const bm=balanceStats(),oldX=p.x,oldY=p.y;updatePhysics(dt);updateVisionCache();claimMilestoneXp();bm.activeSeconds+=dt;livingWorldTick(dt);const traveled=Math.hypot(p.x-oldX,p.y-oldY);
+ if(traveled>dt*.3)bm.movingSeconds+=dt;
+ if(traveled>0&&traveled<dt*11+.2)noteArtifactDistance(traveled);
+ artifactTravelCheckpoint+=dt;
+ if(artifactTravelCheckpoint>1.2){artifactTravelCheckpoint=0;tryAwardEarnedArtifacts();}mineHold(dt);updateSpriteAnimation(dt);
+ saveTimer+=dt;if(saveTimer>6){saveGame(true);saveTimer=0}hudTimer+=dt;if(hudTimer>.18){updHud();hudTimer=0}}
+ if(paused&&menuType==='바람장터'){balanceStats().marketSeconds+=dt;balanceStats().activeSeconds+=dt;}
+ tickMiningPixels(dt);
+ if(toastUntil&&now>toastUntil){$('toast').classList.remove('on');toastUntil=0}
+ rangeHintTime=Math.max(0,rangeHintTime-dt);for(const fx of [invalidReach,miningHitFX,miningBreakFX]){if(fx)fx.life=Math.max(0,fx.life-dt)}if(invalidReach?.life===0)invalidReach=null;if(miningHitFX?.life===0)miningHitFX=null;if(miningBreakFX?.life===0)miningBreakFX=null;
+ for(let i=particles.length-1;i>=0;i--){let o=particles[i];o.x+=o.vx*dt;o.y+=o.vy*dt;o.vy+=160*dt;o.life-=dt;if(o.life<=0)particles.splice(i,1)}
+ for(let i=floatTexts.length-1;i>=0;i--){let o=floatTexts[i];o.y+=o.vy*dt;o.life-=dt;if(o.life<=0)floatTexts.splice(i,1)}if(ropeSnap){ropeSnap.life-=dt;if(ropeSnap.life<=0)ropeSnap=null}shake*=Math.pow(.04,dt);draw();requestAnimationFrame(loop)}
+function pointerTile(e){let r=cv.getBoundingClientRect();return {x:Math.floor((e.clientX-r.left+camera.x)/T),y:Math.floor((e.clientY-r.top+camera.y)/T)}}
+// Mouse secondary click is a dedicated rope action. Pointerdown must never mine on that button.
+cv.addEventListener('mousedown',e=>{if(ssM16TransitionLocked)return;if(e.button!==2)return;e.preventDefault();if(ssM15Scene==='mining')desktopRightClickRope(e);});
+cv.addEventListener('pointerdown',e=>{if(paused||ssM16TransitionLocked)return;if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();let q=pointerTile(e);if(farmWorldTryForestTap(q))return;if(archWorldTryForestTap(q))return;if(ssM16TryPortalTap(q))return;if(ssM17TryObjectTap(q))return;if(shelterTileHit(q)&&closestShelter()){shelterMenu();return}let near=closestStation();if(near&&Math.abs(q.x+.5-near.x)<=1.3&&q.y>=near.foot-3.5&&q.y<=near.foot){stationMenu();return}const b=near?null:closestBuilding();if(b&&Math.abs(q.x+.5-b.x)<=2.6&&q.y>=terrain(b.x)-6&&q.y<=terrain(b.x)){enterNearbyBuilding();return}let tt=tile(q.x,q.y);hover=q;if(tt==='bed'||tt==='chest'){tileAction(q.x,q.y);return}if(ssM15Scene!=='mining')return;holdTarget=q;holdLast=null;holdProgress=0;tileAction(q.x,q.y);try{cv.setPointerCapture(e.pointerId)}catch(e){}});
+cv.addEventListener('pointermove',e=>{if(paused)return;let q=pointerTile(e);hover=q;if(holdTarget&&e.buttons){holdTarget=q;rangeHintTime=MINING_RANGE_HINT_TTL}});
+const release=()=>{holdTarget=null;holdLast=null;holdProgress=0};cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);cv.addEventListener('lostpointercapture',release);cv.addEventListener('contextmenu',e=>e.preventDefault());
+// 2.18-H3: left pad owns movement/rope aim; right independent pad owns mining.
+const stick=$('mineStick');
+let hudPadPointerId=null,hudPadDir=null,hudMinePointerId=null,hudMineHeld=false;
+const HUD_8_DIRECTIONS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function setStickDirection(dx,dy){
+ rangeHintTime=MINING_RANGE_HINT_TTL;
+ if(!stickDir||stickDir.dx!==dx||stickDir.dy!==dy){holdProgress=0;holdLast=null;}
+ stickDir={dx,dy};stickActive=true;
+}
+function stopMineStick(){
+ stickActive=false;stickDir=null;stickPointerId=null;holdProgress=0;holdLast=null;
+}
+function hudPadRopeDirection(d){
+ if(!d)return null;
+ if(d.dx===0&&d.dy===0)return null;
+ if(d.dy>0)return null; // Down and down-diagonals are for mining, not grappling.
+ return d.dx<0?(d.dy<0?'upleft':'left'):d.dx>0?(d.dy<0?'upright':'right'):'up';
+}
+function hudSyncRopeAim(){
+ if(!ropePointerAim||!hudPadDir)return;
+ const g=ropePointerAim,aim=hudPadRopeDirection(hudPadDir);
+ g.padUsed=true;g.padInvalid=!aim;
+ if(!aim){ropePreviewAnchor=null;ropeGestureFeedback();return;}
+ g.direction=aim;g.gesture=g.wasActive?'transfer':'aim';
+ ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;
+ ropePreviewAnchor=ropeGestureTarget(aim);ropeGestureFeedback();
+}
+function hudRefreshPadInput(){
+ const d=hudPadDir,aiming=!!ropePointerAim;
+ // Left pad solely owns movement/rope aim; the mining pad owns mining independently.
+ input.left=!!d&&!aiming&&d.dx<0;
+ input.right=!!d&&!aiming&&d.dx>0;
+ input.reelIn=!!d&&!aiming&&!hudMineHeld&&!!rope.active&&!!rope.attached&&d.dy<0;
+ input.reelOut=!!d&&!aiming&&!hudMineHeld&&!!rope.active&&!!rope.attached&&d.dy>0;
+ if(aiming&&d)hudSyncRopeAim();
+}
+function hudSetPadDirection(dx,dy){
+ hudPadDir=dx||dy?{dx,dy}:null;
+ stick.classList.toggle('pad-on',!!hudPadDir);
+ stick.setAttribute('aria-pressed',hudPadDir?'true':'false');
+ const r=stick.clientWidth*.17;
+ stick.style.setProperty('--jx',`${dx*r}px`);stick.style.setProperty('--jy',`${dy*r}px`);
+ for(const el of stick.querySelectorAll('.dir'))el.classList.toggle('active',el.dataset.dir===`${dx},${dy}`);
+ hudRefreshPadInput();
+}
+function hudSetPadFromPoint(clientX,clientY){
+ const rect=stick.getBoundingClientRect(),dx=clientX-(rect.left+rect.width/2),dy=clientY-(rect.top+rect.height/2);
+ if(Math.hypot(dx,dy)<12){hudSetPadDirection(0,0);return;}
+ const i=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;
+ hudSetPadDirection(...HUD_8_DIRECTIONS[i]);
+}
+function hudReleasePad(){hudPadPointerId=null;hudSetPadDirection(0,0);}
+stick.addEventListener('pointerdown',e=>{
+ if(paused||hudPadPointerId!==null)return;
+ e.preventDefault();hudPadPointerId=e.pointerId;hudSetPadFromPoint(e.clientX,e.clientY);
+ try{stick.setPointerCapture(e.pointerId)}catch(_){}
+});
+stick.addEventListener('pointermove',e=>{
+ if(e.pointerId!==hudPadPointerId||paused)return;
+ e.preventDefault();hudSetPadFromPoint(e.clientX,e.clientY);
+});
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(ev,e=>{
+ if(e.pointerId===hudPadPointerId)hudReleasePad();
+});
+stick.addEventListener('keydown',e=>{
+ const dirs={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],q:[-1,-1],e:[1,-1],z:[-1,1],c:[1,1]};
+ const d=dirs[e.key];if(d){e.preventDefault();e.stopPropagation();if(!paused)hudSetPadDirection(...d);}
+});
+stick.addEventListener('keyup',e=>{
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','q','e','z','c'].includes(e.key)){
+  e.preventDefault();e.stopPropagation();hudSetPadDirection(0,0);
+ }
+});
+stick.addEventListener('blur',()=>{if(hudPadPointerId===null)hudSetPadDirection(0,0)});
+// 2.18-H3: one-thumb independent continuous 8-way mining.
+const hudMinePad=$('mineDirectPad');
+let mineStartX=0,mineStartY=0;
+function mineIsCompact(){return window.matchMedia('(orientation:portrait)').matches;}
+function mineUpdateDirection(dx,dy){
+ const magnitude=Math.hypot(dx,dy);
+ if(magnitude<11){if(!hudMineHeld||!stickActive)setStickDirection(p.facing||1,0);return;}
+ const i=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;
+ const [mx,my]=HUD_8_DIRECTIONS[i];
+ setStickDirection(mx,my);
+ const r=hudMinePad.clientWidth*.17;
+ hudMinePad.style.setProperty('--jx',`${mx*r}px`);hudMinePad.style.setProperty('--jy',`${my*r}px`);
+ for(const el of hudMinePad.querySelectorAll('.dir'))el.classList.toggle('active',el.dataset.dir===`${mx},${my}`);
+}
+function minePointerDirection(e,initial=false){
+ if(mineIsCompact()){
+  // Portrait compact mode is a relative drag: no need to hit tiny arrows.
+  if(initial){setStickDirection(p.facing||1,0);return;}
+  mineUpdateDirection(e.clientX-mineStartX,e.clientY-mineStartY);
+ }else{
+  const r=hudMinePad.getBoundingClientRect();
+  mineUpdateDirection(e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2);
+ }
+}
+function hudReleaseMine(id=null){
+ if(id!==null&&id!==hudMinePointerId)return;
+ hudMinePointerId=null;hudMineHeld=false;input.act=false;
+ hudMinePad.classList.remove('on');hudMinePad.setAttribute('aria-pressed','false');
+ hudMinePad.style.setProperty('--jx','0px');hudMinePad.style.setProperty('--jy','0px');
+ for(const el of hudMinePad.querySelectorAll('.dir'))el.classList.remove('active');
+ stopMineStick();hudRefreshPadInput();
+}
+hudMinePad.addEventListener('pointerdown',e=>{
+ if(paused||hudMinePointerId!==null||ropePointerAim)return;
+ e.preventDefault();hudMinePointerId=e.pointerId;hudMineHeld=true;input.act=true;
+ mineStartX=e.clientX;mineStartY=e.clientY;
+ hudMinePad.classList.add('on');hudMinePad.setAttribute('aria-pressed','true');
+ minePointerDirection(e,true);hudRefreshPadInput();
+ try{hudMinePad.setPointerCapture(e.pointerId)}catch(_){}
+});
+hudMinePad.addEventListener('pointermove',e=>{
+ if(paused||hudMinePointerId!==e.pointerId)return;
+ e.preventDefault();minePointerDirection(e);
+});
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])hudMinePad.addEventListener(ev,e=>hudReleaseMine(e.pointerId));
+hudMinePad.addEventListener('keydown',e=>{
+ const dirs={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],q:[-1,-1],e:[1,-1],z:[-1,1],c:[1,1]};
+ if(!dirs[e.key]||paused)return;
+ e.preventDefault();e.stopPropagation();hudMineHeld=true;input.act=true;
+ hudMinePad.classList.add('on');hudMinePad.setAttribute('aria-pressed','true');
+ setStickDirection(...dirs[e.key]);hudRefreshPadInput();
+});
+hudMinePad.addEventListener('keyup',e=>{
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','q','e','z','c'].includes(e.key)){
+  e.preventDefault();e.stopPropagation();hudReleaseMine();
+ }
+});
+hudMinePad.addEventListener('blur',()=>{if(hudMinePointerId===null&&hudMineHeld)hudReleaseMine();});
+$('jump').addEventListener('pointerdown',e=>{if(paused)return;e.preventDefault();requestJump();});
+$('jump').addEventListener('pointerup',()=>{input.jump=false;});
+$('jump').addEventListener('pointercancel',()=>{input.jump=false;});
+function ssReliableButton(id,action){
+ // v10.1: Native click must own the action. Opening a menu at pointerup
+ // retargeted the synthesized touch click onto its newly visible backdrop,
+ // immediately closing the menu before the player could see it.
+ // One click works for mouse, keyboard (Enter/Space), touchscreen and assistive tech.
+ const button=$(id);let lastActivated=-1e9;
+ button.addEventListener('click',e=>{
+  if(e.button!==0)return;
+  const now=performance.now();
+  if(now-lastActivated<160){e.preventDefault();e.stopPropagation();return;}
+  lastActivated=now;e.stopPropagation();action();
+ });
+}
+ssReliableButton('menuBtn',ssHubToggle);
+ssReliableButton('placeBadge',profileMenu);
+ssReliableButton('inventoryBtn',inventoryMenu);
+ssReliableButton('bagBtn',bagMenu);
+const ropeButton=$('ropeBtn');
+ropeButton.addEventListener('pointerdown',e=>{
+ if(paused||ropeButton.disabled||ropePointerAim)return; // second fingers cannot steal rope capture
+ e.preventDefault();lastRopePointerAt=performance.now();
+ ropeHoldFromActive=rope.active;ropeHold=rope.active;ropeHoldTime=0;ropeHoldUsed=false;ropeHoldChainDelay=0;
+ ropePointerAim={id:e.pointerId,x:e.clientX,y:e.clientY,lastY:e.clientY,direction:'up',wasActive:rope.active,gesture:'tap'};
+ ropePreviewAnchor=rope.active?null:ropeGestureTarget('up');
+ hudRefreshPadInput();
+ ropeGestureFeedback();
+ try{ropeButton.setPointerCapture(e.pointerId)}catch(_){}
+});
+ropeButton.addEventListener('pointermove',e=>{
+ if(paused||!ropePointerAim||e.pointerId!==ropePointerAim.id)return;
+ e.preventDefault();
+ const g=ropePointerAim,dx=e.clientX-g.x,dy=e.clientY-g.y;
+ if(g.padUsed){ropeGestureFeedback();return;} // left-thumb aiming owns this gesture
+ if(g.wasActive){
+  if(!rope.active||!rope.attached)return;
+  if(g.gesture==='tap'&&Math.hypot(dx,dy)>=ROPE_TOUCH_SLOP){
+   g.gesture=Math.abs(dy)>Math.abs(dx)*1.2?'reel':'transfer';
+   ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;ropeHaptic(7);
+  }
+  if(g.gesture==='reel'){
+   const step=e.clientY-g.lastY;
+   const requested=step/34;
+   if(requested){
+    // 2.18-H1: small collision-checked immediate response; remaining change
+    // is still rate-limited by the original ROPE_REEL_SPEED in updateRopeSwing.
+    const immediate=Math.sign(requested)*Math.min(Math.abs(requested),.075);
+    const moved=adjustRopeLength(immediate);
+    ropeReelPending=Math.max(-ROPE_MAX_LENGTH,Math.min(ROPE_MAX_LENGTH,ropeReelPending+requested-(moved?immediate:0)));
+   }
+  }else if(g.gesture==='transfer'){
+   const next=ropeDirectionFromDrag(dx,dy,g.direction);
+   if(next!==g.direction){g.direction=next;ropeHaptic(5);}
+   ropePreviewAnchor=ropeGestureTarget(g.direction);
+  }
+  g.lastY=e.clientY;ropeGestureFeedback();return;
+ }
+ if(g.gesture==='tap'&&Math.hypot(dx,dy)>=ROPE_TOUCH_SLOP){g.gesture='aim';ropeHaptic(7);}
+ if(g.gesture==='aim'){
+  const next=ropeDirectionFromDrag(dx,dy,g.direction);
+  if(next!==g.direction){g.direction=next;ropeHaptic(5);}
+  ropePreviewAnchor=ropeGestureTarget(g.direction);
+ }
+ ropeGestureFeedback();
+});
+ropeButton.addEventListener('pointerup',e=>{
+ if(!ropePointerAim||e.pointerId!==ropePointerAim.id)return;
+ e.preventDefault();
+ const gesture=ropePointerAim,wasUsed=ropeHoldUsed||ropeHoldTime>.42;
+ ropePointerAim=null;ropePreviewAnchor=null;ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;
+ ropeGestureFeedback();
+ hudRefreshPadInput();
+ if(gesture.padInvalid){flash('로프는 위쪽이나 좌우 암벽으로 발사할 수 있어요');ropeHaptic([8,35,8]);return;}
+ let success=false,acted=false;
+ if(gesture.wasActive){
+  if(gesture.gesture==='transfer'&&(gesture.padUsed||gesture.direction!=='up')){acted=true;success=transferRope(gesture.direction);}
+  else if(gesture.gesture==='tap'&&!wasUsed&&rope.active){acted=true;toggleRope();success=true;}
+ }else if(!paused){
+  acted=true;
+  if(gesture.direction==='up'){toggleRope();success=rope.active;}
+  else success=fireDirectionalRope(gesture.direction);
+ }
+ if(acted)ropeHaptic(success?12:[8,35,8]);
+});
+for(const type of ['pointercancel','lostpointercapture'])ropeButton.addEventListener(type,e=>{
+ if(ropePointerAim&&e.pointerId!==ropePointerAim.id)return;
+ ropePointerAim=null;ropePreviewAnchor=null;ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;
+ ropeGestureFeedback();hudRefreshPadInput();
+});
+ropeButton.onclick=e=>{if(performance.now()-lastRopePointerAt<800)return;toggleRope();};
+ssReliableButton('stationAction',()=>{if(closestShelter())shelterMenu();else if(closestStation())stationMenu();else enterNearbyBuilding();});
+$('fileImport').addEventListener('change',e=>{importGame(e.target.files[0]);e.target.value=''});
+window.addEventListener('keydown',e=>{if(e.key!=='Escape'&&e.target instanceof Element&&e.target.closest('button,input,select,textarea,[role=button],[contenteditable=true]'))return;let k=e.key.toLowerCase();if(['arrowleft','arrowright','arrowup','arrowdown',' ','a','d','w','s','f','m','r','e','escape','t'].includes(k))e.preventDefault();if(k==='escape'){if(ssM17PanelKind){ssM17ClosePanel();return;}if(ssIsTitle()){ssEscape();return}if(ssHubIsOpen()){ssHubClose(true);return}if(paused)closeModal();else ssHubToggle();return}if(paused||ssM16TransitionLocked)return;if(k==='t'&&!e.repeat){setRopeABMode(ropeABMode==='A'?'B':'A');flash('로프 실험 '+ropeABMode+' · '+(ropeABMode==='A'?'기존 고정 로프':'탄성 로프'));return;}if(k==='a'||k==='arrowleft')input.left=true;if(k==='d'||k==='arrowright')input.right=true;if((k==='w'||k==='arrowup')&&rope.active&&rope.attached&&(rope.mode==='swing'||rope.mode==='pull')){if(rope.mode==='pull')startRopeSwing(0);input.reelIn=true;}
+ else if((k==='s'||k==='arrowdown')&&rope.active&&rope.attached&&(rope.mode==='swing'||rope.mode==='pull')){if(rope.mode==='pull')startRopeSwing(0);input.reelOut=true;}
+ else if((k==='w'||k==='arrowup'||k===' ')&&!e.repeat)requestJump();if(k==='f')input.act=true;if(k==='m')market();if(k==='r'&&!e.repeat&&ssM15Scene==='mining'){const dir=(input.right?1:0)-(input.left?1:0);
+  if(rope.active&&rope.attached&&dir)transferRope((e.shiftKey?'':'up')+(dir<0?'left':'right'));
+  else if(!rope.active&&dir)fireDirectionalRope((e.shiftKey?'':'up')+(dir<0?'left':'right'));
+  else toggleRope();}if(k==='e'&&!e.repeat){if(farmWorldTryEnter())return;if(ssM1NearbyAction()){ssM1Act();return;}if(closestShelter())shelterMenu();else if(closestStation())stationMenu();else enterNearbyBuilding()}});
+window.addEventListener('keyup',e=>{let k=e.key.toLowerCase();if(k==='a'||k==='arrowleft')input.left=false;if(k==='d'||k==='arrowright')input.right=false;if(k==='f')input.act=false;if(k==='w'||k==='arrowup')input.reelIn=false;
+ if(k==='s'||k==='arrowdown')input.reelOut=false;
+ if(k==='w'||k==='arrowup'||k===' ')input.jump=false});
+
+// Main-screen P0. Only changes the flow into/out of the existing simulation.
+let ssSavedWorldAtBoot=false;
+function ssIsTitle(){return $('startScreen').classList.contains('visible');}
+function ssShowView(id){
+ for(const view of ['ssHome','ssSettingsView','ssConfirmView'])$(view).hidden=view!==id;
+ const focus={ssHome:'ssContinue',ssSettingsView:'ssSound',ssConfirmView:'ssConfirmCreate'};
+ if(id==='ssSettingsView')ssSyncSettings();
+ const target=$(focus[id]);if(target&&!target.disabled)target.focus({preventScroll:true});
+}
+function ssUpdateSummary(){
+  const has=ssSavedWorldAtBoot,issue=!!ssSaveReadIssue,rawAvailable=issue&&typeof ssSaveReadIssue.raw==='string';
+  $('ssContinue').disabled=!has;
+  $('ssBackup').hidden=!(has||rawAvailable);
+  $('ssBackup').textContent=rawAvailable?'↓ 문제 있는 저장 원본 백업':'↓ 저장 월드 백업';
+  $('ssSaveStatus').textContent=issue?'저장 기록 확인 필요':has?'저장된 모험 발견':'새 모험 준비 완료';
+  if(issue){
+   $('ssSaveInfo').textContent='저장 기록을 안전하게 읽지 못했어요';
+   $('ssSaveHint').textContent=rawAvailable?'기존 기록을 지우지 않았어요. 먼저 원본 JSON을 백업해 주세요.':'저장소 접근에 실패했어요. 브라우저 설정을 확인하세요.';
+  }else if(has){
+   const level=deriveLevelFromTotalXp(game.character.totalXp).level;
+   $('ssSaveInfo').textContent=`광부 Lv.${level} · 채굴 ${game.mined||0}블록`;
+   $('ssSaveHint').textContent=`월드 시드 ${game.seed} · 코인 ${game.coins} · ${ssLivingFromLegacy?'운영 저장 읽기 전용 (실험본은 별도 저장)':'실험본 이어하기 가능'}`;
+  }else{
+   $('ssSaveInfo').textContent='아직 저장된 월드가 없어요';
+   $('ssSaveHint').textContent='새 월드를 만들면 탐험을 시작할 수 있어요.';
+  }
+  $('ssConfirmBackup').hidden=!(has||rawAvailable);
+  $('ssConfirmBackup').textContent=rawAvailable?'↓ 문제 있는 저장 원본 백업':'↓ 기존 월드 파일 백업';
+   $('ssOverwriteWarning').textContent=issue?'저장 파일을 읽지 못했어요. 먼저 원본 JSON을 백업하세요. 이 후보는 운영 저장 키에 쓰지 않아요.':has?(ssLivingFromLegacy?'기존 운영 월드는 보존돼요. 실험본의 새 월드만 별도 키에 저장합니다.':'기존 실험본 저장 기록이 덮어써집니다. 먼저 실험본을 백업하세요.'):'새로운 월드와 기본 장비로 실험을 시작합니다. 운영 저장은 변경하지 않아요.';
+ }
+
+function ssSyncSettings(){
+ $('ssBgmToggle').textContent=ssBgm.enabled?'켜짐':'꺼짐';$('ssBgmToggle').setAttribute('aria-pressed',String(ssBgm.enabled));
+ $('ssBgmVolume').value=Math.round(ssBgm.volume*100);
+ $('ssSound').textContent=sfxState.enabled?'켜짐':'꺼짐';$('ssSound').setAttribute('aria-pressed',String(sfxState.enabled));
+ $('ssVolume').value=Math.round(sfxState.volume*100);
+ $('ssHaptics').textContent=ropeHapticsEnabled?'켜짐':'꺼짐';$('ssHaptics').setAttribute('aria-pressed',String(ropeHapticsEnabled));
+ $('ssRopeAB').textContent=ropeABMode==='A'?'A · 고정':'B · 탄성';$('ssRopeAB').setAttribute('aria-label',`로프 물리 ${ropeABMode==='A'?'고정':'탄성'} 모드, 터치하여 전환`);
+}
+let ssGuideActive=false,ssGuideStep=0,ssGuideStageAt=0;
+const SS_GUIDE_STEPS=[
+ '이동: 왼쪽 방향패드(PC는 A/D 또는 방향키)로 이동해 보세요.',
+ '채굴: 오른쪽 8방향 채굴 패드를 누른 채 방향을 움직여 연속 채굴하세요. PC는 F를 길게 누를 수 있어요.',
+  '로프: PC는 커서 방향에서 우클릭 발사·재클릭 해제(R도 유지), Shift+우클릭 재연결. 실험 T키로 고정/탄성 비교. 모바일은 로프 버튼을 사용하세요.',
+ '새 지역: 마을 X55의 별광을 조사한 뒤 X64 숲길을 따라 잔빛숲에 들어가세요. 기존 장터와 광산은 그대로 이용할 수 있어요.'
+];
+function ssGuideRender(){
+ $('tip').classList.toggle('dismissed',!ssGuideActive);
+ $('ssGuideActions').hidden=!ssGuideActive;
+ if(ssGuideActive){$('tip').querySelector('.k').textContent=`첫 탐험 안내 · ${ssGuideStep+1}/4`;$('tiptext').textContent=SS_GUIDE_STEPS[ssGuideStep];$('ssGuideNext').textContent=ssGuideStep>=3?'완료':'다음';}
+}
+function ssGuideStart(){ssGuideActive=true;ssGuideStep=0;ssGuideStageAt=performance.now();ssGuideRender();}
+function ssGuideStop(){ssGuideActive=false;ssGuideRender();}
+function ssGuideNext(){if(!ssGuideActive)return;if(++ssGuideStep>=SS_GUIDE_STEPS.length)ssGuideStop();else {ssGuideStageAt=performance.now();ssGuideRender();}}
+function ssGuideTick(now){if(ssGuideActive&&!paused&&now-ssGuideStageAt>12000)ssGuideNext();}
+function ssQuickGuide(){showModal('조작 도움말',`<p>처음 1분 동안 이 순서로 조작해 보세요.</p>${SS_GUIDE_STEPS.map((s,i)=>`<div class="line"><strong>${i+1}. ${s}</strong></div>`).join('')}<div class="line"><small>시설 앞에서는 오른쪽 ‘입장’ 버튼을 눌러 보세요. 길이 막히면 ☰ → 긴급 구조를 이용할 수 있어요.</small></div>`);}
+$('ssGuideNext').onclick=ssGuideNext;$('ssGuideSkip').onclick=ssGuideStop;
+function ssEnterWorld(){
+ $('startScreen').classList.remove('visible');$('app').classList.remove('ss-at-title');
+ paused=false;ssSavedWorldAtBoot=true;last=performance.now();ssM1SyncHUD();
+ ssBgmStart(); // entered through the user's Continue/Create click; no autoplay on page load
+   tryAwardEarnedArtifacts();updHud();farmWorldRestoreAfterContinue();archWorldRestoreAfterContinue();
+  if(game.mined===0)ssGuideStart();else ssGuideStop();
+ $('ssContinue').blur();
+}
+function ssReturnToTitle(){
+ // The in-game modal may be open here. Save the existing world, never regenerate it.
+ if(!saveGame(true)){flash('저장 실패: 월드 파일 내보내기를 권장해요.');}
+ closeModal();ssSavedWorldAtBoot=true;
+ ssUpdateSummary();$('app').classList.add('ss-at-title');$('startScreen').classList.add('visible');paused=true;
+ ssBgmStop(); // title screen does not retain active game audio
+ ssShowView('ssHome');
+}
+function ssCreateWorld(){
+ if(ssSaveReadIssue&&typeof ssSaveReadIssue.raw!=='string'){
+  $('ssConfirmNote').textContent='브라우저가 이전 저장을 읽지 못했어요. 데이터 보호를 위해 새 월드로 덮어쓰지 않습니다.';return;
+ }
+ if(ssSaveReadIssue&&typeof ssSaveReadIssue.raw==='string'){
+  if(!ssSaveReadIssue.backupAttempted){$('ssConfirmNote').textContent='기존 저장이 손상됐을 수 있어요. 먼저 「문제 있는 저장 원본 백업」을 눌러 다운로드하세요.';return;}
+  if(!confirm('이전 저장은 읽을 수 없지만 백업을 요청했습니다. 다운로드 파일을 확인했나요? 정말 기존 저장을 새 월드로 대체할까요?'))return;
+ }
+ let probe=SAVE_KEY+':menu-storage-check';
+ try{localStorage.setItem(probe,'1');localStorage.removeItem(probe)}catch(e){$('ssConfirmNote').textContent='브라우저 저장소에 쓸 수 없어 새 월드를 만들지 않았어요. 저장소 설정을 확인해 주세요.';return;}
+ if(!resetKey()){$('ssConfirmNote').textContent='새 월드를 저장하지 못해 이전 진행 기록을 보존했어요.';return;}
+ ssSaveReadIssue=null;ssSavedWorldAtBoot=true;ssEnterWorld();
+}
+function ssEscape(){if(!$('ssHome').hidden)return;ssShowView('ssHome')}
+async function ssToggleFullscreen(){
+ const msg=$('ssSettingsNote');
+ try{
+  if(document.fullscreenElement){await document.exitFullscreen();}
+  else if(document.documentElement.requestFullscreen){await document.documentElement.requestFullscreen();}
+  else{msg.textContent='이 브라우저에서는 전체 화면을 지원하지 않아요.';return;}
+  msg.textContent=document.fullscreenElement?'전체 화면으로 전환했어요.':'전체 화면을 종료했어요.';
+ }catch(e){msg.textContent='전체 화면 전환이 차단됐어요. 브라우저 설정을 확인해 주세요.';}
+}
+$('ssContinue').onclick=()=>{if(!ssSavedWorldAtBoot)return;ssEnterWorld();};
+$('ssNew').onclick=()=>{$('ssConfirmNote').textContent='';ssUpdateSummary();ssShowView('ssConfirmView');};
+$('ssSettings').onclick=()=>ssShowView('ssSettingsView');
+for(const el of document.querySelectorAll('[data-ss-back]'))el.onclick=()=>ssShowView('ssHome');
+$('ssConfirmCreate').onclick=ssCreateWorld;
+$('ssBackup').onclick=()=>{if(ssSaveReadIssue)ssExportUnreadableSave();else if(ssSavedWorldAtBoot)exportGame();};
+$('ssCargoBadge').onclick=ssCargoMenu;
+$('ssConfirmBackup').onclick=()=>{if(ssSaveReadIssue)ssExportUnreadableSave();else if(ssSavedWorldAtBoot)exportGame();};
+$('ssBgmToggle').onclick=()=>{ssBgmSetEnabled(!ssBgm.enabled);ssSyncSettings();};
+$('ssBgmVolume').oninput=e=>ssBgmSetVolume(Number(e.target.value)/100);
+$('ssSound').onclick=()=>{setSoundEnabled(!sfxState.enabled);ssSyncSettings();};
+$('ssVolume').oninput=e=>{setSoundVolume(Number(e.target.value)/100);};
+$('ssHaptics').onclick=()=>{ropeHapticsEnabled=!ropeHapticsEnabled;try{localStorage.setItem(ROPE_HAPTIC_KEY,ropeHapticsEnabled?'1':'0')}catch(_){}ssSyncSettings();if(ropeHapticsEnabled)ropeHaptic(8);};
+$('ssRopeAB').onclick=()=>{setRopeABMode(ropeABMode==='A'?'B':'A');ssSyncSettings();};
+$('ssFullscreen').onclick=ssToggleFullscreen;
+$('ssFullscreenSettings').onclick=ssToggleFullscreen;
+
+window.addEventListener('blur',()=>{hudReleaseMine();hudPadPointerId=null;hudPadDir=null;stick.classList.remove('pad-on');stopMineStick();input.left=input.right=input.act=input.jump=input.reelIn=input.reelOut=false;jumpBuffer=0;ropeReelPending=0;ropeHold=false;ropePointerAim=null;ropePreviewAnchor=null;ropeGestureFeedback();stopMineStick();if(!ssIsTitle())saveGame(true)});document.addEventListener('visibilitychange',()=>{if(document.hidden){hudReleaseMine();hudPadPointerId=null;hudPadDir=null;stick.classList.remove('pad-on');stopMineStick();input.left=input.right=input.act=input.jump=input.reelIn=input.reelOut=false;jumpBuffer=0;ropeReelPending=0;ropeHold=false;ropePointerAim=null;ropePreviewAnchor=null;ropeGestureFeedback();stopMineStick();if(!ssIsTitle())saveGame(true)}});window.addEventListener('beforeunload',()=>{if(!ssIsTitle())saveGame(true)});
+
+// M1.5 HUD router: town is an *UI scene* inside the existing mine region.
+// No new village world ID or production save migration in this stage.
+let ssM15Scene='mining',ssM15ManualMining=false,ssM15QuestExpanded=false;
+function ssM15BaseScene(){
+ if(ssRegion===TOWN_WORLD_ID)return 'town';
+ if(ssRegion==='mine')return 'mining';
+ if(ssRegion==='life_forest_01')return 'forest';
+ const depth=p.y-terrain(p.x);
+ if(!Number.isFinite(depth))return 'town';
+ // Hysteresis prevents flicker around the ground line while jumping.
+ return depth>=(ssM15Scene==='mining'&&!ssM15ManualMining?1.4:3.0)?'mining':'town';
+}
+function ssM15ResetHeldInputs(){
+ hudReleaseMine();hudReleasePadForScene();stopMineStick();
+ holdTarget=null;holdLast=null;holdProgress=0;
+ input.act=false;input.reelIn=false;input.reelOut=false;
+ ropePointerAim=null;ropePreviewAnchor=null;ropeHold=false;ropeHoldTime=0;
+ ropeGestureFeedback();
+}
+function hudReleasePadForScene(){
+ // Clear stale finger ownership when a HUD layout changes, never keep a held key.
+ if(hudPadPointerId!==null){try{stick.releasePointerCapture(hudPadPointerId)}catch(_){}}
+ hudReleasePad();input.left=input.right=false;
+}
+function ssM15SyncScene(){
+ if(!p||!game)return;
+ const base=ssM15BaseScene();
+ if(base==='mining'&&ssRegion==='mine')ssM15ManualMining=false;
+ const next=ssM15ManualMining?'mining':base;
+ if(next!==ssM15Scene){
+  ssM15ResetHeldInputs();
+  if(next!=='mining'&&rope.active)releaseRope();
+  ssM15Scene=next;
+ }
+ const root=$('app');
+ root.classList.toggle('ss-hud-town',next==='town');
+ root.classList.toggle('ss-hud-forest',next==='forest');
+ root.classList.toggle('ss-hud-mining',next==='mining');
+ root.dataset.m15Manual=ssM15ManualMining?'1':'0';
+ const b=$('m15ToolModeBtn');
+ b.hidden=ssRegion===TOWN_WORLD_ID||(next==='mining'&&!ssM15ManualMining);
+ b.textContent=ssM15ManualMining?'↩ 생활 조작':'⛏ 채굴 모드';
+ b.setAttribute('aria-label',ssM15ManualMining?'기본 생활 조작으로 돌아가기':'8방향 채굴과 로프 조작 켜기');
+ $('m15MoveCaption').textContent=next==='mining'?'이동 · 로프 조준':'이동';
+ $('controls').setAttribute('aria-label',next==='mining'?'이동, 8방향 채굴, 로프, 점프':'이동, 주변 상호작용, 점프');
+}
+function ssM15ToggleToolMode(){
+ if(paused)return false;
+ // Subterranean scene always uses the mining HUD; do not hide it underwater.
+ if(ssRegion===TOWN_WORLD_ID)return false;
+ if(ssRegion==='mine'&&p.y-terrain(p.x)>=3)return false;
+ ssM15ManualMining=!ssM15ManualMining;
+ if(!ssM15ManualMining){releaseRope();ssM15ResetHeldInputs();}
+ ssM15SyncScene();ssM1SyncHUD();return true;
+}
+$('m15ToolModeBtn').addEventListener('click',e=>{e.stopPropagation();ssM15ToggleToolMode();});
+$('m1QuestBadge').addEventListener('click',e=>{e.stopPropagation();ssM15QuestExpanded=!ssM15QuestExpanded;$('app').classList.toggle('m15-quest-open',ssM15QuestExpanded);$('m1QuestBadge').setAttribute('aria-expanded',String(ssM15QuestExpanded));$('m1QuestBadge').setAttribute('aria-label',ssM15QuestExpanded?'퀘스트 목표 접기':'퀘스트 목표 펼치기');});
+function ssM15Near(worldX,maxDx,vertical=2.7){
+ if(!p)return false;
+ return Math.abs(p.x-worldX)<=maxDx && Math.abs(p.y-(terrain(worldX)-1))<=vertical;
+}
+
+// M1.6 PortalController: two spatial gates, explicit enter/tap/E, safe destination spawn.
+// The village remains the *surface* of the existing mine world until migration is validated.
+const SS_M16_PORTALS=Object.freeze({
+ village:{id:'town-east-forest',region:TOWN_WORLD_ID,target:'life_forest_01',x:M1_MINE_GATE_X,label:'잔빛숲으로 들어가기',arrival:'잔빛숲',spawnX:M1_FOREST_GATE_X+5},
+ forest:{id:'forest-west-town',region:'life_forest_01',target:TOWN_WORLD_ID,x:M1_FOREST_GATE_X,label:'도래마을로 돌아가기',arrival:'도래마을',spawnX:M1_MINE_GATE_X-5},
+ townMine:{id:'town-west-mine',region:TOWN_WORLD_ID,target:'mine',x:TOWN_MINE_PORTAL_X,label:'광산으로 내려가기',arrival:'광산',spawnX:TOWN_MINE_PORTAL_X+4},
+ mine:{id:'mine-surface-town',region:'mine',target:TOWN_WORLD_ID,x:TOWN_MINE_PORTAL_X,label:'도래마을로 돌아가기',arrival:'도래마을',spawnX:TOWN_MINE_PORTAL_X-4}
+});
+function ssM22PortalsInWorld(){return Object.values(SS_M16_PORTALS).filter(g=>g.region===ssRegion);}
+let ssM16TransitionLocked=false,ssM16LastTravelAt=-10000,ssM16TravelCount=0,ssM16LastResult='idle';
+function ssM16CurrentGate(){return ssM22PortalsInWorld().sort((a,b)=>Math.abs((p?.x||0)-a.x)-Math.abs((p?.x||0)-b.x))[0]||SS_M16_PORTALS.mine;}
+function ssM16NearPortal(gate=ssM16CurrentGate()){
+ if(!p||!game||paused||ssM16TransitionLocked||ssRegion!==gate.region)return false;
+ // Mine portal remains accessible to older saves on the original surface.
+ return Math.abs(p.x-gate.x)<=2.9 && Math.abs(p.y-(terrain(gate.x)-1))<=2.6;
+}
+function ssM16PortalFootprintHit(q,gate=ssM16CurrentGate()){
+ // x/y are world tile coordinates from pointerTile, not screen pixels.
+ const floor=terrain(gate.x)-1;
+ return Math.abs(q.x+.5-gate.x)<=1.9 && q.y>=floor-3.5 && q.y<=floor+0.65;
+}
+function ssM16TryPortalTap(q){
+ const gate=ssM22PortalsInWorld().find(g=>ssM16PortalFootprintHit(q,g));
+ if(!gate)return false;
+ if(!ssM16NearPortal(gate)){flash('출입구 가까이 다가가서 이용해 주세요');return true;}
+ ssM16RequestTravel(gate.target,gate.id);return true;
+}
+function ssM16DrawPortalPrompt(){
+ if(!p||!game||ssM16TransitionLocked)return;
+ ctx.save();ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#183344';
+ for(const gate of ssM22PortalsInWorld()){
+  const sx=Math.round(gate.x*T-camera.x),sy=Math.round((terrain(gate.x)-1)*T-camera.y);
+  if(sx<-90||sx>viewW+90)continue;
+  const near=ssM16NearPortal(gate);
+  ctx.fillStyle=gate.target==='mine'?'#7d6b57':'#705945';ctx.fillRect(sx-16,sy-78,8,80);ctx.fillRect(sx+30,sy-78,8,80);ctx.fillRect(sx-16,sy-78,54,10);
+  if(near){ctx.globalAlpha=.28+.10*Math.sin(frame*.1);ctx.fillStyle='#b8fbe5';ctx.fillRect(sx-26,sy-75,70,75);ctx.globalAlpha=1;}
+  const name=near?'E · '+gate.label:gate.target==='mine'?'↓ 광산':gate.target===TOWN_WORLD_ID?'← 도래마을':'→ 잔빛숲';
+  ctx.strokeText(name,sx+7,sy-92);ctx.fillStyle=near?'#fff3be':'#e6f7d1';ctx.fillText(name,sx+7,sy-92);
+ }
+ ctx.restore();
+}
+function ssM16ResolveSafeSpawn(target,sourceGateId=''){
+ let start=target==='mine'?TOWN_MINE_PORTAL_X+4:target==='life_forest_01'?M1_FOREST_GATE_X+5:sourceGateId==='mine-surface-town'?TOWN_MINE_PORTAL_X-4:M1_MINE_GATE_X-5;
+ const offsets=[0,.5,-.5,1,-1,1.5,-1.5,2,-2,2.5,-2.5];
+ for(const off of offsets){const x=start+off,y=terrain(x)-1;
+  if(!Number.isFinite(x)||!Number.isFinite(y)||x<=17||x>=79)continue;
+  if(!collides(x,y))return {x,y};
+ }
+ return null;
+}
+// M2.5-A: presentation only. Real asynchronous world readiness belongs to M2.5-C/C.
+const M25A_WORLD_META=Object.freeze({
+ village_hub_01:{name:'도래마을',subtitle:'생활과 거래가 모이는 곳',index:'01',first:'마을에서 새로운 하루를 시작해요',repeat:'도래마을에 돌아왔어요'},
+ mine:{name:'광산',subtitle:'땅속에 잠든 별의 흔적',index:'02',first:'지층 아래를 탐험해 보세요',repeat:'깊이를 다시 확인하세요'},
+ life_forest_01:{name:'잔빛숲',subtitle:'바람과 물길을 따라',index:'03',first:'숲길에 발을 들였어요',repeat:'숲의 시간이 흐르고 있어요'},
+ farm_01:{name:'도래 농장',subtitle:'작은 씨앗에서 시작되는 하루',index:'04',first:'씨앗을 심을 준비를 하세요',repeat:'작물이 어떻게 자랐을까요?'},
+ ruins_3d_01:{name:'별맥 고대 유적',subtitle:'잊힌 시대의 기억을 찾아서',index:'05',first:'고대 유적을 조사할 수 있어요',repeat:'유적의 길이 다시 열립니다'}
+});
+const m25aVisited=new Set();let m25aLastWorld=null,m25aPreview=false;
+function m25aRenderWorld(worldId,preview=false){
+ const meta=M25A_WORLD_META[worldId];if(!meta)return false;
+ const cover=$('m16TransitionCover');
+ cover.dataset.world=worldId;cover.setAttribute('aria-label',meta.name+' 이동 중');
+ $('m25WorldIndex').textContent='WORLD '+meta.index+' / 05';
+ $('m16TransitionTitle').textContent=meta.name;$('m25WorldTagline').textContent=meta.subtitle;
+ $('m25WorldTip').textContent=(m25aVisited.has(worldId)?meta.repeat:meta.first);
+ $('m16TransitionSubtitle').textContent=preview?'화면 디자인 확인 중':'월드 진입 지점을 확인하는 중…';
+ m25aLastWorld=worldId;m25aPreview=preview;
+ if(!preview)m25aVisited.add(worldId);
+ return true;
+}
+function m25aSetVisible(on){const cover=$('m16TransitionCover');cover.classList.toggle('active',on);cover.setAttribute('aria-hidden',String(!on));$('app').classList.toggle('ss-portal-transition',on);if(!on)m25aPreview=false;}
+function ssM16SetFade(on,target){
+ if(on)m25aRenderWorld(target,false);
+ m25aSetVisible(on);
+}
+// Read-only QA preview; never changes game state, inventory, location or save keys.
+window.__sandstarWorldLoadingM25A=Object.freeze({worlds:Object.keys(M25A_WORLD_META),show(worldId){if(ssM16TransitionLocked)return false;if(!m25aRenderWorld(worldId,true))return false;m25aSetVisible(true);return true;},hide(){if(ssM16TransitionLocked||!m25aPreview)return false;m25aSetVisible(false);return true;},state(){const el=$('m16TransitionCover');return {worldId:el.dataset.world,lastWorld:m25aLastWorld,active:el.classList.contains('active'),preview:m25aPreview,locked:ssM16TransitionLocked,saveKey:SAVE_KEY}}});
+// M2.5-C: farm and ruins full-world transitions. This is not a modal and does
+// not infer a fake progress percentage. The cover stays until a valid first frame.
+let m25bBusy=false,m25bPhase='idle',m25bDestination='',m25bLastResult='idle',m25bCompleted=0;
+const M25B_MIN_SHOW_MS=460, M25B_READY_TIMEOUT_MS=5500;
+const m25bDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const m25bFrame=()=>Promise.race([new Promise(resolve=>requestAnimationFrame(resolve)),m25bDelay(110)]);
+function m25bSetStatus(message){$('m16TransitionSubtitle').textContent=message;}
+function m25bClearInputs(){
+ ssM15ResetHeldInputs();releaseRope();
+ input.left=input.right=input.jump=input.reelIn=input.reelOut=false;
+ if(typeof farmWorldClearInput==='function')farmWorldClearInput();
+ if(typeof archWorldClearInput==='function')archWorldClearInput();
+}
+// M2.5-C: unified all-world rollback, captured BEFORE changing region or portal coordinates.
+function m25bSnapshot(){
+ let persisted=null;
+ try{persisted=localStorage.getItem(SAVE_KEY);}catch(_){}
+ const copy=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
+ return {persisted,region:ssRegion,story:copy(game.storyM1),town:copy(game.town25dV1),
+  playerX:game.playerX,playerY:game.playerY,camera:{x:camera.x,y:camera.y},
+  farm:copy(game.farmWorldV1),arch:copy(game.archWorldV1),
+  p:{x:p.x,y:p.y,vx:p.vx,vy:p.vy,grounded:p.grounded},
+  farmActive:farmWorldActive,archActive:archWorldActive,townActive:town25dActive,
+  farmPosition:{...farmPlayer},archPosition:{...archPlayer},archYaw,
+  townPosition:{...town25dPlayer},townCamera:{...t25Camera},townLastRegion:t25LastRegion,
+  manualMining:ssM15ManualMining,scene:ssM15Scene};
+}
+function m25bRestore(snapshot){
+ // Restore the source world before touching renderers. Never clear the original save key.
+ ssRegion=snapshot.region;
+ if(snapshot.story===undefined)delete game.storyM1;else game.storyM1=snapshot.story;
+ if(snapshot.town===undefined)delete game.town25dV1;else game.town25dV1=snapshot.town;
+ if(snapshot.farm===undefined)delete game.farmWorldV1;else game.farmWorldV1=snapshot.farm;
+ if(snapshot.arch===undefined)delete game.archWorldV1;else game.archWorldV1=snapshot.arch;
+ game.playerX=snapshot.playerX;game.playerY=snapshot.playerY;
+ Object.assign(p,snapshot.p);Object.assign(farmPlayer,snapshot.farmPosition);
+ Object.assign(archPlayer,snapshot.archPosition);archYaw=snapshot.archYaw;
+ Object.assign(town25dPlayer,snapshot.townPosition);t25Camera={...snapshot.townCamera};
+ t25LastRegion=snapshot.townLastRegion;camera.x=snapshot.camera.x;camera.y=snapshot.camera.y;
+ ssM15ManualMining=snapshot.manualMining;ssM15Scene=snapshot.scene;
+ if(snapshot.farmActive){if(!farmWorldActive)farmWorldActivate();else farmWorldDraw();}
+ else if(farmWorldActive)farmWorldDeactivate();
+ if(snapshot.archActive){if(!archWorldActive)archWorldActivate();else archWorldDraw();}
+ else if(archWorldActive)archWorldDeactivate();
+ if(snapshot.townActive){
+  if(!town25dActive)t25Activate();
+  town25dPlayer={...snapshot.townPosition};t25Camera={...snapshot.townCamera};
+  t25Draw(t25Ent);
+ }else if(town25dActive)t25Deactivate();
+ try{if(snapshot.persisted===null)localStorage.removeItem(SAVE_KEY);
+     else localStorage.setItem(SAVE_KEY,snapshot.persisted);}catch(e){console.warn('m25c rollback persistence blocked',e);}
+ visionCache.cx=-999;updateVisionCache(true);
+ m25bClearInputs();updHud();
+}
+function m25bReady(worldId){
+ if(worldId===TOWN_WORLD_ID){
+  // Do not confuse a placeholder town drawing with completed async WorldForge mount.
+  if(ssRegion!==TOWN_WORLD_ID||!town25dActive||t25Root.hidden)return false;
+  const state=town25dEngine?.state;
+  if(!['ready','paused','running','stopped'].includes(state)||town25dEngine.worldId!==T25_ID)return false;
+  t25Resize();t25Draw(t25Ent);
+  return t25Canvas.width>1&&t25Canvas.height>1&&t25W>1&&t25H>1
+    &&!!t25Ctx&&t25Ctx.getImageData(Math.floor(t25Canvas.width/2),Math.floor(t25Canvas.height/2),1,1).data[3]>0;
+ }
+ if(worldId==='mine'||worldId==='life_forest_01'){
+  if(ssRegion!==worldId||farmWorldActive||archWorldActive||town25dActive)return false;
+  resize();draw();
+  return cv.width>1&&cv.height>1&&viewW>1&&viewH>1;
+ }
+ if(worldId==='farm_01'){
+  if(!farmWorldActive||farmRoot.hidden)return false;
+  farmWorldResize();farmWorldDraw();
+  return farmCanvas.width>1&&farmCanvas.height>1&&farmCanvasW>1&&farmCanvasH>1;
+ }
+ if(worldId==='ruins_3d_01'){
+  if(!archWorldActive||archRoot.hidden)return false;
+  if(archRenderer!=='cpu'&&archRenderer!=='webgl')return false;
+  archWorldResize();archWorldDraw();
+  const canvas=archRenderer==='webgl'?archGpuCanvas:archFallbackCanvas;
+  return !canvas.hidden&&canvas.width>1&&canvas.height>1&&!!(archRenderer==='webgl'?archGl:archCpuCtx);
+ }
+ return false;
+}
+async function m25bWaitReady(destination){
+ const started=performance.now();let lastError=null;
+ while(performance.now()-started<M25B_READY_TIMEOUT_MS){
+  await m25bFrame();
+  try{if(m25bReady(destination))return true;}catch(e){lastError=e;}
+  if(destination===TOWN_WORLD_ID&&town25dEngine?.state==='failed')break;
+ }
+ if(lastError)console.warn('M2.5-C destination readiness',lastError);
+ return false;
+}
+async function m25bTransition(destination,action,core,source){
+ if(m25bBusy||ssM16TransitionLocked||ssIsTitle()||paused)return false;
+ const snapshot=m25bSnapshot(), priorPaused=paused,started=performance.now();
+ m25bBusy=true;ssM16TransitionLocked=true;m25bDestination=destination;
+ m25bLastResult='pending';m25bPhase='cover';paused=true;
+ m25bClearInputs();m25aRenderWorld(destination,false);m25aSetVisible(true);
+ m25bSetStatus('입력을 정리하고 월드를 준비하는 중…');
+ let ok=false,error=null,coreFinished=false;
+ try{
+  await m25bFrame(); // show actual cover before changing the destination renderer
+  m25bPhase='prepare';m25bSetStatus('월드 데이터와 출입구를 확인하는 중…');
+  const changed=await core();if(changed!==true)throw new Error('saved transition rejected');
+  coreFinished=true;m25bPhase='render';m25bSetStatus('첫 화면을 렌더링하는 중…');
+  await m25bFrame();
+  ok=await m25bWaitReady(destination);
+  if(!ok)throw new Error('destination first frame not ready');
+  if(action.startsWith('portal:')&&!saveGame(true))throw new Error('portal atomic commit rejected');
+  m25bPhase='ready';m25bSetStatus('준비 완료 · 월드로 들어갑니다');
+  await m25bDelay(Math.max(0,M25B_MIN_SHOW_MS-(performance.now()-started)));
+  m25bCompleted++;m25bLastResult='success';
+   // Change BGM only after world readiness and atomic portal save succeed.
+   void ssBgmSwitchRegion(destination);
+ }catch(e){
+  error=e;ok=false;m25bLastResult='failed';m25bPhase='rollback';
+  console.warn('M2.5-C transition rollback',action,e);
+  // If persistence changed, roll it back before exposing the source world.
+  try{m25bRestore(snapshot);}catch(restoreErr){console.error('M2.5-C rollback',restoreErr);}
+  m25bSetStatus('이동이 취소됐어요 · 이전 월드로 돌아갑니다');
+  await m25bDelay(Math.max(280,M25B_MIN_SHOW_MS-(performance.now()-started)));
+ }finally{
+  m25aSetVisible(false);paused=priorPaused;
+  m25bClearInputs();m25bBusy=false;ssM16TransitionLocked=false;m25bPhase='idle';m25bDestination='';last=performance.now();
+ }
+ if(!ok){
+  if(source==='farm_01'&&farmWorldActive)farmWorldToast('출입구 확인·저장 또는 렌더링 준비에 실패했어요');
+  else if(source==='ruins_3d_01'&&archWorldActive)archWorldNotify('월드 이동이 취소됐어요');
+  else flash('월드 이동이 취소됐어요. 이전 지역을 유지합니다');
+ }
+ return ok;
+}
+window.__sandstarWorldLoadingM25B=Object.freeze({
+ state:()=>({busy:m25bBusy,phase:m25bPhase,destination:m25bDestination,result:m25bLastResult,completed:m25bCompleted,saveKey:SAVE_KEY,
+   farmActive:farmWorldActive,archActive:archWorldActive,displayed:$('m16TransitionCover').classList.contains('active')}),
+ ready:worldId=>worldId==='farm_01'&&farmWorldActive?farmCanvas.width>1&&farmCanvas.height>1:
+  worldId==='ruins_3d_01'&&archWorldActive?(archRenderer==='webgl'?!!archGl:!!archCpuCtx):
+  ['mine','life_forest_01'].includes(worldId)&&!farmWorldActive&&!archWorldActive&&!town25dActive&&ssRegion===worldId||worldId===TOWN_WORLD_ID&&town25dActive&&['ready','paused','running','stopped'].includes(town25dEngine?.state)&&town25dEngine?.worldId===T25_ID,
+ worlds:['village_hub_01','mine','life_forest_01','farm_01','ruins_3d_01']
+});
+// M2.5-C: the same full-screen readiness/rollback used by farm + ruins now
+// handles town, mine and forest. Town adapter is authenticated by a nearby 2.5D gate.
+async function ssM16RequestTravel(target,requestedGateId=null,options={}){
+ const gate=ssM22PortalsInWorld().find(g=>g.target===target&&(!requestedGateId||g.id===requestedGateId))||ssM16CurrentGate();
+ const fromTown=options?.fromTown===true;
+ const townTarget=fromTown&&town25dActive&&ssRegion===TOWN_WORLD_ID
+    ?T25_TARGETS.find(t=>t.target===target&&t25Distance(t)<=2.65):null;
+ if(ssM16TransitionLocked||ssIsTitle()||paused||target!==gate.target
+    ||(fromTown?!townTarget:!ssM16NearPortal(gate)))return false;
+ if(performance.now()-ssM16LastTravelAt<1000){flash('출입구를 다시 이용하려면 잠시 기다려 주세요');return false;}
+ ssM16LastResult='pending';
+ const source=ssRegion;
+ const result=await m25bTransition(target,'portal:'+gate.id,()=>{
+  // Only after m25bSnapshot() has captured the actual 2.5D location.
+  if(fromTown){
+   if(game?.town25dV1)game.town25dV1.position={...town25dPlayer};
+   p.x=gate.x;p.y=terrain(gate.x)-1;p.vx=0;p.vy=0;
+  }
+  paused=false;
+  try{return ssM1Transition(target,true,gate.id,true);}finally{paused=true;}
+ },source);
+ ssM16LastResult=result?'success':'failed';
+ if(result){ssM16TravelCount++;ssM16LastTravelAt=performance.now();}
+ return result;
+}
+
+window.__sandstarWorldLoadingM25C=Object.freeze({state:()=>({
+ ...window.__sandstarWorldLoadingM25B.state(),townEngine:town25dEngine?.state||'unloaded',
+ townActive:town25dActive,region:ssRegion,transitionLastResult:ssM16LastResult,
+ worldforgeId:town25dEngine?.worldId||null,worlds:['village_hub_01','mine','life_forest_01','farm_01','ruins_3d_01'],
+ saveKey:SAVE_KEY
+})});
+// M1.7 — real forest objects resolve touch/E action at the actual location.
+// All payouts, inventory changes, timers and duplicate checks are delegated to the proven P1.1 command engine.
+const SS_M17_OBJECTS=Object.freeze([
+ ...LIVING_SITES.plots.map(x=>Object.freeze({id:'plot:'+x,type:'plot',x})),
+ {id:'pond',type:'pond',x:LIVING_SITES.pond},
+ ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x}))
+]);
+let ssM17PanelKind=null,ssM17PanelTarget=null,ssM17Selected=null,ssM17LastAction='',ssM17PanelFocus=null;
+function ssM17NearObject(o,range=3.15){
+ if(!game||!p||ssRegion!=='life_forest_01'||ssM15Scene==='mining'||ssM16TransitionLocked)return false;
+ const dy=p.y-(terrain(o.x)-1),dx=p.x-o.x;
+ return Math.abs(dx)<=range && Math.abs(dy)<=2.75 && Math.hypot(dx,dy*1.3)<=range+0.7;
+}
+function ssM17NearbyObject(){
+ if(!p||!game||paused||ssRegion!=='life_forest_01'||ssM15Scene==='mining')return null;
+ const choices=SS_M17_OBJECTS.filter(o=>ssM17NearObject(o)).map(o=>({o,d:Math.hypot(p.x-o.x,(p.y-(terrain(o.x)-1))*1.3)})).sort((a,b)=>a.d-b.d);
+ if(!choices.length)return null;
+ const selected=choices.find(c=>c.o.id===ssM17Selected);
+ return selected&&selected.d<=choices[0].d+0.65?selected.o:choices[0].o;
+}
+function ssM17ObjectById(id){return SS_M17_OBJECTS.find(o=>o.id===id)||null;}
+function ssM17ActionLabel(o){
+ const w=game?.livingP0;if(!o||!w)return '주변 행동';
+ if(o.type==='tree'){const waiting=w.trees[o.id]-w.clock;return waiting>0?(w.bag.sapling>0?'🌱 묘목 심기':'🌲 나무 재생 중'):'🪓 나무 벌목';}
+ if(o.type==='plot'){
+  const plot=w.plots[o.id];if(!plot||plot.plantedAt===null)return '🌾 씨앗 심기';
+  if(!plot.watered)return '💧 밭에 물 주기';
+  const sec=plot.crop==='legacy'?90:LIVING_CROPS[plot.crop]?.seconds||90;
+  return w.clock-plot.plantedAt>=sec?'🌾 작물 수확':'🌱 작물 성장 확인';
+ }
+ return w.fishing?'🎣 낚시 이어하기':w.rod?'🎣 낚시 시작':'🎣 낚싯대 준비';
+}
+function ssM17DoAction(id){
+ const o=ssM17ObjectById(id);if(!o||!ssM17NearObject(o)||paused){flash('대상 가까이 다가가서 이용해 주세요');return false;}
+ ssM17Selected=o.id;
+ if(o.type==='tree'){
+  const w=game.livingP0,waiting=w.trees[id]-w.clock;
+  const type=waiting<=0?'tree.cut':'tree.plant';
+  const r=livingAction(type,id);ssM17LastAction=type;
+  if(r.ok)updHud();return !!r.ok;
+ }
+ if(o.type==='plot'){
+  const w=game.livingP0,plot=w.plots[id];
+  if(plot.plantedAt===null){ssM17OpenPanel('seeds',id);return true;}
+  const type=plot.watered?'plot.harvest':'plot.water';
+  const r=livingAction(type,id);ssM17LastAction=type;
+  if(r.ok)updHud();return !!r.ok;
+ }
+ if(o.type==='pond'){ssM17OpenPanel('fish','pond');return true;}
+ return false;
+}
+function ssM17TryObjectTap(q){
+ if(ssRegion!=='life_forest_01'||ssM15Scene==='mining'||paused||ssM16TransitionLocked)return false;
+ const candidates=SS_M17_OBJECTS.filter(o=>Math.abs(q.x+.5-o.x)<=(o.type==='tree'?1.8:1.55)&&q.y>=(terrain(o.x)-1)-(o.type==='tree'?3.75:2.25)&&q.y<=(terrain(o.x)-1)+1.3)
+  .map(o=>({o,d:Math.abs(q.x+.5-o.x)})).sort((a,b)=>a.d-b.d);
+ if(!candidates.length)return false;
+ const obj=candidates[0].o;
+ if(!ssM17NearObject(obj)){flash('나무·밭·낚시터에 조금 더 가까이 가세요');return true;}
+ ssM17DoAction(obj.id);return true;
+}
+function ssM17DrawObjectMarker(){
+ const o=ssM17NearbyObject();if(!o||!p||!game)return;
+ const x=o.x*T-camera.x,foot=(terrain(o.x)-1)*T-camera.y;
+ if(x<-90||x>viewW+90)return;
+ const t=1+.055*Math.sin(frame*.13);
+ ctx.save();ctx.strokeStyle='#f8e9aa';ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.strokeRect(x-23*t,foot-(o.type==='tree'?76:36),53*t,o.type==='tree'?80:42);ctx.setLineDash([]);
+ ctx.fillStyle='#193e42eb';ctx.fillRect(x-30,foot-(o.type==='tree'?102:59),66,20);
+ ctx.fillStyle='#fff0bb';ctx.textAlign='center';ctx.font='bold 11px system-ui';ctx.fillText('E · '+(o.type==='tree'?'벌목':o.type==='plot'?'농사':'낚시'),x+3,foot-(o.type==='tree'?87:44));ctx.restore();
+}
+function ssM17ClosePanel(){
+ if(!ssM17PanelKind)return false;
+ ssM17PanelKind=null;ssM17PanelTarget=null;
+ $('m17ActivityOverlay').hidden=true;$('m17ActivityCard').innerHTML='';$('app').classList.remove('m17-activity-active');
+ paused=ssIsTitle()||$('overlay').classList.contains('open');
+ ssM15ResetHeldInputs();updHud();
+ const restore=ssM17PanelFocus;ssM17PanelFocus=null;
+ if(restore&&restore.isConnected&&typeof restore.focus==='function')restore.focus({preventScroll:true});
+ return true;
+}
+function ssM17OpenPanel(kind,id){
+ const o=ssM17ObjectById(id);if(!o||!ssM17NearObject(o)||paused)return false;
+ ssM17PanelKind=kind;ssM17PanelTarget=id;ssM17PanelFocus=document.activeElement;
+ ssM15ResetHeldInputs();releaseRope();paused=true;
+ $('app').classList.add('m17-activity-active');$('m17ActivityOverlay').hidden=false;
+ ssM17RenderPanel();$('m17ActivityCard').querySelector('button')?.focus({preventScroll:true});return true;
+}
+function ssM17RenderPanel(message=''){
+ const pane=$('m17ActivityCard'),w=game.livingP0;if(!pane||!ssM17PanelKind)return;
+ if(ssM17PanelKind==='seeds'){
+  const names={wheat:'밀',potato:'감자',carrot:'당근'};
+  pane.innerHTML='<h2>🌾 씨앗 심기</h2><p>밭 '+ssM17PanelTarget.split(':')[1]+' · 원하는 씨앗을 골라 심어 보세요.</p><div class="m17-actions">'+Object.keys(names).map(id=>'<button type="button" data-m17="seed" data-crop="'+id+'" '+(w.bag['seed_'+id]<1?'disabled':'')+'>'+names[id]+' ('+w.bag['seed_'+id]+')</button>').join('')+'</div><button class="m17-exit" data-m17="close" type="button">돌아가기</button><p class="m17-info">심은 후에는 다시 밭을 눌러 물을 주고 성장하면 수확할 수 있어요.</p>';
+ }else{
+  const f=w.fishing,info=f?LIVING_FISH[f.id]:null;
+  const state=f?'<div class="m17-meters"><div class="m17-meter"><span>포획 '+f.progress+'%</span><progress max="100" value="'+f.progress+'"></progress></div><div class="m17-meter"><span>줄 긴장 '+f.tension+'%</span><progress max="100" value="'+f.tension+'"></progress></div></div>':'<p>'+(w.rod?'낚싯대를 던지면 긴장도 관리가 시작돼요.':'원목 3개로 낚싯대를 만들 수 있어요.')+'</p>';
+  const actions=!w.rod?'<button data-m17="craft" type="button" '+((game.inv.wood||0)<3?'disabled':'')+'>🪵 낚싯대 만들기 (원목 3)</button>':f?'<button data-m17="reel" type="button">⬆ 줄 감기</button><button data-m17="slacken" type="button">⬇ 줄 풀기</button>':'<button data-m17="cast" type="button" '+(w.clock<w.pondReadyAt?'disabled':'')+'>🎣 낚싯대 던지기</button>';
+  pane.innerHTML='<h2>🎣 잔빛숲 강변 낚시</h2>'+state+'<div class="m17-actions">'+actions+'</div><button class="m17-exit" data-m17="close" type="button">낚시 화면 닫기</button><p class="m17-info">'+(message||('도감 '+w.fishDex.length+'/3종 · 포획 '+w.stats.fished+'마리'))+'</p>';
+ }
+}
+$('m17ActivityCard').addEventListener('click',e=>{
+ const b=e.target.closest('button[data-m17]');if(!b||!ssM17PanelKind)return;
+ e.preventDefault();e.stopPropagation();
+ const action=b.dataset.m17;if(action==='close'){ssM17ClosePanel();return;}
+ const obj=ssM17ObjectById(ssM17PanelTarget);
+ if(!obj||!ssM17NearObject(obj)){flash('대상에서 멀어졌어요');ssM17ClosePanel();return;}
+ const kind=ssM17PanelKind,id=ssM17PanelTarget;
+ const typ=action==='seed'?'plot.plant':action==='craft'?'craft.rod':action==='cast'?'pond.cast':action==='reel'?'pond.reel':action==='slacken'?'pond.slacken':null;
+ if(!typ)return;
+ const r=livingAction(typ,kind==='seeds'?id:'pond',action==='seed'?b.dataset.crop:undefined);ssM17LastAction=typ;
+ if(r.ok&&kind==='seeds'){ssM17ClosePanel();return;}
+ ssM17RenderPanel(r.ok?r.message:r.reason||'조건을 확인하세요');
+});
+$('m17ActivityOverlay').addEventListener('pointerdown',e=>{if(e.target.id==='m17ActivityOverlay'){e.preventDefault();ssM17ClosePanel();}});
+window.__sandstarM17={get:()=>({saveKey:SAVE_KEY,region:ssRegion,scene:ssM15Scene,nearby:ssM17NearbyObject()?.id||null,selected:ssM17Selected,panel:ssM17PanelKind,action:ssM17LastAction,paused}),interact:ssM17DoAction,tap:ssM17TryObjectTap,close:ssM17ClosePanel,getWorldObjects:()=>SS_M17_OBJECTS.map(x=>({...x}))};
+
+// M1 story slice: organic quest, no compulsory dialogue locks or new paid resources.
+function ssM1NearbyAction(){
+ if(!p||!game||paused)return null;
+ const x=p.x;
+   if(ssRegion===TOWN_WORLD_ID){
+   if(ssM16NearPortal(SS_M16_PORTALS.townMine))return {label:'⛏ 광산으로 내려가기',act:'mine-enter'};
+   if(ssM16NearPortal(SS_M16_PORTALS.village))return {label:'🌿 잔빛숲 들어가기',act:'enter'};
+   if(ssM15Near(59,2.5))return {label:'🪚 목수 하린과 대화',act:'harin'};
+   if(ssM15Near(23,3.4))return {label:'🛒 생활 장터·요리',act:'market'};
+  }else if(ssRegion==='mine'){
+   if(ssM16NearPortal(SS_M16_PORTALS.mine))return {label:'🏘️ 도래마을로 올라가기',act:'mine-exit'};
+   if(ssM15Near(M1_MINE_CRYSTAL_X,3.1)&&!game.storyM1.crystalSeen)return {label:'✦ 빛나는 광맥 조사',act:'crystal'};
+  }else{
+  if(archWorldNearForestGate())return {label:'✦ 3D 유적 들어가기',act:'arch-enter'};
+  if(ssM16NearPortal(SS_M16_PORTALS.forest))return {label:'🏘️ 도래마을 돌아가기',act:'exit'};
+  if(ssM15Near(M1_FOREST_SPRING_X,3.8))return {label:game.storyM1.springRepaired?'💧 별샘의 기록 보기':'✦ 꺼진 별샘 조사·복구',act:'spring'};
+  if(ssM15Near(113,2.5))return {label:'📖 연구자 서온과 대화',act:'seon'};
+  const livingObject=ssM17NearbyObject();if(livingObject)return {label:ssM17ActionLabel(livingObject),act:'m17-object',targetId:livingObject.id};
+ }
+ return null;
+}
+function ssM1QuestText(){
+ const st=game?.storyM1;if(!st)return '월드 데이터를 확인하는 중';
+ if(st.springRepaired)return '물길이 돌아왔다 · 자유 탐험과 주민 의뢰를 이어가세요.';
+ if(!st.crystalSeen)return '마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요.';
+ if(!st.forestVisited)return '마을 동쪽 X64 출입구에서 잔빛숲으로 이동하세요.';
+ if(ssRegion==='mine')return '광산 출입구 X40 → 마을 → 잔빛숲의 별샘을 찾아가세요.';
+ return '별샘 X120 · 재료: 원목 2, 돌 2 · 채굴·벌목으로 준비.';
+}
+function ssM1SyncHUD(){
+ const badge=$('m1QuestBadge'),label=$('m1QuestText'),b=$('m1ActionBtn');if(!badge||!b||!game||!p)return;
+ label.textContent=ssM1QuestText();farmWorldSyncForestGate();
+ const item=ssM16TransitionLocked?null:ssM1NearbyAction();b.hidden=!item;
+ if(item){b.textContent=item.label;b.dataset.action=item.act;}
+}
+function ssM1LogEvent(id){const a=game.storyM1.storyEvents;if(!a.includes(id)){a.push(id);if(a.length>24)a.shift();}}
+function ssM1Transition(target,fromPortal=false,sourceGateId='',deferSave=false){
+ if(!game||!p||paused||!['mine','life_forest_01',TOWN_WORLD_ID].includes(target)||target===ssRegion)return false;
+ const previousRegion=ssRegion,prevWorld={x:game.playerX,y:game.playerY},prevPos={x:p.x,y:p.y,vx:p.vx,vy:p.vy},prevStory=JSON.parse(JSON.stringify(game.storyM1));
+ if(!deferSave&&!saveGame(true)){flash('이동 전 저장이 차단됐어요. 기존 위치를 유지합니다.');return false;}
+ if(previousRegion==='mine')game.storyM1.minePos={x:p.x,y:p.y};else if(previousRegion===TOWN_WORLD_ID)game.storyM1.townPos={x:p.x,y:p.y};else game.storyM1.forestPos={x:p.x,y:p.y};
+ game.storyM1.region=target;ssRegion=target;
+ const dest=target==='mine'?game.storyM1.minePos:target===TOWN_WORLD_ID?game.storyM1.townPos:game.storyM1.forestPos;
+ const safe=fromPortal?ssM16ResolveSafeSpawn(target,sourceGateId):null;
+ const targetX=fromPortal?(safe?.x??NaN):(dest?.x||(target==='mine'?TOWN_MINE_PORTAL_X+.5:target===TOWN_WORLD_ID?SPAWN_X+.5:M1_FOREST_GATE_X+2));
+ const targetY=fromPortal?(safe?.y??NaN):(dest?.y||terrain(targetX)-1);
+ releaseRope();hudReleaseMine();stopMineStick();holdTarget=null;holdLast=null;holdProgress=0;
+ input.left=input.right=input.jump=input.reelIn=input.reelOut=false;
+ p.x=targetX;p.y=targetY;p.vx=0;p.vy=0;p.grounded=false;
+ if(!fromPortal&&collides(p.x,p.y)){p.x=(target==='mine'?TOWN_MINE_PORTAL_X+2:target===TOWN_WORLD_ID?SPAWN_X+1:M1_FOREST_GATE_X+2)+.5;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!Number.isFinite(p.x)||!Number.isFinite(p.y)){
+  game.storyM1=prevStory;ssRegion=previousRegion;p.x=prevPos.x;p.y=prevPos.y;p.vx=prevPos.vx;p.vy=prevPos.vy;flash('안전한 진입 위치를 찾지 못했어요.');return false;
+ }
+ if(target==='life_forest_01'){game.storyM1.forestVisited=true;ssM1LogEvent('entered-forest');}
+ game.playerX=p.x;game.playerY=p.y;
+ if(!deferSave&&!saveGame(true)){
+  game.storyM1=prevStory;ssRegion=previousRegion;game.playerX=prevWorld.x;game.playerY=prevWorld.y;
+  p.x=prevPos.x;p.y=prevPos.y;p.vx=prevPos.vx;p.vy=prevPos.vy;
+  flash('저장 실패로 지역 이동을 취소했어요.');return false;
+ }
+ camera.x=Math.max(0,p.x*T-viewW*.45);camera.y=Math.max(0,p.y*T-viewH*.5);
+ ssM15ManualMining=false;ssM15Scene='';ssM15ResetHeldInputs();
+ visionCache.cx=-999;updateVisionCache(true);updHud();flash(target==='mine'?'광산에 도착했어요':target===TOWN_WORLD_ID?'도래마을에 도착했어요':'새 지역 발견 · 잔빛숲');return true;
+}
+function ssM1InspectCrystal(){
+ if(ssRegion!=='mine'||Math.abs(p.x-M1_MINE_CRYSTAL_X)>3.1)return false;
+ if(game.storyM1.crystalSeen){flash('이미 기록한 별맥의 흔적이에요');return true;}
+ if(game.mined<1){flash('주변 흙이나 돌을 먼저 한 번 채굴해 보세요.');return false;}
+ game.storyM1.crystalSeen=true;ssM1LogEvent('crystal-discovered');
+ if(!saveGame(true)){game.storyM1.crystalSeen=false;game.storyM1.storyEvents=game.storyM1.storyEvents.filter(x=>x!=='crystal-discovered');flash('저장할 수 없어 발견을 기록하지 못했어요');return false;}
+ updHud();flash('✦ 별맥의 흔적 발견! 동쪽 X64 숲길로 향하세요.');return true;
+}
+function ssM1SpringMenu(){
+ if(ssRegion!=='life_forest_01'||Math.abs(p.x-M1_FOREST_SPRING_X)>3.8)return false;
+ const st=game.storyM1;
+ if(st.springRepaired){showModal('💧 다시 흐르는 별샘','<p>작은 물줄기가 돌아왔습니다. 그러나 오래된 장치에는 경고가 새겨져 있어요.</p><p><em>“흐름을 되찾는 자여, 무엇이 잠들어 있는지도 기억하라.”</em></p><p class="note">제1장 완료 · 이후의 이야기는 후속 개발에서 이어집니다. 생활·채굴은 계속할 수 있습니다.</p>');return true;}
+ showModal('✦ 꺼진 샘의 비밀',`<p>메마른 강의 상류에 봉인된 별맥 장치가 있습니다. 낡은 수리판에는 <strong>원목 2개와 돌 2개</strong>가 필요하다고 적혀 있어요.</p><div class="line"><div>✦ 광맥 조사 기록</div><strong>${st.crystalSeen?'발견함':'미발견 · 마을 X55'}</strong></div><div class="line"><div>원목</div><strong>${game.inv.wood||0} / 2</strong></div><div class="line"><div>돌</div><strong>${game.inv.stone||0} / 2</strong></div><div class="stack"><button type="button" class="cta" id="m1RepairBtn" ${st.crystalSeen&&game.inv.wood>=2&&game.inv.stone>=2?'':'disabled'}>별샘 수리하기</button></div><p class="note">숲 나무 X82·94·106에서 벌목하고, 마을 광산에서 돌을 채굴하세요. 지역을 오가도 소지품은 보존됩니다.</p>`);
+ $('m1RepairBtn').onclick=ssM1RepairSpring;return true;
+}
+function ssM1RepairSpring(){
+ const st=game.storyM1;
+ if(ssRegion!=='life_forest_01'||Math.abs(p.x-M1_FOREST_SPRING_X)>3.8||st.springRepaired||!st.crystalSeen||game.inv.wood<2||game.inv.stone<2){flash('별맥 조사와 수리 재료가 더 필요해요.');return false;}
+ const prev={wood:game.inv.wood,stone:game.inv.stone,story:JSON.parse(JSON.stringify(st))};
+ game.inv.wood-=2;game.inv.stone-=2;st.springRepaired=true;st.storyRewarded=true;ssM1LogEvent('spring-repaired');
+ if(!saveGame(true)){game.inv.wood=prev.wood;game.inv.stone=prev.stone;game.storyM1=prev.story;flash('저장할 수 없어 수리를 취소했어요. 재료는 보존됐습니다.');return false;}
+ closeModal();updHud();flash('💧 첫 번째 별맥이 깨어났어요!');return true;
+}
+function ssM1Talk(role){
+ if(role==='harin'){
+  showModal('🪚 하린 · 도래마을의 목수',`<p>“여긴 고칠 게 많아. 그래도 돌아올 길은 남겨 두었어.”</p><p>${game.storyM1.crystalSeen?'별빛 결정이라… 그럼 숲의 오래된 수로 장치도 다시 움직일지 몰라.':'저쪽 X55에서 묘한 빛이 보여. 근처 땅을 조금 캐보고 살펴줄래?'}</p><p class="note">마을 동쪽 X64의 나무문을 지나면 잔빛숲으로 이어집니다. 생활권은 별도의 맵이지만 자원과 장비는 공유합니다.</p>`);return true;
+ }
+ if(role==='seon'){
+  showModal('📖 서온 · 지질 조사원',`<p>“빛이 난다는 사실과 안전하다는 결론은 다르죠. 지금은 둘을 구분해야 해요.”</p><p>${game.storyM1.springRepaired?'물길은 돌아왔지만, 봉인된 장치가 왜 있었는지는 더 조사해야 합니다.':'이 길 끝 X120의 샘에 고대 결정 회로가 있어요. 광산의 별광 흔적을 기록하고 원목 2개와 돌 2개로 장치를 수리해 볼 수 있을 거예요.'}</p><p class="note">서온은 이 세계의 별맥이 자연의 순환인지, 누군가가 설계한 장치인지 아직 판단하지 않았습니다.</p>`);return true;
+ }
+ return false;
+}
+function ssM1Act(){
+ const choice=ssM1NearbyAction();if(!choice)return false;
+ if(choice.act==='arch-enter')return archWorldTryEnter();
+  if(choice.act==='crystal')return ssM1InspectCrystal();
+ if(choice.act==='enter')return ssM16RequestTravel('life_forest_01');
+ if(choice.act==='exit'||choice.act==='mine-exit')return ssM16RequestTravel(TOWN_WORLD_ID);
+ if(choice.act==='mine-enter')return ssM16RequestTravel('mine');
+ if(choice.act==='spring')return ssM1SpringMenu();
+ if(choice.act==='harin'||choice.act==='seon')return ssM1Talk(choice.act);
+ if(choice.act==='m17-object')return ssM17DoAction(choice.targetId);
+ const name=choice.act==='market'?'town':choice.act;
+ livingActiveTab=name==='town'?'town':name;livingMenu();return true;
+}
+$('m1ActionBtn').addEventListener('click',e=>{e.stopPropagation();ssM1Act();});
+window.__sandstarHUDM15={get:()=>({scene:ssM15Scene,manualMining:ssM15ManualMining,base:ssM15BaseScene(),region:ssRegion,questExpanded:ssM15QuestExpanded,saveKey:SAVE_KEY}),toggleTool:ssM15ToggleToolMode,sync:ssM15SyncScene,setTestPosition:(x,y)=>{p.x=x;p.y=y;p.vx=p.vy=0;ssM15ManualMining=false;ssM15Scene='';updHud();}};
+
+// ============================================================
+// SANDSTAR FARM WORLD M2.0: true independently simulated top-down map.
+// Not a popup: its viewport, player, collision, camera, input and worldId
+// replace the legacy side-view scene until the physical gate is used.
+// Legacy ssRegion remains life_forest_01 in the suspended side-view adapter.
+// ============================================================
+const FARM_WORLD_ID='farm_01', FARM_FOREST_GATE_X=28, FARM_W=46, FARM_H=32, FARM_TILE=32;
+const FARM_PLOTS=Object.freeze([{id:'plot:34',x:18,y:15},{id:'plot:37',x:24,y:15},{id:'plot:40',x:30,y:15}]);
+const farmRoot=$('farmWorldRoot'),farmCanvas=$('farmWorldCanvas'),farmCtx=farmCanvas.getContext('2d',{alpha:false});
+let farmWorldActive=false,farmFrame=0,farmPlayer={x:6.5,y:16.5,face:'down'},farmCamera={x:0,y:0},farmSelectedSeed='wheat',farmMoveKeys=new Set(),farmPointer=null,farmJoystick={x:0,y:0},farmActionCount=0,farmChangeTimer=0,farmToastUntil=0,farmLastEnter=0;
+let farmCanvasW=0,farmCanvasH=0,farmCanvasDpr=1,farmCommandSeq=0;
+function farmWorldNormalize(raw){
+ const d={schema:1,activeWorldId:ssRegion,position:{x:6.5,y:16.5},entryCount:0};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return d;
+ if(raw.activeWorldId===FARM_WORLD_ID)d.activeWorldId=FARM_WORLD_ID;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.y)){
+  const x=Math.max(2.5,Math.min(FARM_W-2.5,raw.position.x)),y=Math.max(2.5,Math.min(FARM_H-2.5,raw.position.y));
+  if(!farmWorldBlocked(x,y))d.position={x,y};
+ }
+ d.entryCount=Number.isSafeInteger(raw.entryCount)?Math.min(100000,Math.max(0,raw.entryCount)):0;
+ return d;
+}
+function farmWorldBlocked(x,y){
+ if(!Number.isFinite(x)||!Number.isFinite(y)||x<1.4||y<1.4||x>FARM_W-2.4||y>FARM_H-2.4)return true;
+ const rect=(x1,y1,x2,y2)=>x>x1&&x<x2&&y>y1&&y<y2;
+ if(rect(8,4,15,10)||rect(33,4,41,11)||rect(34,22,43,30)||rect(4,22,8,27))return true;
+ for(const [tx,ty] of [[12,24],[16,25],[40,16],[7,30],[43,12],[17,4]])if(Math.hypot(x-tx,y-ty)<.83)return true;
+ return false;
+}
+function farmWorldInitState(){game.farmWorldV1=farmWorldNormalize(game?.farmWorldV1);return game.farmWorldV1;}
+function farmWorldNearbyGate(){return Math.hypot(farmPlayer.x-3.9,farmPlayer.y-16.5)<3.1;}
+function farmWorldNearPlot(){
+ let best=null,dist=Infinity;
+ for(const o of FARM_PLOTS){let d=Math.hypot(farmPlayer.x-o.x,farmPlayer.y-o.y);if(d<dist){best=o;dist=d;}}
+ return dist<=3.15?best:null;
+}
+function farmWorldNearForestGate(){return !!p&&!!game&&!paused&&!ssM16TransitionLocked&&ssRegion==='life_forest_01'&&ssM15Scene!=='mining'&&Math.abs(p.x-FARM_FOREST_GATE_X)<=2.8&&Math.abs(p.y-(terrain(FARM_FOREST_GATE_X)-1))<=2.8;}
+function farmWorldSyncForestGate(){
+ const b=$('farmForestGateAction');if(!b)return;
+ b.hidden=!farmWorldNearForestGate();
+}
+$('farmForestGateAction').addEventListener('click',e=>{e.stopPropagation();farmWorldTryEnter();});
+function farmWorldDrawForestPortal(){
+ if(!game||ssRegion!=='life_forest_01')return;
+ const sx=Math.round(FARM_FOREST_GATE_X*T-camera.x),sy=Math.round((terrain(FARM_FOREST_GATE_X)-1)*T-camera.y);
+ if(sx<-75||sx>viewW+75)return;
+ const near=farmWorldNearForestGate();ctx.save();
+ ctx.fillStyle='#60452e';ctx.fillRect(sx-16,sy-48,8,51);ctx.fillRect(sx+22,sy-48,8,51);
+ ctx.fillStyle='#bfa474';ctx.fillRect(sx-18,sy-49,50,9);
+ ctx.fillStyle=near?'#fff3ab':'#edffdb';ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillText(near?'E · 도래 농장 입장':'🌾 농장 길 →',sx+5,sy-62);
+ if(near){ctx.globalAlpha=.24;ctx.fillStyle='#f5e9b1';ctx.fillRect(sx-23,sy-52,58,55);}
+ ctx.restore();
+}
+function farmWorldTryForestTap(q){
+ if(ssRegion!=='life_forest_01'||!q)return false;
+ const y=terrain(FARM_FOREST_GATE_X)-1;
+ if(Math.abs(q.x+.5-FARM_FOREST_GATE_X)>1.7||q.y<y-3.1||q.y>y+1)return false;
+ if(!farmWorldNearForestGate()){flash('농장 출입구 가까이 가서 이용해 주세요');return true;}
+ farmWorldTryEnter();return true;
+}
+function farmWorldClearInput(){farmMoveKeys.clear();farmJoystick={x:0,y:0};farmPointer=null;}
+function farmWorldActivate(){
+ farmWorldActive=true;farmRoot.hidden=false;$('app').classList.add('farm-world-active');
+ farmWorldClearInput();ssM15ResetHeldInputs();releaseRope();
+ const state=farmWorldInitState();farmPlayer.x=state.position.x;farmPlayer.y=state.position.y;
+ farmWorldResize();farmWorldRefreshHud();
+}
+function farmWorldDeactivate(){
+ farmWorldClearInput();farmWorldActive=false;farmRoot.hidden=true;$('app').classList.remove('farm-world-active');
+ ssM15ResetHeldInputs();last=performance.now();
+}
+function farmWorldEnterCore(){
+ if(farmWorldActive)return false;
+ if(!saveGame(true)){flash('진입 전 저장에 실패했어요. 월드는 유지됩니다.');return false;}
+ const prev=game.farmWorldV1?JSON.parse(JSON.stringify(game.farmWorldV1)):null;
+ const state=farmWorldInitState();state.activeWorldId=FARM_WORLD_ID;state.entryCount++;
+ if(!saveGame(true)){
+  if(prev)game.farmWorldV1=prev;else delete game.farmWorldV1;
+  flash('농장 저장에 실패했어요. 진입하지 않았습니다.');return false;
+ }
+ farmWorldActivate();farmLastEnter=performance.now();farmWorldToast('도래 농장에 도착했어요. 밭까지 걸어가 보세요!');return true;
+}
+function farmWorldExitCore(){
+ if(!farmWorldActive||!farmWorldNearbyGate()){farmWorldToast('서쪽 출입구로 가까이 가야 돌아갈 수 있어요');return false;}
+ const state=farmWorldInitState(),old=JSON.parse(JSON.stringify(state));
+ const oldPlayer={x:p.x,y:p.y,vx:p.vx,vy:p.vy};
+ state.position={x:farmPlayer.x,y:farmPlayer.y};state.activeWorldId='life_forest_01';
+ p.x=FARM_FOREST_GATE_X+.5;p.y=terrain(p.x)-1;p.vx=p.vy=0;
+ if(collides(p.x,p.y)){p.x=FARM_FOREST_GATE_X+1.5;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!saveGame(true)){
+  game.farmWorldV1=old;Object.assign(p,oldPlayer);farmWorldToast('저장 또는 안전 위치 확인에 실패해 농장에 머무릅니다');return false;
+ }
+ farmWorldDeactivate();updHud();flash('잔빛숲으로 돌아왔어요');return true;
+}
+function farmWorldTryEnter(){
+ if(!farmWorldNearForestGate()||farmWorldActive||performance.now()-farmLastEnter<420||m25bBusy)return false;
+ return m25bTransition(FARM_WORLD_ID,'farm-enter',farmWorldEnterCore,'life_forest_01');
+}
+function farmWorldTryExit(){
+ if(!farmWorldActive||!farmWorldNearbyGate()||m25bBusy){
+  if(farmWorldActive&&!m25bBusy)farmWorldToast('서쪽 출입구로 가까이 가야 돌아갈 수 있어요');
+  return false;
+ }
+ return m25bTransition('life_forest_01','farm-exit',farmWorldExitCore,FARM_WORLD_ID);
+}
+function farmWorldRestoreAfterContinue(){
+ if(!game||ssIsTitle())return;
+ const state=farmWorldInitState();
+ if(state.activeWorldId===FARM_WORLD_ID){farmWorldActivate();farmWorldToast('농장에서 이어서 시작합니다');}
+}
+function farmWorldToast(message){const t=$('farmWorldToast');t.textContent=message;t.classList.add('show');farmToastUntil=performance.now()+2400;}
+function farmWorldActionLabel(){
+ if(farmWorldNearbyGate())return '🚪 잔빛숲으로 나가기';
+ const near=farmWorldNearPlot();if(!near)return '🌾 밭으로 이동하세요';
+ const plot=game?.livingP0?.plots?.[near.id];if(!plot)return '🌾 경작 준비 중';
+ if(plot.plantedAt===null)return '🌱 '+LIVING_CROPS[farmSelectedSeed].name+' 심기';
+ if(!plot.watered)return '💧 물 주기';
+ const t=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90);
+ const remaining=t-(game.livingP0.clock-plot.plantedAt);
+ return remaining>0?'🌿 성장 중 '+Math.ceil(remaining)+'초':'🌾 수확하기';
+}
+function farmWorldRefreshHud(){
+ if(!game||!farmWorldActive)return;
+ const bag=game.livingP0.bag;
+ $('farmWorldBag').textContent=`🌱 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;
+ $('farmWorldCoords').textContent=`X ${Math.floor(farmPlayer.x)} · Y ${Math.floor(farmPlayer.y)} · ${FARM_WORLD_ID}`;
+ const btn=$('farmWorldAction');btn.textContent=farmWorldActionLabel();btn.disabled=!farmWorldNearPlot()&&!farmWorldNearbyGate();
+ $('farmWorldExit').hidden=!farmWorldNearbyGate();
+ const near=farmWorldNearPlot();$('farmWorldSub').textContent=near?`농장 ${near.id.replace('plot:','')}번 밭 · ${farmWorldActionLabel().replace(/^[^ ]+ /,'')}`:'자유롭게 이동하며 밭과 출입구를 찾으세요';
+}
+function farmWorldCommand(type,target,item){
+ const cmd={id:'farm-'+Date.now()+'-'+(++farmCommandSeq),type,target,item};
+ const tx=livingTargetX(target);if(tx===null)return false;
+ // The existing P1.1 command engine operates on canonical legacy plot IDs.
+ // Farm player proximity is validated in independent world coordinates FIRST.
+ const r=applyLivingCommandPure(game.livingP0,cmd,{x:tx,y:76,groundY:76,inv:game.inv,coins:game.coins,seed:game.seed});
+ if(!r.ok){farmWorldToast(r.reason);return false;}
+ const prevState=game.livingP0,prevInv=game.inv,prevCoins=game.coins;
+ game.livingP0=r.state;game.inv=r.inv;game.coins=r.coins;
+ if(!saveGame(true)){game.livingP0=prevState;game.inv=prevInv;game.coins=prevCoins;farmWorldToast('저장 실패: 작업이 취소되고 자원이 복구됐어요');return false;}
+ farmActionCount++;farmWorldRefreshHud();farmWorldToast(r.message);return true;
+}
+function farmWorldAction(){
+ if(!farmWorldActive||m25bBusy)return false;
+ if(farmWorldNearbyGate())return farmWorldTryExit();
+ const near=farmWorldNearPlot();if(!near){farmWorldToast('밭 옆으로 이동하면 작업할 수 있어요');return false;}
+ const plot=game.livingP0.plots[near.id];
+ if(plot.plantedAt===null)return farmWorldCommand('plot.plant',near.id,farmSelectedSeed);
+ if(!plot.watered)return farmWorldCommand('plot.water',near.id);
+ return farmWorldCommand('plot.harvest',near.id);
+}
+$('farmWorldAction').addEventListener('click',farmWorldAction);
+$('farmWorldExit').addEventListener('click',farmWorldTryExit);
+$('farmSeedSelector').addEventListener('click',e=>{const b=e.target.closest('[data-farm-seed]');if(!b)return;
+ farmSelectedSeed=b.dataset.farmSeed;
+ for(const x of $('farmSeedSelector').querySelectorAll('button'))x.classList.toggle('selected',x===b);
+ farmWorldRefreshHud();});
+function farmWorldResize(){
+ const r=farmCanvas.getBoundingClientRect();farmCanvasW=r.width;farmCanvasH=r.height;
+ farmCanvasDpr=Math.min(devicePixelRatio||1,2);farmCanvas.width=Math.max(1,Math.round(r.width*farmCanvasDpr));farmCanvas.height=Math.max(1,Math.round(r.height*farmCanvasDpr));
+ farmCtx.imageSmoothingEnabled=false;
+}
+function farmWorldMoveDelta(){
+ if(m25bBusy)return {x:0,y:0};
+ let dx=(farmMoveKeys.has('d')||farmMoveKeys.has('arrowright')?1:0)-(farmMoveKeys.has('a')||farmMoveKeys.has('arrowleft')?1:0);
+ let dy=(farmMoveKeys.has('s')||farmMoveKeys.has('arrowdown')?1:0)-(farmMoveKeys.has('w')||farmMoveKeys.has('arrowup')?1:0);
+ dx+=farmJoystick.x;dy+=farmJoystick.y;let n=Math.hypot(dx,dy);return n>1?{x:dx/n,y:dy/n}:{x:dx,y:dy};
+}
+function farmWorldTick(dt){
+ if(!game||ssIsTitle())return;
+ if(m25bBusy){farmWorldDraw();return;}
+ if(farmToastUntil&&performance.now()>farmToastUntil){$('farmWorldToast').classList.remove('show');farmToastUntil=0;}
+ farmFrame++;
+ const vec=farmWorldMoveDelta();const delta=Math.min(.05,dt)*4.7;
+ for(const axis of ['x','y']){
+  const v=vec[axis]*delta;if(!v)continue;
+  const next={...farmPlayer,[axis]:farmPlayer[axis]+v};
+  const rad=.31;
+  if(![[-rad,-rad],[rad,-rad],[-rad,rad],[rad,rad]].some(([ox,oy])=>farmWorldBlocked(next.x+ox,next.y+oy)))farmPlayer[axis]+=v;
+ }
+ if(Math.abs(vec.x)+Math.abs(vec.y)>.1)farmPlayer.face=Math.abs(vec.x)>Math.abs(vec.y)?vec.x>0?'right':'left':vec.y>0?'down':'up';
+ livingWorldTick(Math.max(0,dt)); // crops mature while playing in the new world
+ farmChangeTimer+=dt;
+ if(farmChangeTimer>.25){farmChangeTimer=0;farmWorldRefreshHud();}
+ if(farmFrame%270===0){game.farmWorldV1.position={x:farmPlayer.x,y:farmPlayer.y};saveGame(true);}
+ farmWorldDraw();
+}
+const farmRand=(x,y,k=1)=>{let a=Math.sin((x*113+y*241+k*37)*12.9898)*43758.5453;return a-Math.floor(a);};
+function farmWorldDraw(){
+ if(!farmCanvasW||!farmCanvasH)farmWorldResize();
+ const c=farmCtx,t=FARM_TILE,W=farmCanvasW,H=farmCanvasH;
+ c.setTransform(farmCanvasDpr,0,0,farmCanvasDpr,0,0);c.imageSmoothingEnabled=false;
+ c.fillStyle='#85b990';c.fillRect(0,0,W,H);
+ farmCamera.x=Math.max(0,Math.min(Math.max(0,FARM_W*t-W),farmPlayer.x*t-W*.5));
+ farmCamera.y=Math.max(0,Math.min(Math.max(0,FARM_H*t-H),farmPlayer.y*t-H*.51));
+ c.save();c.translate(-Math.round(farmCamera.x),-Math.round(farmCamera.y));
+ const x0=Math.max(0,Math.floor(farmCamera.x/t)-1),x1=Math.min(FARM_W-1,Math.ceil((farmCamera.x+W)/t)+1);
+ const y0=Math.max(0,Math.floor(farmCamera.y/t)-1),y1=Math.min(FARM_H-1,Math.ceil((farmCamera.y+H)/t)+1);
+ const path=(x,y)=>(y>=15&&y<=17&&x>=3&&x<=37)||(x>=19&&x<=21&&y>=6&&y<=26)||(x>=11&&x<=13&&y>=10&&y<=17);
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+  const px=x*t,py=y*t,road=path(x,y);c.fillStyle=road?((x+y)%2?'#baae80':'#c6b78e'):(farmRand(x,y)>.55?'#82b98a':'#8cc497');c.fillRect(px,py,t,t);
+  if(road){c.fillStyle='#e0cf9c';if(farmRand(x,y,9)>.66)c.fillRect(px+8,py+11,4,2);}else{
+   const r=farmRand(x,y);if(r>.79){c.fillStyle='#568b5b';c.fillRect(px+7,py+8,3,9);c.fillRect(px+21,py+22,4,5);}if(r<.12){c.fillStyle='#fff3bb';c.fillRect(px+13,py+13,3,3);} }
+ }
+ // Outer fence with visible western farm gate; fence has physical collision along map bounds.
+ for(let x=1;x<FARM_W-1;x++){farmDrawFence(c,x,1,'horizontal');farmDrawFence(c,x,FARM_H-2,'horizontal');}
+ for(let y=1;y<FARM_H-1;y++){if(y<14||y>18)farmDrawFence(c,1,y,'vertical');farmDrawFence(c,FARM_W-2,y,'vertical');}
+ // Barn, farmhouse, woodland, pond, orchard and crop plots are actual spatial entities.
+ farmDrawHouse(c,8,4,7,6,'🏡 농장 주택','#a96e59');
+ farmDrawHouse(c,33,4,8,7,'🏚️ 창고','#805c56');
+ // Pond with bordered reeds; solid collision handled by farmWorldBlocked.
+ for(let y=22;y<30;y++)for(let x=34;x<43;x++){
+  c.fillStyle=farmRand(x,y,7)>.5?'#488f9a':'#559da2';c.fillRect(x*t,y*t,t,t);
+  if(farmRand(x,y,21)>.83){c.fillStyle='#bddcd1';c.fillRect(x*t+9,y*t+14,9,2);}
+ }
+ for(const [x,y] of [[6,25],[12,24],[16,25],[40,16],[7,30],[43,12],[17,4]])farmDrawTree(c,x,y);
+ for(const o of FARM_PLOTS)farmDrawPlot(c,o);
+ // signposts and a separate in-world west portal
+ farmDrawPortal(c,3.9,16.5);
+ farmDrawSign(c,14,13,'농작물 🌱');farmDrawSign(c,23,21,'✦ 별맥 토양');
+ // player sprite: autonomous top-down four-direction avatar; independent position
+ farmDrawPlayer(c,farmPlayer.x*t,farmPlayer.y*t);
+ c.restore();
+}
+function farmDrawFence(c,x,y,dir){const px=x*FARM_TILE,py=y*FARM_TILE;c.fillStyle='#654b39';if(dir==='horizontal'){c.fillRect(px,py+11,32,5);c.fillRect(px+4,py+6,6,17);}else{c.fillRect(px+12,py,5,32);c.fillRect(px+7,py+4,16,5);}}
+function farmDrawHouse(c,x,y,w,h,label,color){let t=FARM_TILE,px=x*t,py=y*t;c.fillStyle='#283b35aa';c.fillRect(px+11,py+h*t-2,w*t+8,20);c.fillStyle='#d1ae82';c.fillRect(px,py+40,w*t,h*t-40);c.fillStyle='#704b3c';c.fillRect(px-7,py+20,w*t+14,25);c.fillStyle=color;c.beginPath();c.moveTo(px-20,py+35);c.lineTo(px+w*t/2,py-12);c.lineTo(px+w*t+20,py+35);c.closePath();c.fill();c.fillStyle='#fff1b2';c.fillRect(px+24,py+76,25,27);c.fillStyle='#406270';c.fillRect(px+28,py+79,17,19);c.fillStyle='#5c4030';c.fillRect(px+w*t/2-11,py+h*t-48,25,48);c.fillStyle='#fff2d3';c.font='bold 13px system-ui';c.textAlign='center';c.fillText(label,px+w*t/2,py-20);}
+function farmDrawTree(c,x,y){const t=FARM_TILE,px=x*t,py=y*t;c.fillStyle='#543c2d';c.fillRect(px+10,py-6,13,37);c.fillStyle='#325d49';c.fillRect(px-22,py-35,77,22);c.fillStyle='#3e7855';c.fillRect(px-16,py-55,63,36);c.fillStyle='#519264';c.fillRect(px-5,py-63,44,20);c.fillStyle='#78aa74';c.fillRect(px+5,py-46,16,8);}
+function farmDrawPlot(c,o){
+ const t=FARM_TILE,px=(o.x-1.6)*t,py=(o.y-1.4)*t,w=3.2*t,h=2.8*t;
+ c.fillStyle='#4f6944';c.fillRect(px-5,py-5,w+10,h+10);c.fillStyle='#80604a';c.fillRect(px,py,w,h);
+ for(let r=0;r<3;r++)for(let col=0;col<3;col++){
+  c.fillStyle=(r+col)%2===0?'#9b7554':'#926d4b';c.fillRect(px+4+col*(w-8)/3,py+4+r*(h-8)/3,(w-13)/3,(h-13)/3);
+  c.fillStyle='#b18c69';c.fillRect(px+9+col*(w-8)/3,py+4+r*(h-8)/3,2,(h-15)/3);
+ }
+ const plot=game?.livingP0?.plots?.[o.id];
+ if(plot?.plantedAt!==null&&plot){
+  const duration=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90),ratio=Math.min(1,(game.livingP0.clock-plot.plantedAt)/duration);
+  const colors=plot.crop==='wheat'?['#6a9c54','#8ebc65','#d8b95d']:plot.crop==='carrot'?['#6ab45b','#6aa94a','#f4a456']:['#55a35e','#80b267','#b8d48b'];
+  for(let r=0;r<3;r++)for(let col=0;col<3;col++){
+   let xx=px+19+col*29,yy=py+22+r*25;const hgt=10+Math.round(15*ratio);
+   c.fillStyle=colors[ratio>.92?2:ratio>.48?1:0];c.fillRect(xx-4,yy-hgt,9,hgt);c.fillStyle='#e7d88c';if(ratio>.8)c.fillRect(xx-2,yy-hgt-5,6,5);
+  }
+  if(plot.watered){c.fillStyle='#a5e2ed';for(let i=0;i<5;i++)c.fillRect(px+9+i*17,py+h-8,4,3);}
+ }
+ if(farmWorldNearPlot()?.id===o.id){c.strokeStyle='#fff3c4';c.lineWidth=4;c.strokeRect(px-5,py-5,w+10,h+10);}
+ c.fillStyle='#193e31de';c.fillRect(px+10,py-27,w-20,21);c.fillStyle='#fff4ce';c.font='bold 12px system-ui';c.textAlign='center';c.fillText('밭 '+o.id.split(':')[1],px+w/2,py-12);
+}
+function farmDrawPortal(c,x,y){let px=x*FARM_TILE,py=y*FARM_TILE;
+ c.fillStyle='#544738';c.fillRect(px-10,py-32,9,44);c.fillRect(px+19,py-32,9,44);c.fillStyle='#cbb27e';c.fillRect(px-12,py-37,43,10);c.fillStyle='#fff3bd';c.font='bold 12px system-ui';c.textAlign='center';c.fillText('← 잔빛숲',px+8,py-47);
+ if(farmWorldNearbyGate()){c.strokeStyle='#f5efb3';c.lineWidth=3;c.strokeRect(px-22,py-43,62,63);}
+}
+function farmDrawSign(c,x,y,title){let px=x*FARM_TILE,py=y*FARM_TILE;c.fillStyle='#6c543f';c.fillRect(px,py-22,6,34);c.fillStyle='#a9855e';c.fillRect(px-33,py-35,76,20);c.fillStyle='#fff2ca';c.textAlign='center';c.font='bold 11px system-ui';c.fillText(title,px+5,py-22);}
+function farmDrawPlayer(c,x,y){c.fillStyle='#183a3477';c.beginPath();c.ellipse(x,y+8,13,6,0,0,Math.PI*2);c.fill();
+ c.fillStyle='#263d49';c.fillRect(x-8,y-4,7,14);c.fillRect(x+1,y-4,7,14);
+ c.fillStyle='#477d70';c.fillRect(x-11,y-17,22,17);c.fillStyle='#d0a175';c.fillRect(x-8,y-29,17,15);
+ c.fillStyle='#77543c';c.fillRect(x-12,y-35,25,7);c.fillStyle='#d6be79';c.fillRect(x-15,y-35,31,4);c.fillRect(x-4,y-39,11,7);
+ c.fillStyle='#312e2e';if(farmPlayer.face==='down'){c.fillRect(x-5,y-21,3,3);c.fillRect(x+5,y-21,3,3);}if(farmPlayer.face==='right')c.fillRect(x+6,y-21,3,3);if(farmPlayer.face==='left')c.fillRect(x-7,y-21,3,3);
+ c.fillStyle='#e4c39f';c.fillRect(x-14,y-14,5,9);c.fillRect(x+9,y-14,5,9);}
+// Touch/mouse canvas selects only nearby plots or west gate, never remote interaction.
+farmCanvas.addEventListener('pointerdown',e=>{
+ if(!farmWorldActive||m25bBusy)return;e.preventDefault();const r=farmCanvas.getBoundingClientRect(),wx=(e.clientX-r.left+farmCamera.x)/FARM_TILE,wy=(e.clientY-r.top+farmCamera.y)/FARM_TILE;
+ if(Math.hypot(wx-3.9,wy-16.5)<2.6){farmWorldTryExit();return;}
+ let o=FARM_PLOTS.find(v=>Math.hypot(v.x-wx,v.y-wy)<2.2);
+ if(o){if(Math.hypot(farmPlayer.x-o.x,farmPlayer.y-o.y)>3.15){farmWorldToast('밭 가까이 가서 손질해 주세요');return;}farmWorldAction();}
+});
+// Joystick uses pointer ownership and clears it on cancel/blur/world exit.
+function farmSetJoystick(e){const r=$('farmDpad').getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width*.34),dy=(e.clientY-r.top-r.height/2)/(r.height*.34),n=Math.max(1,Math.hypot(dx,dy));farmJoystick={x:dx/n,y:dy/n};}
+$('farmDpad').addEventListener('pointerdown',e=>{if(!farmWorldActive||m25bBusy||farmPointer!==null)return;e.preventDefault();farmPointer=e.pointerId;try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}farmSetJoystick(e)});
+$('farmDpad').addEventListener('pointermove',e=>{if(farmPointer===e.pointerId){e.preventDefault();farmSetJoystick(e)}});
+for(const type of ['pointerup','pointercancel','lostpointercapture'])$('farmDpad').addEventListener(type,e=>{if(farmPointer===e.pointerId){farmPointer=null;farmJoystick={x:0,y:0}}});
+window.addEventListener('keydown',e=>{
+ if(!farmWorldActive||m25bBusy)return;
+ const k=e.key.toLowerCase();if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape'].includes(k)){
+  e.preventDefault();e.stopImmediatePropagation();
+  if(['e',' '].includes(k)&&!e.repeat)farmWorldAction();
+  else if(k==='escape'&&!e.repeat)farmWorldTryExit();
+  else if(!['e',' ','escape'].includes(k))farmMoveKeys.add(k);
+ }
+},true);
+window.addEventListener('keyup',e=>{if(!farmWorldActive)return;const k=e.key.toLowerCase();farmMoveKeys.delete(k);if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',farmWorldClearInput);
+window.addEventListener('resize',()=>{if(farmWorldActive){farmWorldResize();farmWorldDraw()}});
+window.__sandstarFarmWorld={
+ state:()=>({worldId:farmWorldActive?FARM_WORLD_ID:ssRegion,active:farmWorldActive,player:{x:farmPlayer.x,y:farmPlayer.y},entryCount:game?.farmWorldV1?.entryCount||0,legacyRegion:ssRegion,saveKey:SAVE_KEY,actionCount:farmActionCount,selectedSeed:farmSelectedSeed,nearPlot:farmWorldNearPlot()?.id||null,nearGate:farmWorldNearbyGate()}),
+ tryEnter:farmWorldTryEnter,exit:farmWorldTryExit,action:farmWorldAction,chooseSeed:id=>{if(!LIVING_CROPS[id])return false;farmSelectedSeed=id;farmWorldRefreshHud();return true},
+ testMove:(x,y)=>{if(!farmWorldActive||farmWorldBlocked(x,y))return false;farmPlayer.x=x;farmPlayer.y=y;game.farmWorldV1.position={x,y};farmWorldRefreshHud();farmWorldDraw();return true},
+ viewport:()=>({w:farmCanvasW,h:farmCanvasH,camera:{...farmCamera}}),blocked:farmWorldBlocked,portalX:FARM_FOREST_GATE_X
+};
+
+// ============================================================
+// M2.1: RUINS_3D_01 independent 3D WORLD adapter.
+// Reuse Sandstar player/inventory/save/portal mechanisms; no relic rewards.
+// GPU WebGL1 projected-triangle renderer with full perspective and z-buffer;
+// CPU 3D perspective fallback for browsers that cannot create WebGL context.
+// ============================================================
+const ARCH_WORLD_ID='ruins_3d_01', ARCH_FOREST_GATE_X=134;
+const archRoot=$('archWorldRoot'),archGpuCanvas=$('archWorldGpu'),archFallbackCanvas=$('archWorldFallback');
+let archWorldActive=false,archPlayer={x:0,z:12},archYaw=0.18,archPitch=.49,archFrame=0,archElapsed=0,archLastEnter=0;
+let archKeys=new Set(),archJoy={x:0,y:0},archJoyPointer=null,archDrag=null,archRenderer='uninitialized',archToastEnd=0,archSaveTick=0;
+let archW=0,archH=0,archDpr=1,archGl=null,archProgram=null,archBuffer=null,archGlPosition=-1,archGlColor=-1,archCpuCtx=null;
+const archStatic=[];
+const archColors={earth:[38,57,65],tile:[68,90,93],tileAlt:[53,78,82],wall:[86,107,112],wallDark:[56,77,83],pillar:[122,139,140],pillarLight:[149,161,154],metal:[126,110,89],bronze:[177,142,93],teal:[43,170,177],light:[107,231,222],gold:[227,188,111],stone:[94,114,121],shard:[73,208,214],red:[171,89,89],void:[24,40,53]};
+function archWorldBlocked(x,z){
+ if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>12.65||Math.abs(z)>18.25)return true;
+ const rect=(a,b,c,d)=>x>a&&x<c&&z>b&&z<d;
+ for(const cx of [-7.8,7.8])for(const cz of [9.3,1.3,-6.7,-13.3])if(Math.hypot(x-cx,z-cz)<.9)return true;
+ if(rect(-3.35,-14.85,3.35,-10.05)||rect(-9.6,-2.35,-7.1,.2)||rect(7.3,-10.1,9.7,-8.0))return true;
+ return false;
+}
+function archWorldNormalize(raw){
+ const d={schema:1,activeWorldId:'life_forest_01',position:{x:0,z:12},entryCount:0,cameraYaw:.18};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return d;
+ if(raw.activeWorldId===ARCH_WORLD_ID)d.activeWorldId=ARCH_WORLD_ID;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.z)){
+  const x=Math.max(-12.2,Math.min(12.2,raw.position.x));const z=Math.max(-17.8,Math.min(17.8,raw.position.z));
+  if(!archWorldBlocked(x,z))d.position={x,z};
+ }
+ if(Number.isFinite(raw.cameraYaw))d.cameraYaw=Math.max(-100,Math.min(100,raw.cameraYaw));
+ if(Number.isSafeInteger(raw.entryCount))d.entryCount=Math.max(0,Math.min(100000,raw.entryCount));
+ return d;
+}
+function archWorldInitState(){game.archWorldV1=archWorldNormalize(game?.archWorldV1);return game.archWorldV1;}
+function archWorldNearForestGate(){
+ return !!p&&!!game&&!paused&&!farmWorldActive&&!archWorldActive&&!ssM16TransitionLocked&&ssRegion==='life_forest_01'&&ssM15Scene!=='mining'&&Math.abs(p.x-ARCH_FOREST_GATE_X)<=2.85&&Math.abs(p.y-(terrain(ARCH_FOREST_GATE_X)-1))<=2.8;
+}
+function archWorldDrawForestPortal(){
+ if(!game||ssRegion!=='life_forest_01')return;
+ const x=Math.round(ARCH_FOREST_GATE_X*T-camera.x),foot=Math.round((terrain(ARCH_FOREST_GATE_X)-1)*T-camera.y);
+ if(x<-100||x>viewW+100)return;
+ const near=archWorldNearForestGate();ctx.save();
+ ctx.fillStyle='#607984';ctx.fillRect(x-27,foot-65,11,67);ctx.fillRect(x+16,foot-65,11,67);ctx.fillStyle='#9eabb0';ctx.fillRect(x-27,foot-67,54,11);
+ ctx.fillStyle='#18353d';ctx.fillRect(x-15,foot-52,30,50);ctx.fillStyle='#56acb4';ctx.fillRect(x-10,foot-47,20,43);ctx.globalAlpha=.48+.15*Math.sin(frame*.06);ctx.fillStyle='#a8f5e9';ctx.fillRect(x-8,foot-45,16,40);ctx.globalAlpha=1;
+ ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillStyle=near?'#fff0b9':'#e1fcf3';ctx.fillText(near?'E · 3D 유적으로':'✦ 유적 입구',x,foot-77);
+ ctx.restore();
+}
+function archWorldTryForestTap(q){
+ if(!q||ssRegion!=='life_forest_01'||archWorldActive||farmWorldActive)return false;
+ let y=terrain(ARCH_FOREST_GATE_X)-1;
+ if(Math.abs(q.x+.5-ARCH_FOREST_GATE_X)>1.65||q.y<y-3.7||q.y>y+1)return false;
+ if(!archWorldNearForestGate()){flash('유적 입구로 가까이 이동하세요');return true;}
+ archWorldTryEnter();return true;
+}
+function archWorldClearInput(){archKeys.clear();archJoy={x:0,y:0};archJoyPointer=null;archDrag=null;}
+function archWorldNotify(msg){let t=$('archWorldToast');t.textContent=msg;t.classList.add('show');archToastEnd=performance.now()+2400;}
+function archWorldActivate(){
+ if(archWorldActive)return;
+ archWorldActive=true;archRoot.hidden=false;$('app').classList.add('arch-world-active');
+ archWorldClearInput();ssM15ResetHeldInputs();releaseRope();
+ const s=archWorldInitState();archPlayer.x=s.position.x;archPlayer.z=s.position.z;archYaw=s.cameraYaw;
+ archWorldInitRenderer();archWorldResize();archWorldRefreshHud();archWorldDraw();
+}
+function archWorldDeactivate(){
+ archWorldClearInput();archWorldActive=false;archRoot.hidden=true;$('app').classList.remove('arch-world-active');
+ ssM15ResetHeldInputs();last=performance.now();
+}
+function archWorldEnterCore(){
+ if(archWorldActive||farmWorldActive)return false;
+ if(!saveGame(true)){flash('저장 실패: 현재 지역을 유지합니다');return false;}
+ const prev=game.archWorldV1?JSON.parse(JSON.stringify(game.archWorldV1)):null;
+ const s=archWorldInitState();s.activeWorldId=ARCH_WORLD_ID;s.entryCount++;
+ if(!saveGame(true)){
+  if(prev)game.archWorldV1=prev;else delete game.archWorldV1;
+  flash('저장 실패: 유적 진입을 취소했어요');return false;
+ }
+ archWorldActivate();archLastEnter=performance.now();archWorldNotify('별맥 유적에 진입했습니다. 3D 공간을 걸어보세요.');return true;
+}
+function archWorldNearExit(){return Math.hypot(archPlayer.x,archPlayer.z-15.5)<2.75;}
+function archWorldNearExhibit(){return Math.hypot(archPlayer.x+6.2,archPlayer.z+6.6)<2.65||Math.hypot(archPlayer.x,archPlayer.z+8.25)<2.8;}
+function archWorldExitCore(){
+ if(!archWorldActive||!archWorldNearExit()){archWorldNotify('남쪽의 빛나는 출입구로 돌아가세요');return false;}
+ const s=archWorldInitState(),old=JSON.parse(JSON.stringify(s)),oldP={x:p.x,y:p.y,vx:p.vx,vy:p.vy};
+ s.position={x:archPlayer.x,z:archPlayer.z};s.cameraYaw=archYaw;s.activeWorldId='life_forest_01';
+ p.x=ARCH_FOREST_GATE_X+.4;p.y=terrain(p.x)-1;p.vx=p.vy=0;
+ if(collides(p.x,p.y)){p.x=ARCH_FOREST_GATE_X-1.3;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!saveGame(true)){
+  game.archWorldV1=old;Object.assign(p,oldP);archWorldNotify('출입구 또는 저장 검증에 실패했어요');return false;
+ }
+ archWorldDeactivate();updHud();flash('잔빛숲으로 돌아왔어요');return true;
+}
+function archWorldTryEnter(){
+ if(!archWorldNearForestGate()||archWorldActive||farmWorldActive||performance.now()-archLastEnter<400||m25bBusy)return false;
+ return m25bTransition(ARCH_WORLD_ID,'ruins-enter',archWorldEnterCore,'life_forest_01');
+}
+function archWorldTryExit(){
+ if(!archWorldActive||!archWorldNearExit()||m25bBusy){
+  if(archWorldActive&&!m25bBusy)archWorldNotify('남쪽의 빛나는 출입구로 돌아가세요');
+  return false;
+ }
+ return m25bTransition('life_forest_01','ruins-exit',archWorldExitCore,ARCH_WORLD_ID);
+}
+function archWorldRestoreAfterContinue(){
+ if(!game||ssIsTitle())return;
+ let s=archWorldInitState();
+ if(s.activeWorldId===ARCH_WORLD_ID){archWorldActivate();archWorldNotify('별맥 유적에서 이어서 시작합니다.');}
+}
+function archWorldAction(){
+ if(!archWorldActive||m25bBusy)return false;
+ if(archWorldNearExit())return archWorldTryExit();
+ if(archWorldNearExhibit()){archWorldNotify('유적 조사는 화면 전환 실험용입니다. 보상·퀘스트는 변경되지 않아요.');return true;}
+ archWorldNotify('이동하며 유적의 길·기둥·카메라를 살펴보세요');return false;
+}
+function archWorldRefreshHud(){
+ if(!game||!archWorldActive)return;
+ let label=archWorldNearExit()?'🚪 잔빛숲으로 돌아가기':archWorldNearExhibit()?'⌕ 유적 흔적 조사':'✦ 유적 둘러보기';
+ $('archWorldAction').textContent=label;$('archWorldAction').disabled=!archWorldNearExit()&&!archWorldNearExhibit();
+ $('archWorldHint').textContent=archWorldNearExit()?'출입구 가까이 있습니다 · E로 귀환':archWorldNearExhibit()?'빛나는 흔적을 조사할 수 있습니다':'길을 따라 유적 안쪽으로 이동해 보세요';
+ $('archWorldPosition').textContent=`X ${archPlayer.x.toFixed(1)} · Z ${archPlayer.z.toFixed(1)}`;
+ $('archWorldMode').textContent=archRenderer==='webgl'?'WebGL · 3D 공간':'소프트웨어 · 3D 공간';
+}
+$('archWorldAction').addEventListener('click',archWorldAction);
+$('archCameraReset').addEventListener('click',()=>{archYaw=.18;archPitch=.49;archWorldDraw();});
+function archWorldMovement(){
+ if(m25bBusy)return {x:0,z:0};
+ let x=(archKeys.has('d')||archKeys.has('arrowright')?1:0)-(archKeys.has('a')||archKeys.has('arrowleft')?1:0);
+ let f=(archKeys.has('w')||archKeys.has('arrowup')?1:0)-(archKeys.has('s')||archKeys.has('arrowdown')?1:0);
+ x+=archJoy.x;f-=archJoy.y;
+ let length=Math.max(1,Math.hypot(x,f));x/=length;f/=length;
+ // Screen-relative motion must use the exact same ground-plane basis as archCameraSetup:
+ // camera.right=(cos(yaw), 0, -sin(yaw)), camera.forward=(-sin(yaw), 0, -cos(yaw)).
+ // In M2.4, +f*sin(yaw) reversed forward X whenever the camera rotated.
+ const cy=Math.cos(archYaw),sy=Math.sin(archYaw);
+ return {x:x*cy-f*sy,z:-x*sy-f*cy};
+}
+function archWorldTick(dt){
+ if(!archWorldActive||!game||ssIsTitle())return;
+ if(m25bBusy){archWorldDraw();return;}
+ const move=archWorldMovement(),delta=Math.min(.05,dt)*5;
+ for(const axis of ['x','z']){const next={...archPlayer,[axis]:archPlayer[axis]+move[axis]*delta};
+  if(![[-.31,-.31],[.31,-.31],[-.31,.31],[.31,.31]].some(([a,b])=>archWorldBlocked(next.x+a,next.z+b)))archPlayer[axis]+=move[axis]*delta;
+ }
+ archElapsed+=dt;archFrame++;
+ if(archToastEnd&&performance.now()>archToastEnd){$('archWorldToast').classList.remove('show');archToastEnd=0;}
+ if(archFrame%12===0)archWorldRefreshHud();
+ archSaveTick+=dt;
+ if(archSaveTick>5){archSaveTick=0;saveGame(true);}
+ archWorldDraw();
+}
+// Geometry generation: intentional simple untextured proxy ruins, no external assets.
+function archColor(c){return archColors[c]||c;}
+function archAddTriangle(out,a,b,c,color){out.push({v:[a,b,c],color:archColor(color)});}
+function archBox(out,x,y,z,w,h,d,color){
+ const x0=x-w/2,x1=x+w/2,y0=y,y1=y+h,z0=z-d/2,z1=z+d/2;
+ const V=[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]];
+ for(const [a,b,c,d] of [[3,2,1,0],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]]){
+  archAddTriangle(out,V[a],V[b],V[c],color);archAddTriangle(out,V[a],V[c],V[d],color);
+ }
+}
+function archPyramid(out,x,y,z,r,h,color){
+ let verts=[];for(let i=0;i<4;i++){let a=i*Math.PI/2+Math.PI/4;verts.push([x+Math.sin(a)*r,y,z+Math.cos(a)*r]);}
+ for(let i=0;i<4;i++)archAddTriangle(out,verts[i],verts[(i+1)%4],[x,y+h,z],color);
+}
+function archCylinder(out,x,y,z,r,h,color,sides=9){
+ const c=archColor(color);for(let i=0;i<sides;i++){let a=i*2*Math.PI/sides,b=(i+1)*2*Math.PI/sides;
+  let lo=[x+Math.cos(a)*r,y,z+Math.sin(a)*r],ro=[x+Math.cos(b)*r,y,z+Math.sin(b)*r];
+  let hi=[lo[0],y+h,lo[2]],hr=[ro[0],y+h,ro[2]];
+  archAddTriangle(out,lo,ro,hr,c);archAddTriangle(out,lo,hr,hi,c);
+  archAddTriangle(out,[x,y+h,z],hi,hr,c);
+ }
+}
+function archMakeGeometry(){
+ if(archStatic.length)return;
+ for(let x=-12;x<13;x+=2)for(let z=-18;z<19;z+=2){
+  archBox(archStatic,x, -.16,z,2.05,.16,2.05,((x*7+z*3)&4)?'tile':'tileAlt');
+  if((x+z)%6===0)archBox(archStatic,x,-.01,z,1.35,.025,.025,'wallDark');
+ }
+ // Stone boundary: broken enough that the hall opens onto the void, still physically bounded.
+ for(let z=-18;z<=18;z+=3){archBox(archStatic,-13.1,0,z,1.0,1.8,2.95,'wall');archBox(archStatic,13.1,0,z,1.0,1.8,2.95,'wall');}
+ for(let x=-12;x<=12;x+=3){archBox(archStatic,x,0,-19,2.9,1.75,1,'wallDark');if(Math.abs(x)>2.3)archBox(archStatic,x,0,19,2.9,1.25,1,'wallDark');}
+ for(const x of [-7.8,7.8])for(const z of [9.3,1.3,-6.7,-13.3]){
+  archBox(archStatic,x,.0,z,2.6,.5,2.6,'stone');
+  archCylinder(archStatic,x,.5,z,.75,3.85,'pillar');
+  archBox(archStatic,x,4.35,z,2.35,.6,2.35,'pillarLight');
+  archBox(archStatic,x,4.94,z,2.0,.25,2.0,'gold');
+ }
+ // Fragmented stone walkways, threshold, old machinery and real-world-size doorway.
+ for(let z=16;z>-13;z-=4){archBox(archStatic,0,.025,z,5,.07,1.1,'metal');}
+ archBox(archStatic,-4.25,0,16,1.0,2.35,1.0,'pillarLight');
+ archBox(archStatic,4.25,0,16,1.0,2.35,1.0,'pillarLight');
+ archPyramid(archStatic,-4.25,2.35,16,.7,.6,'shard');archPyramid(archStatic,4.25,2.35,16,.7,.6,'shard');
+ archBox(archStatic,0,0,16,3,.06,2.2,'teal');
+ archPyramid(archStatic,0,.05,16,1.2,.4,'light');
+ // Vault north, pedestal and visual-only sigil, no gameplay reward.
+ archBox(archStatic,0,0,-12.5,6.1,1.35,5.7,'wallDark');
+ archBox(archStatic,0,1.35,-12.5,3.0,.5,3.2,'metal');
+ archBox(archStatic,0,1.85,-12.5,1.6,.35,1.6,'bronze');
+ archPyramid(archStatic,0,2.2,-12.5,1.2,2.5,'shard');
+ archPyramid(archStatic,0,4.7,-12.5,.54,.7,'light');
+ for(const [x,z] of [[-10,-3],[10,-10],[-8,13],[9,8]]){
+  archBox(archStatic,x,0,z,2.1,.8,1.4,'wallDark');
+  archBox(archStatic,x,.8,z,1.7,.4,1.2,'pillar');
+ }
+ archBox(archStatic,-4.2,0,4,2.0,1.0,2.0,'stone');
+ archPyramid(archStatic,-4.2,1.0,4,.8,1.3,'teal');
+ archBox(archStatic,4.2,0,3.5,2.0,1.0,2.0,'wallDark');
+ archPyramid(archStatic,4.2,1.0,3.5,.7,1.1,'gold');
+ // Excavation grid marks. This is scenery only; no new collection or reward.
+ archBox(archStatic,-6.15,.02,-6.6,3.0,.035,3.0,'earth');
+ for(let x=-7.4;x<=-4.8;x+=.85)archBox(archStatic,x,.07,-6.6,.05,.025,2.85,'bronze');
+ for(let z=-7.85;z<=-5.25;z+=.85)archBox(archStatic,-6.15,.08,z,2.85,.025,.05,'bronze');
+ archPyramid(archStatic,-6.15,.1,-6.6,.65,.55,'shard');
+ for(let i=0;i<8;i++){let a=i*Math.PI/4,x=5.5+Math.cos(a)*1.6,z=-4.3+Math.sin(a)*1.6;
+  archPyramid(archStatic,x,0,z,.6,.6,i%2?'bronze':'teal');
+ }
+}
+function archCameraSetup(){
+ const target=[archPlayer.x,1.2,archPlayer.z],radius=14.7;
+ const eye=[target[0]+Math.sin(archYaw)*Math.cos(archPitch)*radius,target[1]+Math.sin(archPitch)*radius+2,target[2]+Math.cos(archYaw)*Math.cos(archPitch)*radius];
+ const norm=a=>{const d=Math.hypot(...a)||1;return a.map(v=>v/d)};
+ const forward=norm(target.map((v,i)=>v-eye[i]));
+ const right=norm([-forward[2],0,forward[0]]); // right = cross(forward, world-up)
+ const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
+ return {eye,forward,right,up};
+}
+function archProject(p,cam){
+ const d=p.map((x,i)=>x-cam.eye[i]);
+ const dot=v=>d[0]*v[0]+d[1]*v[1]+d[2]*v[2];
+ const depth=dot(cam.forward);if(depth<=.55)return null;
+ const focal=Math.min(archW*1.35,archH*1.85),sx=archW*.5+dot(cam.right)*focal/depth,sy=archH*.56-dot(cam.up)*focal/depth;
+ return {x:sx,y:sy,depth};
+}
+function archLitColor(t,depth){
+ const [a,b,c]=t.v,ax=b[0]-a[0],ay=b[1]-a[1],az=b[2]-a[2],bx=c[0]-a[0],by=c[1]-a[1],bz=c[2]-a[2];
+ let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx,len=Math.hypot(nx,ny,nz)||1;
+ const light=Math.max(.48,Math.min(1.1, .84+(.18*nx+.65*ny+.5*nz)/len*.28));
+ const fog=Math.max(0,Math.min(.56,(depth-15)/40));
+ return t.color.map((v,i)=>Math.max(0,Math.min(255,Math.round(v*light*(1-fog)+[14,29,39][i]*fog))));
+}
+function archWorldGeometry(){
+ archMakeGeometry();const dynamic=[];
+ const p=archPlayer,walk=Math.sin(archElapsed*8)*.045;
+ archBox(dynamic,p.x,0,p.z,.65,.28,.55,'metal');
+ archBox(dynamic,p.x,.28+walk,p.z,.82,1.05,.48,'teal');
+ archBox(dynamic,p.x,1.33+walk,p.z,.69,.67,.67,'pillarLight');
+ archBox(dynamic,p.x,1.96+walk,p.z,.9,.18,.9,'bronze');
+ archBox(dynamic,p.x,2.12+walk,p.z,.52,.35,.55,'metal');
+ archBox(dynamic,p.x-.25,.12,p.z,.27,.38,.33,'wallDark');
+ archBox(dynamic,p.x+.25,.12,p.z,.27,.38,.33,'wallDark');
+ // Small orbiting spark at the restored ruins shrine.
+ const t=archElapsed*.9;
+ archPyramid(dynamic,.75*Math.sin(t),3.95+.12*Math.sin(t*2),-12.5+.75*Math.cos(t),.34,.65,'light');
+ return archStatic.concat(dynamic);
+}
+function archShader(gl,type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error('shader:'+gl.getShaderInfoLog(s));return s;}
+function archTryWebGL(){
+ let gl;try{gl=archGpuCanvas.getContext('webgl',{antialias:true,alpha:false,depth:true,powerPreference:'low-power'});}catch(e){return false;}
+ if(!gl)return false;
+ try{
+  let program=gl.createProgram();
+  gl.attachShader(program,archShader(gl,gl.VERTEX_SHADER,'attribute vec3 a_position; attribute vec3 a_color; varying vec3 v_color; void main(){ gl_Position=vec4(a_position,1.0); v_color=a_color;}'));
+  gl.attachShader(program,archShader(gl,gl.FRAGMENT_SHADER,'precision mediump float; varying vec3 v_color; void main(){gl_FragColor=vec4(v_color,1.0);}'));
+  gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('link:'+gl.getProgramInfoLog(program));
+  archGl=gl;archProgram=program;archBuffer=gl.createBuffer();archGlPosition=gl.getAttribLocation(program,'a_position');archGlColor=gl.getAttribLocation(program,'a_color');
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);return true;
+ }catch(err){console.warn('arch WebGL unavailable:',err);return false;}
+}
+function archWorldInitRenderer(){
+ if(archRenderer!=='uninitialized')return;
+ archRenderer=archTryWebGL()?'webgl':'cpu';
+ if(archRenderer==='cpu'){archGpuCanvas.hidden=true;archFallbackCanvas.hidden=false;archCpuCtx=archFallbackCanvas.getContext('2d',{alpha:false});}
+ archGpuCanvas.addEventListener('webglcontextlost',e=>{e.preventDefault();archRenderer='cpu';archGpuCanvas.hidden=true;archFallbackCanvas.hidden=false;archCpuCtx=archFallbackCanvas.getContext('2d',{alpha:false});archWorldResize();archWorldNotify('3D 그래픽이 중단되어 소프트웨어 3D로 전환했어요');},{once:true});
+ archMakeGeometry();
+}
+function archWorldResize(){
+ let r=archRoot.getBoundingClientRect();archW=r.width||window.innerWidth;archH=r.height||window.innerHeight;
+ archDpr=Math.min(window.devicePixelRatio||1,2);
+ for(const canvas of [archGpuCanvas,archFallbackCanvas]){canvas.width=Math.max(1,Math.round(archW*archDpr));canvas.height=Math.max(1,Math.round(archH*archDpr));}
+}
+function archWorldDraw(){
+ if(!archWorldActive)return;
+ const rect=archRoot.getBoundingClientRect();
+ if(!archW||!archH||Math.abs(rect.width-archW)>1||Math.abs(rect.height-archH)>1)archWorldResize();
+ const cam=archCameraSetup(),faces=[];
+ for(const tri of archWorldGeometry()){
+  const vv=tri.v.map(v=>archProject(v,cam));if(vv.some(v=>!v))continue;
+  const dep=vv.reduce((s,v)=>s+v.depth,0)/3;
+  faces.push({v:vv,c:archLitColor(tri,dep),depth:dep});
+ }
+ if(archRenderer==='webgl'&&archGl){
+  const gl=archGl;gl.viewport(0,0,archGpuCanvas.width,archGpuCanvas.height);gl.clearColor(.052,.115,.157,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const data=new Float32Array(faces.length*3*6);let i=0;
+  for(const f of faces)for(const v of f.v){data[i++]=v.x/archW*2-1;data[i++]=1-v.y/archH*2;data[i++]=Math.min(.99,v.depth/85*2-1);data[i++]=f.c[0]/255;data[i++]=f.c[1]/255;data[i++]=f.c[2]/255;}
+  gl.useProgram(archProgram);gl.bindBuffer(gl.ARRAY_BUFFER,archBuffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(archGlPosition);gl.vertexAttribPointer(archGlPosition,3,gl.FLOAT,false,24,0);
+  gl.enableVertexAttribArray(archGlColor);gl.vertexAttribPointer(archGlColor,3,gl.FLOAT,false,24,12);
+  gl.drawArrays(gl.TRIANGLES,0,faces.length*3);
+ }else if(archCpuCtx){
+  const c=archCpuCtx;c.setTransform(archDpr,0,0,archDpr,0,0);c.fillStyle='#0e2533';c.fillRect(0,0,archW,archH);
+  const g=c.createLinearGradient(0,0,0,archH);g.addColorStop(0,'#102d40');g.addColorStop(1,'#10232b');c.fillStyle=g;c.fillRect(0,0,archW,archH);
+  faces.sort((a,b)=>b.depth-a.depth);
+  for(const f of faces){c.beginPath();c.moveTo(f.v[0].x,f.v[0].y);c.lineTo(f.v[1].x,f.v[1].y);c.lineTo(f.v[2].x,f.v[2].y);c.closePath();c.fillStyle=`rgb(${f.c.join(',')})`;c.fill();}
+ }
+}
+function archJoystickSet(e){let r=$('archPad').getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width*.36),dy=(e.clientY-r.top-r.height/2)/(r.height*.36),d=Math.max(1,Math.hypot(dx,dy));archJoy={x:dx/d,y:dy/d};}
+$('archPad').addEventListener('pointerdown',e=>{if(!archWorldActive||m25bBusy||archJoyPointer!==null)return;e.preventDefault();archJoyPointer=e.pointerId;try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}archJoystickSet(e);});
+$('archPad').addEventListener('pointermove',e=>{if(archWorldActive&&archJoyPointer===e.pointerId){e.preventDefault();archJoystickSet(e);}});
+for(const typ of ['pointerup','pointercancel','lostpointercapture'])$('archPad').addEventListener(typ,e=>{if(archJoyPointer===e.pointerId){archJoyPointer=null;archJoy={x:0,y:0};}});
+function archPointerDown(e){if(!archWorldActive||archDrag||m25bBusy)return;e.preventDefault();archDrag={id:e.pointerId,x:e.clientX,y:e.clientY};try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){};}
+function archPointerMove(e){if(!archWorldActive||m25bBusy||!archDrag||archDrag.id!==e.pointerId)return;e.preventDefault();let dx=e.clientX-archDrag.x,dy=e.clientY-archDrag.y;archYaw-=dx*.007;archPitch=Math.max(.16,Math.min(.85,archPitch-dy*.003));archDrag.x=e.clientX;archDrag.y=e.clientY;}
+function archPointerEnd(e){if(archDrag?.id===e.pointerId)archDrag=null;}
+for(const c of [archGpuCanvas,archFallbackCanvas]){
+ c.addEventListener('pointerdown',archPointerDown);c.addEventListener('pointermove',archPointerMove);
+ for(const ev of ['pointerup','pointercancel','lostpointercapture'])c.addEventListener(ev,archPointerEnd);
+}
+window.addEventListener('keydown',e=>{
+ if(!archWorldActive||m25bBusy)return;const k=e.key.toLowerCase();
+ if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape','q','r'].includes(k)){
+  e.preventDefault();e.stopImmediatePropagation();
+  if(['e',' '].includes(k)&&!e.repeat)archWorldAction();
+  else if(k==='escape'&&!e.repeat)archWorldTryExit();
+  else if(k==='q'&&!e.repeat){archYaw-=.32;}
+  else if(k==='r'&&!e.repeat){archYaw+=.32;}
+  else if(!['e',' ','escape','q','r'].includes(k))archKeys.add(k);
+ }
+},true);
+window.addEventListener('keyup',e=>{if(!archWorldActive)return;let k=e.key.toLowerCase();archKeys.delete(k);if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',archWorldClearInput);
+window.addEventListener('resize',()=>{if(archWorldActive){archWorldResize();archWorldDraw();}});
+window.__sandstarArchWorld={
+ state:()=>({worldId:archWorldActive?ARCH_WORLD_ID:ssRegion,active:archWorldActive,player:{...archPlayer},yaw:archYaw,renderer:archRenderer,entryCount:game?.archWorldV1?.entryCount||0,nearExit:archWorldNearExit(),nearExhibit:archWorldNearExhibit(),frames:archFrame,saveKey:SAVE_KEY}),
+ enter:archWorldTryEnter,exit:archWorldTryExit,action:archWorldAction,
+ blocked:archWorldBlocked,portalX:ARCH_FOREST_GATE_X,
+ testMove:(x,z)=>{if(!archWorldActive||archWorldBlocked(x,z))return false;archPlayer.x=x;archPlayer.z=z;game.archWorldV1.position={x,z};archWorldRefreshHud();archWorldDraw();return true},
+ setYaw:y=>{if(!Number.isFinite(y))return false;archYaw=y;archWorldDraw();return true},
+ render:archWorldDraw,geometry:()=>({staticTriangles:archStatic.length,renderer:archRenderer})
+};
+
+// SANDSTAR M2.3 — independently rendered full-scene 2.5D village.
+// WorldForge 0.1-compatible manifest and renderer-neutral runtime port.
+// Offline Canvas2D isometric renderer (PlayCanvas/GPU integration NOT claimed).
+const T25_ID='village_hub_01';
+const t25Root=$('town25dRoot'),t25Canvas=$('town25dCanvas'),t25Ctx=t25Canvas.getContext('2d',{alpha:false});
+let town25dActive=false,town25dEngine=null,town25dRenderer=null,town25dPlayer={x:.3,z:3.6},t25V={x:0,z:0},t25Move={x:0,z:0},t25Keys=new Set(),t25Joy={x:0,y:0},t25Pointer=null,t25TapCandidates=[],t25ToastEnd=0,t25Elapsed=0,t25Frames=0,t25W=0,t25H=0,t25Dpr=1,t25SavedTick=0,t25LastRegion='',t25LastAction='',t25TrafficLock=false,t25Camera={x:0,z:0};
+const T25_TARGETS=Object.freeze([
+ {id:'market',type:'service',x:-6.2,z:.2,title:'바람장터',label:'🛒 상점 이용',hint:'물품 거래 · 기존 장터 메뉴'},
+ {id:'forge',type:'service',x:3.2,z:-.15,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이·장비 제작 · 기존 대장간 메뉴'},
+ {id:'mine',type:'gate',x:-7.6,z:5.5,title:'광산 입구',label:'⛏ 광산으로 이동',target:'mine',hint:'2D 채굴 월드'},
+ {id:'forest',type:'gate',x:8.0,z:5.2,title:'잔빛숲 입구',label:'🌿 잔빛숲으로 이동',target:'life_forest_01',hint:'숲·농장·고대 유적'},
+ {id:'harin',type:'npc',x:-.75,z:1.0,title:'목수 하린',label:'🪚 하린과 대화',hint:'마을 이야기'}
+]);
+const t25Hex=(h,delta=0)=>{let s=h.replace('#','');let a=[0,2,4].map(i=>Math.max(0,Math.min(255,parseInt(s.slice(i,i+2),16)+delta)));return '#'+a.map(x=>x.toString(16).padStart(2,'0')).join('')};
+const T25_MAT={soil:'#66998c',road:'#b5b5a0',cobble:'#c5c6a8',wall:'#d7c69a',wood:'#90674f',woodLight:'#b5895e',roof:'#487b76',roofRed:'#a66c60',stone:'#8ba7a0',gold:'#e8cc80',tree:'#3f7663',trunk:'#765d46',blue:'#4f9c9c',door:'#574d45'};
+const t25Ent=[];
+function t25Add(id,name,x,y,z,sx,sy,sz,color,meta={}){
+ t25Ent.push({id,name,type:'sandstar.static',parentId:null,enabled:true,transform:{position:[x,y,z],rotation:[0,0,0,1],scale:[sx,sy,sz]},tags:['town','m23'],components:{'core.primitive':{shape:'box',color}},metadata:meta});
+}
+// Blocks and landmarks describe WorldForge objects, not DOM elements.
+t25Add('floor','마을 보호 지표',0,-.30,0,26,.5,20,'#7fae9b',{nonMining:true});
+t25Add('plaza','도래 중앙광장',0,-.02,.6,15,.10,9,'#b6b59e');
+t25Add('market-body','바람장터 본체',-6.2,1.55,-3.1,5.1,3.1,4.4,'#caba98',{collision:[5.1,4.4]});
+t25Add('market-roof','장터 청록 지붕',-6.2,3.48,-3.1,6.0,.78,5.0,'#487b76');
+t25Add('market-awning','장터 차양',-6.2,2.45,-.7,4.9,.2,1.4,'#d8b978');
+t25Add('market-door','장터 문',-6.2,1.01,-.77,1.45,2.02,.12,'#574d45');
+t25Add('market-counter','장터 진열대',-4.6,.48,.55,1.3,.75,.68,'#ac825f');
+t25Add('forge-body','대장간 본체',3.2,1.50,-3.2,5.6,3.0,4.5,'#a8a89a',{collision:[5.6,4.5]});
+t25Add('forge-roof','대장간 붉은 지붕',3.2,3.44,-3.2,6.4,.78,5.2,'#995f59');
+t25Add('forge-chimney','화로 굴뚝',5.0,4.82,-4.6,.95,2.75,.95,'#6f7f7b');
+t25Add('forge-door','대장간 문',3.2,1.0,-.88,1.4,2.0,.16,'#594b46');
+t25Add('forge-anvil','모루 조형',4.95,.58,.28,1.05,.85,.62,'#4c6268',{collision:[1,.7]});
+t25Add('well-bottom','별샘 작은 우물',-.4,.31,-2.1,1.6,.72,1.6,'#879992',{collision:[1.6,1.6]});
+t25Add('well-water','우물 물',-.4,.68,-2.1,1.12,.07,1.12,'#60b8b3');
+t25Add('notice-board','마을 게시판',-.6,1.06,4.9,1.8,1.5,.32,'#8c6546');
+t25Add('mine-door','광산 출입 받침',-7.6,.22,5.5,2.2,.38,1.75,'#8a7d6e');
+t25Add('mine-left','광산 입구 기둥 좌',-8.6,1.6,5.5,.45,3,.56,'#776c5b');
+t25Add('mine-right','광산 입구 기둥 우',-6.6,1.6,5.5,.45,3,.56,'#776c5b');
+t25Add('mine-top','광산 입구 상단',-7.6,3.20,5.5,2.4,.44,.8,'#a19b80');
+t25Add('forest-door','숲길 출입 받침',8.0,.16,5.2,2.2,.35,1.75,'#7c9473');
+t25Add('forest-left','숲길 입구 기둥 좌',7.0,1.55,5.2,.38,3,.38,'#876746');
+t25Add('forest-right','숲길 입구 기둥 우',9.0,1.55,5.2,.38,3,.38,'#876746');
+t25Add('forest-top','숲길 입구 상단',8.0,3.17,5.2,2.4,.38,.7,'#a78e69');
+for(const [i,x,z] of [[0,-10,-8],[1,-9,-6],[2,10,-8],[3,10,-4],[4,-11,4],[5,11,2],[6,-10,8],[7,11,8]]){
+ t25Add('tree-trunk-'+i,'가로수 줄기',x,.80,z,.48,1.55,.48,'#78684e');
+ t25Add('tree-leaves-'+i,'가로수 잎',x,2.3,z,1.85,1.85,1.85,'#4c8067');
+}
+for(const [i,x,z] of [[0,-2,7],[1,2,7],[2,-4,1.0],[3,6,1.0]])t25Add('lantern-'+i,'가로등',x,1.35,z,.25,2.65,.25,'#87674e');
+// M2.4: reviewed GLB assets baked as faithful Canvas isometric sprite projections for offline QA.
+// Runtime GLB rendering is NOT asserted. Exported PNGs are original-asset-derived, source SHA tracked.
+const T24_GLBS = {};
+T24_GLBS["planter"]={src:"data:image/png;base64,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",anchor:[123, 128],ratio:126.0,originalAsset:"PROP_PLANTER_CAMPUS_001",sourceSha256:"f3ea8d22be93d29f1e7d69330436224696e1ce3c23efd7057fbef32304d4708a",spriteSha256:"e2e9ea77155194691216ad3f9d771d58ac115f2193ca5f94f09629d9a38996f3"};
+T24_GLBS["bench"]={src:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATQAAAD/CAYAAAB/2SpcAAAbFElEQVR42u3dfYwc5WHH8d/u7J3ts419xsEpYGNejFFADSIVUZ0XVCmiShsi1IpKSRGigia0VVpaNYWoViOqqBVJoYgWUlCjqqmSVGlQQl8SVWqahFbkj7aUJgEMNrbPNobD7/eyd7e7s9M/5p692dl5eZ6Z55l5Zvb3lSz55bzn29v5+HnmeWYWYIwxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMocGnYLQv3Pkz3qTjPzW/87f/xeeIMYJWzR6/+2Yv+GvP84gaYwStOv3Vve/zOr1u4scQNsYIWiV64t59HgA4aICwMUbQKt3v33aDBwBX7rgIzupTQtgYI2iVBk2kChvAxQPGCJqloBE2xgha7UDLghthY4ygWQ8aYWOMoNUONMLGGEGrHWiEjTGCVjvQCBtjBK12oOmAbdOWrV6j0YDb66G9MM/vDWMETb3f/cV3+VcKNJvaHlMVtv3PHhr5s/nz5/j9YYygZYdNoLZz2wYAwPGzS7lhA+Qvqwri5rouAKA9P8fvE2METb3H777ZO3JqAWLEtnPbhtyoZR21PfAPLwEAltttfp8YI2jqmAV/bQtsXEBgjKBJJ+624fZ6sR9z5NQCYWOMoNlf8G4bSagFR227t28kbIwRNHtBCwKjAhsALbgRNsYImnbQCBtjBK12oKngJmDTOR2V3fJB2BgjaEqglQlbcNRG2BgjaNpAywIboO8qBJnpqICNuDGCRtAIG2MEbTxBk4UtjBthY4ygWQtaVth04UbYGCNoAIBPf9QHzfP0PSZhY4yglQ6bTtQEMAAKP88ms+WDsDGCNkYjtsun9V23KTNqC8OmAzfCxgjaGBe848bxs23onoqWBVtwOkrYGEGrcWl326grbED0eTbCxghahRO34L7mp7amnsg3gVuWBQRd01FZ2IgbI2gVA01E2AgbI2i1AY2wETZG0GoHWhA2IHnrhYBNJ25ZtnzowC1tZZSwMYJWYdBURm0mYJMZtRE2xgiaMmhZYNM9aiNsjBE0raBVFTYduBE2RtBqChphI2yMoNUOtKyw6cIt68poXtySVkYJGyNoFQdNFjZTozYbYSNujKAV2IO3/7QHACvdnvbHVt3yoRO2tM9rCjaACwiMoFkBmwnUssKmA7e8sGXFjbAxgsYRmzHYZKajhI0RNMKWC7dxgU18XsLGCNoYTEdVYdM1Hc0DW55RG2FjBG0MpqOEjbAxgkbYCoDN8zwcPb1oDDaAe9kYQas1bED6nXR145a2MioDWxbckhYQCBsjaBI9/Yl9Xq/v//w3//r5zM+HgM0EbmmweZ6HE+eWxhI24sYI2mpf/PX3eSMH6Ow8Pv9PPyZshI0RtGpCFnmAaoRNN255YNOBW17YVHEjbIygKSJG2OyHTXxewsbGFrSn7nu/13fzLf+Jg8X26WhW2PLgpgu2LKM2wsZqD9pjd73HA4BezwUArN+wDhMTEwAAG2EzMWqzDTbT01HCxmoJ2mN3vcfr94dfyP1+fwi1cYItaTqatOUjL2xp02CTsAHDe9kIG0GrBWThbIVtatNm77c/dCVshS0rbjphU8EtbgGBsBG0SvTonTcpHW62wTa1afPgk4dh04kbYYuHjbgRtEpAduyMf5DuungqEraZ04vYu3ObNtyywBYETfy77r/16tJgq9sCAmEjaLUakQnYolATgADQOmpTgS0KNMD/rftvvcZq2PKM2nTBpoobYSNopffUJz/gLS8vAwAOvXnef3Fesln5ccqCDYi/rCoJNNFyu90ILyDowo2wETaCVmDhDbGdTmeAWh7YkqaiOmELHyjhUVsQtKbjAAB63c4IaOLnhI2wsYqB9tQnP+AJWOLSAVvSqK0o2ARoTcdB33VjR2jhxzMFWxpusrBlwS1pAWEwjTeAG2EjaIWMxqJ69cQZAMDeyy+uDWx/+b2jsVPOptMCALTn5yK/V1GwFTFqqytswPACAmEjaEo98qs3eo1GExs2bFD6e6+eODNATcAGQMt0NAxbcLRoGjYBmuO0Bqz13V7kKI2wETZmAWhP3rvPC75IVlZWBn9mE2zA8Hm2IGzhLR9aYfv+DBzHQbezkjjtrCpsqriZgE0GN8JG0KQw8zw39LvNIdSywhaeilYdtse/+7oyaGmw6cCtLNgEMjbDRtzGBLRoyFBb2LLiFnWg/N5XX1QGzQbYABgdtRUNm/i8hG3MQXvinvcqHtn5YQtPR4uCDdBzni3qQNF9Mbwu3OoGm+yojSujYwaaDGQHT14AAOy5dEskbAeOnx6BJ895Nl2wCdwI2yhsUbiVDZvJ6ShhqzloX/zE+z3/AO5K/52DJy/EoObDBkDLdNQUbMFRG2HTC5sKbnELCHlhS8Mt6vMStgqD9he/9l5PfAMPnjwHAHjX7h1KqBUJG+CfZxOwHT21gN7qi5GwmZ+O1h02roxWGLTH777ZG4Xp3ODnWWFLmorqhC0MWJ7rRWVg07EyStgIG9MIWhRi0TDlgy151FYMbFlxI2zysImvRRU2VdxMwJaEG2GzHDQZyA7PzgEArlr9ZkbB5h/Auqaj1YBN4FYUbIC+N0/Wjdu4wSY+L2GzALQ/u/Mmb7LVUn7ww7NzQ6jpnI6Owrb2QiJshK0OsBE3Q6B94WPv9gCg4TiwDTYgfJ5t7YUU3vJhC2zh6WgabFlwiztIbJ2OmlgZlcXNJGxp01HCVgJon7p1jycOvsbqPbuywhaeilYBNoFb0bAB+VdGy4ItK25lwxb+vCOXpBk8zyY+L2ErCLTgdKkOsGUdtYUfQ+eWDwC4fHo9YSNshK0o0HTBFjcdNQ0boOc8WxReurZ8xMGW9zwbYZPHzTRscbgRNsOg3f/h6zwAcN34i8t1jNp0wyZwI2x2wZYXt3GDTZxnI2yaQAvCloSa7bANj9oIW9r//qZXRqsGm0CGsNUEtKJhA4bPsx2enRuMEvPsZSsTNlXcPvvPRwAA9/zsjljU6gBbFtxMwSY7ajO5MpqEG2HTDFrRU9EwbMFRmynYdGz50A3bQx+5cjBqMwGbl3IU54HN5KiNsBE2LaCpjNqqszJaPmxiVCYAsw02W8+zxS0gBL8eU7jZsICQ9n0bB9y0f4FVh20Nt2JgS9ryEcRLF2wquNkCmypudYctCjfCZgg0wpaeuGVRkbDlGbURNsI29qDJnmcTd6LIc1mVCdhGp6PJsGXBLQq24HRUFTYxTSVsxcKWhFtRsIVxG1fYCvtCqr6XLQ42IP/KqCpsSbjZABtQ3MpoVtyKhk0gUxZsDhpY6XZqD1vhX0BZsOnc8uHjNk3YCBthG3fQyoYtOGozBVve82ymYAMQeQE8YTMHW9p0tAjYonCrK2yl/4MJW3bYVM6z2QJbkefZVHBLO89mGrbg5y0SNgDodbvKsG3astVrNBqDf3N7Yb5B0AJt3jrtid3wSQsIhC3wQs+wMkrYqgub6emoLGybt06P/MPcXs8K1Bo2QBb+vbJhE7hl36Q7HfnnVYYNwAA3wmZ2OlokbEHc0mDb/+yh1MdyXRft+bnG2II2tWnz4LvlrOLkuj04TksKNsC+O+kK3EzAFodaGbDJjtpshE0WN8ImB5o4RvtuD8vtNkELotbrdAYjsL7bw3237ILseTbCNnyezQRsWaejnuTN/otcQCBs6bCJvWyfeebA0MCj33cH/96+u/acELTwN3X1YGo0m+j31xBTgS3LdDQOtvCWD9OwqeCWFTZZ3AhbObAl4VYUbAI3Adun//7HQ3+29toY/neMNWhRsAVBW3vivBHYTJ5niwNPx162ONjyjNoImz7YVHEbF9ie/N6MFGgP33F9aVs+rNpnIlBLA038LyC2fBQNW3A6StiqAVvRo7YiYQtOC03C9tQPjkuDJioaNis3zm2Y2ujJgBb8tcw1o4Qt8EJfXUCoImxlLCDI4FYUbFG4FQFbFtCKhs1K0MLn1WRAI2z5YIsatemCDVDb8kHYzMGWB7c8oBUFW+1AC8MWh1veLR+mYPNrVgq2z/7CFamfn7CZhS2MmwnYZEF75OM3Zrr6gKBJVDZsAreqwJZ0no2wZcMtDTaTozadsMmC9hs/t3vwNafBphu32oMmC1twOqoTNh1bPsqC7TPPHMA9+95ZCGwy59lkYQPKWRmtO2wqoIW/5qJgGxvQssCm8zxbEbAFR1VFwBaHmwpsAjfCZg62KNyywJYFtPDXbRq2sQPNNtiynWeTh00Wt6rBpoJambAl4RaELW70VMR5tjhkwrDlBU111JYFtrEFLQq2pPNsNq6MJsGWdToqA5vqlg+bYKvKeTYbYdMFmixsM6f9N9k+Nb+Cv3vuUIOgaR61EbZR2J567gQ+d/seY7ABwA1X7SBshmAL4pYGm7iWUxdoSdPRmdNtnJpfuwM0QTMMG2Djlo96wyazMlol2GSno7bAZhI0AFjp+Y+zvtUcwoygEbZSYZNdGSVs6rCFv7YiYAvfbcM0aOfm22i1Jgha3WATCwhVg038b15F2AD7FxCKgk3gpnq3DYJmOWhRsKWdZ7NrL1s6bIDalg8V2ACMTEdNwJZ0nq1qsMXhVsaWDwGb7N02dIAGYAg1gjYGsKmN2pqpH1EGbFG4qcImcBtX2Io6z/bEv8vfPijL9aIEreSqueWDsJUBm6npaJGwqYAmUoFtrr2CdZOTA9CCqBE0wqYdNhncZGFTWRm1DbayFxCicCsCtiygqcAWBZpAjaBZipt9K6NNqY9SXUCwCbbgeba6wxZ1nk0XbLKgpd1tIw43gmZxhE0eNcKWH7a0UZsO2GRB+9SHrsLuS9Lf6zMMWxxoAPC152cI2jjDln3LR7mwJZ1nsx22vOfZbIdNBTSRCmxh0GQRI2gFJt5IWbzHqMx5tqrBFjzPRtjqC1sW0ILtvuSiRNh+dOws1k1O4sl/fYV327A18bWI9zIkbGZhU0FtXGAL4xZeQAgjEwdbXtBkRm0vzlzAjVdsAcC7baAKX4vALQxb3HTUnr1s9sIWxk0HbP7z4o01bGHcdIEmOx0Vd9uYvbCEr/znYZ5DqxtsgA1bPsqHTXYBIQtsAjdTsNm4gCALm27QkqajM6fbmL2whilBqwFudq+MZoMtCTdTsA0ffHqno1WHLYhbGmyyF6dnAQ0AFlf81/v6VnMIM4JWYdj6/T7uu2Vn7WATuBG26sJWFGgLy72R1zxBqyhuwa/1vlt2EbYxga0K59lk77ZB0AjaoPVTG73l9mLku8LH4WbXXrbyYROjCcKmd9RWJGjh1zhBq2FpsAncqggbkL6AkBU2IH3LB2FLh032PQUIGkGrJGxyuNkNWxi3LLCdOLcM13VjYcuDmk2wPf5vR6RAe/iO6zNdLxoGLfi6JmiEzRhsQJbzbHbAJnuejbDlA23tOZGHbXHFP86DoInXNEEbc9jCuNmzl218YIubjuaFrayVUVnQ4u62kYYbQWPKozY7VkabSo9dVdiA5PNsVYNNBTSRCmxxoAHAl39wkKARtnrDFofbuMFW1HRUFrT7b70GO7dvGvo9GdiiQJOFjKARNqOwqa2MNpUfX2bLRxbYALktH1lhSzrPZjtsKqCJVGALg6aKGUEjbEO/Ln/LRzbY0qajhE0PbFlAC5aG26tvLQLwsPed/sfxbhssE2xRozbCRtjCsOUFTWXUtjZVb+PRf3lJ+msgaIStVNiScbMLNpnzbHWGTRdoMrCJWwcBHmYvLHOVk9kNG+AvINQBtv3fOjj4uQ7YxPO/d+c2OM2WNbBFH5fZQYvCrb3Uw5vnFweQiQga04KbXSujhE0XbFm2fJgEDQDOzvtf8+LK6LYNgsaMjdqqCNvBk+fgum4sbFlRk4Ety00m42ALTkd1wKYyaisKtK7rodPj3TZYTWCTX0CwG7ZgeWETuJUJWxVAa/KwZXE99p0Djce+c2DkheQ4DhzHwbEzbRw704bnulhZWUGn19Pyea/acRH2XDqNV4+fxstHZ9F0JtB0JiI+sr/6Q749l07jup3bcexMG0fensfLM29jaWkJS0v+XqjJyUlMTk5m+nfvfscm/OkvXwfHcbD/WweH/xPo9dBsNvHQt2cyPy+XT6/HFds34tDJC/jJ4Vm4/R6aTgONhv8jb0/eu8978t59ng2vvcmWk+nvcYTGtI3YxKitSiM2IPk8W54RGzC65UNMR3WN2ADgmku3FDJiCx+XTquFbqcTeWxmuV40OEIDMDRKq+SUU7yHpRv6nz4KtNaE/7/owoXzhG1MYYvHzT7Yjp5awM5tGyoNW/AtGcVj+1st4gcbKrDNL3XQ7fUHoAVRqwxoArHw8DwNtInJdUPfNMJmD2xB3Mrd8tHM/Nhx59lMwTZ8TiofbOGVUV2wPfCNVwaP13fd2HNoUbMnGdiiQBOoWQ9aFGRZQAvmeR5hsxg2AFi3bh1hQ/TKKODfgNI22ARk4eMzDJrjtAZHaXt+LvY4jMOtkqAlQRYHWxC0ptNaffJiThquftPmCZuV01GTWz4IWzRsYjqqCtsD33gFnudFLji4vd4QaBOT6+C6LvpuL3aUlgZbHGgA8Dfft/T2QcF5uCpoTacVD9kqZt1uR/oJZfWDTW4BgbDFwRacVsqunAYhS5p2psEWBk0WMStAEzk6XswByLI8oYywqcImvoYrL9lsFDaBmwnYxAKC53kj08qskOU5/n7r56/zur0+nv7ua5mP3dJBy4VbBGQErVqwhXEjbGsdeXt+AH5w1PbHH70692ML3L70w1nlv9vtrCT++aMfvzHXNaN5KvWgj8MtFTZCRti0w5Z9j3kYtuB0VAdsUSujeWFT3eCbNBqLAk1UNGxWHPzSsMVARsQIW1bYRnHLd/FM3Hk2W2B76Nszuc+PjRLixYJWNGzWQRCFW9S2DUI2XrABRW/5qBdsOiFrNp3AcQkp0IqCzVoQgrAFQSNi44tbVWELolw0bDqnlgKy4eNSDTTTuFUCh/VTG73l9iIhI2xGYTs8O4e9O7dXErbwlg/VBbYkyO67ZRcA4On/eEMraCZgIxKs8rCZOM9mGrbwyqgO2PY/e0j57yRB9rnbrx38/MS5ZWOg6YSNoDHClgBb/MqoPbDtf/aQ0vkxFciC/dE/vm4UtLklfzvIg1/5n8wutXi4MNsT92SLgs1xHLxxfsXIyuhVOy4CALx6/HQEbP1csO25dHoA27EzbQBt7Lp4Sgm2IGSymCXtIYuDrIjmllbgeQ3835G3cz0OQWO1gQ3AALc6wxacWspAlrb1wg7ITml5PILGagVbeNSmcwEhDrbh6ahe2AB/AaHT6SifI0uD7E9+6brcl1NF9dobZwEA1162LRGyFw+f0v65CRobE9igHbZupzNYQBC3CNcFm8ANAL70wyPaIHv4jusB+Cujx86soVkUbKYgI2isdrAlTUdNwCZwMwGbD5nadZYykIl2v2PTADbP87TCdvn0egBr14u+9sZZnF3swu2v3TeNoDGWc9RWFdgefOaAMcjCmYRt+0X+ecDTc0tSHy97E0eCxghbBGwAcNlW//d0LiBkgU0VsbyQycKWFbdlt4GXjvtTzh1bNhiHTMR9aGwsStrL5sO2TitsovhNuk0rIEsq7tKqUej8p3b/bXsHiAXbsWXD0JTTBGQEjRG2GCyKuMvHH3z9JeXHSNpDJi5P2nXxVPJdnTPC5nle7JUC+2+7NhIy0deen2nc9cGrPQGaCcg45WScikZkesuHKmRpWy8e+di7Bz9f2/LhJ+70kTcxHR2aIn/4Srxy8gLgIREz0yMyjtAYUxixBaejeWD7w9B0TSdk4cR2D92wrfT9afILh97E5MQEum4PzUb6aLAIyAgaYwXAphOyJMRMw7bSb+KFQ28Ofi0DWpGQETTGMuImA1uZkKXhpnKeLQxZGmjPvPBWqfcsJGiMaYRNJ2R/fudNAID+6oX3OlIZtcVhJkADMFi5fOaFtwZ/RtAYqzBsWd45KQmyz//KDQD8lVEAg20fRcGWBFkYtK//91sI3z6IoDFWQdhMQRauKNii9orF9c0XT8XeD42gMVahNm+d9lT/TtIesjjIioBtbsnf6Dt7biEVtG++OHxROUFjbIwgS9t6IQtZGmxZcZtb6uJHR32k4nbzA2urleF3ZLMRNG6sZUwWqJ6PU9obkJiCTBR9+yJHCrYgYkmVseWCIzTGCiw8QnFaLbi93gA4mUuTdGzSzTIdTYNMXJ705edeb8h+/RyhMVazEZvTaqHX6aDRlLs9kLjLB7CCy7au03r7IsC/m66A7fS5ebx88vxgr1j4fTXDJWFWlQgaYxqmoQKM4Jtiy+GmFzZxD7L/fX0Wy9302/5UdWpJ0BjLWXthvhE3/cqTLtjmlrr4ybEz/i8ajcS7hdQNMhHPoTGWo6lNmz2v3x9MOeNGaOK8kolrRocgGxzZPmhRlydlxawK59AIGmM5QRs9yONBE8nAJnBLgi0Ss9Xpb8vxkdV1HzKCxhhBSzzIs8IWB1kUaLpO9hM0xgia1EEuA9vZxW6p9yAjaIwRNOWDPA43GdBMnuwnaIwRtMwHeRi2ONCKWrEkaIwRtNwHuYDt7KJ/IXkRbzZC0BgjaEZAE931was9oLwd/QSNMYJW+kE+TqA1+ZJkjNUlgsYYI2iMMUbQGGOMoDHGGEFjjBE0xhirVrzBI2MsMfFuV8G786Z9vOd5WLhwvvD9aASNMZYIWZYajUYpsBE0xpg2yMqGjaAxxqQgE2/XFzf1bDotOI4TD9uWrR4AzBuEjaAxxoagSnsjZfF+pMEmJlPe/8Dz0O12OOVkjNkHm9NqwZF5sIIgI2iMsaHE2/SJu2rIjthkISviLhwEjTGmBzbPPwVXBmQEjTGmBzYLICNojLFcsNl4g0eCxhjLBFs4G+7KS9AYY5lgWz+10bMFMoLGGMvVcnvRuvdJ4N02GGO1iaAxxggaY4wRNMYYI2iMMUbQGGMEjTHGCBpjjBE0xhgjaIwxRtAYYwSNMcYIGmOMETTGGCNojLHxqcGngDH1xJvyht+f0r8t9egNXScm12H+/DkebwSNMfsgE6mAJvI8DwsG3z2coDHGlCDLAxphI2iMWQVZHGxh0JpOC46T8B7jq28BN0/YtMT3FGBMAqq0N9l1Wq2R0VrUqCyMWfi9LBlBY8wK2JxWC47MgxEyTjkZK7Pwe1Gmjdii6nZWRn7PpreAI2iMEbZMozFCRtAYqw5sEZARMYLGWKVgi9q2QcgIGmOVhC0IGiFjjFW69VMbPT4LjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjOvp/aiLzFowD/kYAAAAASUVORK5CYII=",anchor:[151, 187],ratio:126.0,originalAsset:"PROP_BENCH_CAMPUS_001",sourceSha256:"765066e241469666dcc7671a994968b63e9899886cd3bb0f315b305995e5a74d",spriteSha256:"9d24369711df39ace2625526269fa1e159c160a78bf798081750c6a1e37f212d"};
+T24_GLBS["streetlamp"]={src:"data:image/png;base64,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",anchor:[42, 488],ratio:126.0,originalAsset:"PROP_STREETLAMP_CAMPUS_001",sourceSha256:"62c81c051fda70edaf155bdb0f68c2accd6f97854fc942bfe758f07a829b0575",spriteSha256:"4026bb07d9763f275bd50d1692afc9929d4bb44a2d03629e71510cf3acb0dfaa"};
+const T24_IMAGES={};for(const [k,v] of Object.entries(T24_GLBS)){let im=new Image();im.decoding='async';im.src=v.src;T24_IMAGES[k]=im;}
+const T24_PROPS=Object.freeze([
+ {id:'bench-south',kind:'bench',x:-2.8,z:6.8,radius:.80},{id:'bench-north',kind:'bench',x:2.7,z:6.8,radius:.80},
+ {id:'planter-market',kind:'planter',x:-4.2,z:2.9,radius:.52},{id:'planter-forge',kind:'planter',x:5.25,z:2.75,radius:.52},{id:'planter-square',kind:'planter',x:.1,z:7.5,radius:.52},
+ {id:'lamp-west',kind:'streetlamp',x:-2,z:7,radius:.18},{id:'lamp-east',kind:'streetlamp',x:2,z:7,radius:.18},{id:'lamp-market',kind:'streetlamp',x:-4,z:1,radius:.18},{id:'lamp-forge',kind:'streetlamp',x:6,z:1,radius:.18}
+]);
+function t24DrawProp(prop){const obj=T24_GLBS[prop.kind],img=T24_IMAGES[prop.kind];if(!obj||!img?.complete||!img?.naturalWidth)return;const loc=t25Project(prop.x,0,prop.z);const scale=t25Scale()/obj.ratio;const anchor=obj.anchor;t25Ctx.drawImage(img,loc.x-anchor[0]*scale,loc.y-anchor[1]*scale,img.naturalWidth*scale,img.naturalHeight*scale);}
+window.__sandstarTownAssetsM24={assets:()=>Object.fromEntries(Object.entries(T24_GLBS).map(([k,a])=>[k,{source:a.originalAsset,sourceSha256:a.sourceSha256,spriteSha256:a.spriteSha256,loaded:T24_IMAGES[k].complete&&T24_IMAGES[k].naturalWidth>0}])), props:()=>T24_PROPS.map(x=>({...x})),saveKey:SAVE_KEY};
+const T25_MANIFEST={schemaVersion:'worldforge/0.1',project:{id:'sandstar',name:'흙별',template:'town-isometric'},world:{id:T25_ID,name:'도래마을 2.5D',units:'meter',upAxis:'Y',handedness:'right',metadata:{view:'isometric-2.5d',rendererPort:'canvas2d-offline',source:'WorldForge/0.1',status:'prototype-assets-m24'}},assets:Object.entries(T24_GLBS).map(([k,a])=>({id:'town-'+k+'-sprite',type:'texture',uri:'embedded:'+k+':png',metadata:{sourceAsset:a.originalAsset,sourceSha256:a.sourceSha256,spriteSha256:a.spriteSha256,bake:'GLB->isometric Canvas sprite',renderStatus:'prototype'}})),zones:[],places:T25_TARGETS.map(t=>({id:'place-'+t.id,name:t.title,type:'sandstar.location',position:[t.x,0,t.z],tags:[t.type]})),paths:[],entities:t25Ent,npcs:[],quests:[],events:[],rules:[],metadata:{baseWorld:'village_hub_01',legacyMarketX:MARKET_X,legacyForgeX:45,protectedFloor:true}};
+function t25ValidateManifest(m){
+ const valid=!!m&&m.schemaVersion==='worldforge/0.1'&&m.world?.id===T25_ID&&m.world?.upAxis==='Y'&&Array.isArray(m.entities)&&m.entities.every(e=>e.id&&Array.isArray(e.transform?.position)&&e.transform.position.length===3);
+ return valid?{valid:true,value:m,diagnostics:[]}:{valid:false,errors:[{code:'INVALID_WORLDFORGE_MANIFEST'}]};
+}
+// Renderer-neutral lifecycle adapter follows ALDOL WorldForge runtime-core's public port contract.
+function t25CreateEngine({renderer,validateManifest,systems=[],scheduler=window,fixedStep=1/60}){
+ let state='created',world=null,frameId=null,lastTime=null,accumulator=0;let diagnostics=[];
+ const entities=new Map();
+ const context={getEntity:id=>entities.has(id)?structuredClone(entities.get(id)):null,getAction:()=>0,setTransform(id,transform){const e=entities.get(id);if(!e)throw Error('E_ENTITY_NOT_FOUND');e.transform=structuredClone(transform);renderer.setTransform?.(id,transform);},diagnose:(severity,code,detail='')=>diagnostics.push({severity,code,detail})};
+ const cancel=()=>{if(frameId!==null)scheduler.cancelAnimationFrame(frameId);frameId=null;lastTime=null;accumulator=0};
+ const tick=time=>{if(state!=='running')return;frameId=null;let dt=lastTime===null?0:Math.max(0,Math.min(.1,(time-lastTime)/1000));lastTime=time;accumulator+=dt;let iter=0;try{while(accumulator>=fixedStep&&iter++<6){for(const sys of systems)sys.fixedUpdate?.(context,fixedStep);accumulator-=fixedStep;}for(const sys of systems)sys.update?.(context,dt);renderer.frame?.(dt);}catch(err){state='failed';diagnostics.push({severity:'ERROR',code:'E_ENGINE_TICK',detail:String(err)});cancel();return;}frameId=scheduler.requestAnimationFrame(tick)};
+ return {get state(){return state},get worldId(){return world?.world?.id||null},get diagnostics(){return structuredClone(diagnostics)},getEntity:context.getEntity,setTransform:context.setTransform,async load(src){if(state!=='created')throw Error('E_ENGINE_LOAD_STATE');state='loading';let r=validateManifest(src);if(!r.valid){state='failed';diagnostics=r.errors;return {ok:false,diagnostics}}world=structuredClone(r.value);for(const e of world.entities)entities.set(e.id,structuredClone(e));try{await renderer.mount(world,{diagnose:context.diagnose});for(const sys of systems)await sys.init?.(context);state='ready';return {ok:true,diagnostics};}catch(err){state='failed';diagnostics.push({severity:'ERROR',code:'E_ENGINE_LOAD',detail:String(err)});return {ok:false,diagnostics}}},start(){if(!['ready','stopped'].includes(state))throw Error('E_ENGINE_START_STATE');state='running';frameId=scheduler.requestAnimationFrame(tick)},pause(){if(state!=='running')return false;cancel();state='paused';return true},resume(){if(state!=='paused')return false;state='running';frameId=scheduler.requestAnimationFrame(tick);return true},stop(){if(!['running','paused','ready'].includes(state))return false;cancel();state='stopped';return true},async dispose(){cancel();await renderer.dispose();entities.clear();world=null;state='disposed'}};
+}
+function t25Project(x,y,z){const scale=t25Scale();const px=(x-z)-(t25Camera.x-t25Camera.z),py=(x+z)-(t25Camera.x+t25Camera.z);return {x:t25W*.5+px*scale,y:t25H*.53+py*scale*.47-y*scale*1.08};}
+function t25Scale(){return Math.max(23,Math.min(35,t25W/28));}
+function t25Poly(pts,color,stroke){if(pts.every(p=>p.x<-100||p.x>t25W+100)&&pts.every(p=>p.y<-100||p.y>t25H+100))return;t25Ctx.beginPath();t25Ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)t25Ctx.lineTo(pts[i].x,pts[i].y);t25Ctx.closePath();t25Ctx.fillStyle=color;t25Ctx.fill();if(stroke){t25Ctx.strokeStyle=stroke;t25Ctx.lineWidth=1;t25Ctx.stroke()}}
+function t25Cuboid(x,y,z,w,h,d,color){
+ const a=t25Project(x-w/2,y-h/2,z-d/2),b=t25Project(x+w/2,y-h/2,z-d/2),c=t25Project(x+w/2,y-h/2,z+d/2),e=t25Project(x-w/2,y-h/2,z+d/2);
+ const A=t25Project(x-w/2,y+h/2,z-d/2),B=t25Project(x+w/2,y+h/2,z-d/2),C=t25Project(x+w/2,y+h/2,z+d/2),E=t25Project(x-w/2,y+h/2,z+d/2);
+ t25Poly([b,c,C,B],t25Hex(color,-36),'#1f363549');t25Poly([e,c,C,E],t25Hex(color,-16),'#173b3849');t25Poly([A,B,C,E],t25Hex(color,14),'#d8e0ba3b');
+}
+function t25Diamond(x,z,r,color){const a=t25Project(x-r,0,z-r),b=t25Project(x+r,0,z-r),c=t25Project(x+r,0,z+r),d=t25Project(x-r,0,z+r);t25Poly([a,b,c,d],color,'#436f622a')}
+function t25Ground(){
+ const c=t25Ctx;c.fillStyle='#8bbdb0';c.fillRect(0,0,t25W,t25H);
+ c.save();c.globalAlpha=.30;c.fillStyle='#b6d8b6';for(let i=0;i<8;i++){const x=((i*181+66+t25Elapsed*1.3)%(t25W+300))-100;const y=40+i%3*21;c.beginPath();c.ellipse(x,y,85,21,0,0,Math.PI*2);c.fill()}c.restore();
+ for(let ix=-14;ix<=14;ix++){for(let iz=-11;iz<=11;iz++){
+  const pt=t25Project(ix,0,iz);if(pt.x<-48||pt.x>t25W+48||pt.y<-48||pt.y>t25H+58)continue;
+  const road=(Math.abs(ix)<=2||Math.abs(iz-2)<=2),plaza=Math.abs(ix)<8&&iz>-1&&iz<5;
+  const jitter=(ix*29+iz*17+ix*iz*7)&7;
+  const col=plaza?(jitter<3?'#bebfa5':'#b5b7a0'):road?(jitter<4?'#c1c0a8':'#b1b8a1'):(jitter<3?'#7baf97':'#83b59d');
+  const p0=t25Project(ix-.5,0,iz-.5),p1=t25Project(ix+.5,0,iz-.5),p2=t25Project(ix+.5,0,iz+.5),p3=t25Project(ix-.5,0,iz+.5);
+  t25Poly([p0,p1,p2,p3],col,plaza?'#ddd6ad28':null);
+ }}
+}
+function t25Label(x,y,z,title,active=false,color='#e7f9db'){
+ const p=t25Project(x,y,z);if(p.x<-130||p.x>t25W+130||p.y<-50||p.y>t25H+50)return;
+ t25Ctx.save();t25Ctx.font='900 12px system-ui';t25Ctx.textAlign='center';const tw=t25Ctx.measureText(title).width+23;t25Ctx.fillStyle=active?'#275b62ee':'#244650c6';t25Ctx.strokeStyle=active?'#ffe6a3':'#a3c9bd90';t25Ctx.lineWidth=active?2:1;
+ t25Ctx.beginPath();t25Ctx.roundRect(p.x-tw/2,p.y-17,tw,29,9);t25Ctx.fill();t25Ctx.stroke();t25Ctx.fillStyle=active?'#ffe6a4':color;t25Ctx.fillText(title,p.x,p.y+2);t25Ctx.restore();t25TapCandidates.push({x:p.x,y:p.y,wx:x,wz:z,name:title});
+}
+function t25Avatar(){
+ const {x,z}=town25dPlayer,pt=t25Project(x,0,z);t25Ctx.save();t25Ctx.fillStyle='#1d393d5a';t25Ctx.beginPath();t25Ctx.ellipse(pt.x,pt.y+6,16,7,0,0,Math.PI*2);t25Ctx.fill();t25Ctx.restore();
+ t25Cuboid(x,.37,z,.62,.75,.49,'#237f83');t25Cuboid(x,1.05,z,.58,.56,.54,'#d6ab86');t25Cuboid(x,1.39,z-.02,.7,.25,.64,'#5c4838');
+ const p=t25Project(x,2.0,z);t25Ctx.font='900 11px system-ui';t25Ctx.textAlign='center';t25Ctx.fillStyle='#fff1c1';t25Ctx.fillText('나',p.x,p.y);
+}
+function t25RendererPort(){
+ let manifest=null,shapes=[];return {backend:'canvas2d-isometric',async mount(m){manifest=m;shapes=m.entities.filter(e=>e.enabled&&e.components?.['core.primitive']);t25Resize();},setTransform(id,t){const obj=shapes.find(s=>s.id===id);if(obj)obj.transform=structuredClone(t)},resize:t25Resize,frame(dt){if(!town25dActive)return;t25Elapsed+=dt;if(++t25Frames%2===0)return;t25Draw(shapes)},async dispose(){manifest=null;shapes=[]}};
+}
+function t25Draw(shapes){
+ if(!town25dActive)return;const r=t25Root.getBoundingClientRect();if(Math.abs(r.width-t25W)>1||Math.abs(r.height-t25H)>1)t25Resize();
+ t25Camera.x+=(town25dPlayer.x-t25Camera.x)*.09;t25Camera.z+=(town25dPlayer.z-t25Camera.z)*.09;
+ const c=t25Ctx;c.setTransform(t25Dpr,0,0,t25Dpr,0,0);t25Ground();t25TapCandidates=[];
+ const items=shapes.slice().filter(e=>e.id!=='floor'&&e.id!=='plaza'&&!e.id.startsWith('lantern-')).map(e=>({e,depth:e.transform.position[0]+e.transform.position[2]+(e.transform.position[1]*.0001)}));items.push(...T24_PROPS.map(prop=>({prop,depth:prop.x+prop.z+.01})));items.push({player:true,depth:town25dPlayer.x+town25dPlayer.z});items.sort((a,b)=>a.depth-b.depth);
+ for(const item of items){if(item.prop){t24DrawProp(item.prop);continue;}if(item.player){t25Avatar();continue;}const {position,scale}=item.e.transform;t25Cuboid(...position,...scale,item.e.components['core.primitive'].color);}
+ for(const target of T25_TARGETS){const near=t25Distance(target)<2.5;t25Label(target.x,target.type==='gate'?3.85:target.type==='npc'?2.0:4.1,target.z,target.title,near);}
+ // M2.4.1: The 2D mine-era building icon sprites are intentionally NOT painted on the 2.5D facades.
+}
+function t25Resize(){const r=t25Root.getBoundingClientRect();t25W=Math.max(1,r.width||window.innerWidth);t25H=Math.max(1,r.height||window.innerHeight);t25Dpr=Math.min(1.6,window.devicePixelRatio||1);t25Canvas.width=Math.round(t25W*t25Dpr);t25Canvas.height=Math.round(t25H*t25Dpr);}
+function t25Blocked(x,z){if(!Number.isFinite(x)||!Number.isFinite(z)||x<-11.7||x>11.7||z<-9.2||z>9.2)return true;
+ const blocks=[[-6.2,-3.1,5.4,4.3],[3.2,-3.2,5.8,4.5],[-.4,-2.1,1.75,1.75],[4.95,.28,1.0,.7]];
+ for(const [bx,bz,w,d] of blocks)if(Math.abs(x-bx)<w/2+.35&&Math.abs(z-bz)<d/2+.35)return true;
+ for(const prop of T24_PROPS)if(Math.hypot(x-prop.x,z-prop.z)<prop.radius+.25)return true;
+ return false;
+}
+function t25Normalize(raw){const def={schema:1,position:{x:.3,z:3.6},entryCount:0,renderer:'worldforge/0.1:canvas2d'};if(!raw||typeof raw!=='object')return def;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.z)&&!t25Blocked(raw.position.x,raw.position.z))def.position={x:raw.position.x,z:raw.position.z};if(Number.isInteger(raw.entryCount))def.entryCount=Math.max(0,Math.min(100000,raw.entryCount));return def;
+}
+function t25Distance(t){return Math.hypot(t.x-town25dPlayer.x,t.z-town25dPlayer.z)}
+function t25Closest(){return [...T25_TARGETS].sort((a,b)=>t25Distance(a)-t25Distance(b))[0]}
+function t25Notify(msg){const el=$('town25dToast');el.textContent=msg;el.classList.add('show');t25ToastEnd=performance.now()+2200;}
+function t25ClearInput(){t25Keys.clear();t25Joy={x:0,y:0};t25Pointer=null;t25Move={x:0,z:0};}
+function t25RefreshHUD(){if(!town25dActive)return;let near=t25Closest();let valid=near&&t25Distance(near)<2.65;$('town25dAction').textContent=valid?near.label:'둘러보기';$('town25dAction').disabled=!valid;$('town25dCoins').textContent='🪙 '+Math.max(0,game?.coins||0);$('town25dSub').textContent=valid?near.hint:'마을 시설에 다가가면 이용할 수 있어요';}
+function t25Activate(){if(town25dActive)return;
+ const state=game.town25dV1=t25Normalize(game?.town25dV1);town25dPlayer={...state.position};t25Camera={...town25dPlayer};t25ClearInput();ssM15ResetHeldInputs();releaseRope();
+ town25dActive=true;t25Root.hidden=false;$('app').classList.add('town-25d-active');t25Resize();
+ if(!town25dEngine||['failed','disposed'].includes(town25dEngine.state)){town25dRenderer=t25RendererPort();const loadingEngine=town25dEngine=t25CreateEngine({renderer:town25dRenderer,validateManifest:t25ValidateManifest});loadingEngine.load(T25_MANIFEST).then(result=>{if(loadingEngine!==town25dEngine)return;if(!result.ok){t25Notify('2.5D 월드 로딩 실패');return;}if(town25dActive&&!paused)loadingEngine.start();}).catch(err=>{console.warn('town world loader rejected',err);t25Notify('2.5D 월드 초기화 실패');});}
+ else if(town25dEngine.state==='paused')town25dEngine.resume();else if(town25dEngine.state==='stopped')town25dEngine.start();
+ t25Draw(t25Ent);t25RefreshHUD();
+}
+function t25Deactivate(){if(!town25dActive)return;t25ClearInput();town25dActive=false;t25Root.hidden=true;$('app').classList.remove('town-25d-active');town25dEngine?.pause();ssM15ResetHeldInputs();last=performance.now();}
+async function t25Travel(t){
+ if(!town25dActive||t25TrafficLock||!t||!t.target||t25Distance(t)>2.65)return false;
+ const gate=t.target==='mine'?SS_M16_PORTALS.townMine:SS_M16_PORTALS.village;
+ t25TrafficLock=true;t25ClearInput();let result=false;
+ try{result=await ssM16RequestTravel(t.target,gate.id,{fromTown:true});}
+ catch(err){console.warn('town portal',err);}
+ finally{t25TrafficLock=false;}
+ if(!result)t25Notify('지역 이동에 실패해 마을에 머물러요');
+ return result;
+}
+function t25Interact(){if(!town25dActive||paused||t25TrafficLock)return false;const target=t25Closest();if(!target||t25Distance(target)>2.65){t25Notify('건물이나 출입구에 가까이 가보세요');return false;}
+ t25LastAction=target.id;
+ if(target.target){t25Travel(target);return true;}
+ if(target.id==='market'){market();return true;}
+ if(target.id==='forge'){forgeMenu();return true;}
+ if(target.id==='harin'){ssM1Talk('harin');return true;}
+ return false;
+}
+function t25Tick(dt,now){const should=ssRegion===T25_ID&&!farmWorldActive&&!archWorldActive&&!ssIsTitle();
+ if(!should){if(town25dActive)t25Deactivate();if(ssRegion!==T25_ID)t25LastRegion=ssRegion;return false;}
+ if(!town25dActive){t25Activate();if(t25LastRegion==='mine')town25dPlayer={x:-7.6,z:5.8};else if(t25LastRegion==='life_forest_01')town25dPlayer={x:8,z:5.4};if(game.town25dV1)game.town25dV1.position={...town25dPlayer};t25LastRegion='';}
+ if(town25dEngine?.state==='ready'&&!paused)town25dEngine.start();else if(town25dEngine?.state==='paused'&&!paused)town25dEngine.resume();else if(town25dEngine?.state==='running'&&paused)town25dEngine.pause();
+ if(now>t25ToastEnd)$('town25dToast').classList.remove('show');
+ if(!paused){let sx=0,sy=0;const key=x=>t25Keys.has(x);if(key('w')||key('arrowup'))sy--;if(key('s')||key('arrowdown'))sy++;if(key('a')||key('arrowleft'))sx--;if(key('d')||key('arrowright'))sx++;
+ sx+=t25Joy.x;sy+=t25Joy.y;const l=Math.hypot(sx,sy);if(l>1){sx/=l;sy/=l;}
+ const tx=(sx+sy)*.70710678*4.75,tz=(sy-sx)*.70710678*4.75;const damp=1-Math.exp(-dt*10);t25V.x+=(tx-t25V.x)*damp;t25V.z+=(tz-t25V.z)*damp;
+ const nx=town25dPlayer.x+t25V.x*dt,nz=town25dPlayer.z+t25V.z*dt;
+ if(!t25Blocked(nx,town25dPlayer.z))town25dPlayer.x=nx;else t25V.x=0;
+ if(!t25Blocked(town25dPlayer.x,nz))town25dPlayer.z=nz;else t25V.z=0;
+ if(game?.town25dV1)game.town25dV1.position={...town25dPlayer};
+ livingWorldTick(Math.max(0,dt));t25SavedTick+=dt;if(t25SavedTick>7){saveGame(true);t25SavedTick=0;}
+ }
+ t25RefreshHUD();return true;
+}
+const t25Pad=$('town25dPad');
+function t25PadMove(e){if(t25Pointer!==e.pointerId)return;const r=t25Pad.getBoundingClientRect();let dx=(e.clientX-r.left-r.width*.5)/(r.width*.35),dy=(e.clientY-r.top-r.height*.5)/(r.height*.35);const len=Math.hypot(dx,dy);if(len>1){dx/=len;dy/=len;}t25Joy={x:dx,y:dy};}
+t25Pad.addEventListener('pointerdown',e=>{if(!town25dActive||ssM16TransitionLocked)return;e.preventDefault();t25Pointer=e.pointerId;t25Pad.setPointerCapture(e.pointerId);t25PadMove(e)});
+t25Pad.addEventListener('pointermove',t25PadMove);
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])t25Pad.addEventListener(ev,e=>{if(e.pointerId===t25Pointer){t25Joy={x:0,y:0};t25Pointer=null}});
+window.addEventListener('keydown',e=>{if(!town25dActive||ssIsTitle()||ssM16TransitionLocked)return;const k=e.key.toLowerCase();const keys=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright','e',' ','escape'];if(!keys.includes(k))return;
+ if(e.target instanceof Element&&e.target.closest('#overlay.open'))return;
+ e.preventDefault();e.stopImmediatePropagation();if(k==='e'||k===' '){if(!e.repeat)t25Interact();}else if(k==='escape'){if(!e.repeat)menu();}else t25Keys.add(k);
+},true);
+window.addEventListener('keyup',e=>{if(!town25dActive)return;const k=e.key.toLowerCase();t25Keys.delete(k);if(['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',t25ClearInput);
+$('town25dAction').addEventListener('click',t25Interact);
+$('town25dBag').addEventListener('click',()=>{t25ClearInput();bagMenu();});
+$('town25dMenu').addEventListener('click',()=>{t25ClearInput();menu();});
+$('town25dCenter').addEventListener('click',()=>{t25Camera={...town25dPlayer};t25Notify('시점을 중앙으로 맞췄어요')});
+t25Canvas.addEventListener('pointerdown',e=>{if(!town25dActive||paused||ssM16TransitionLocked)return;const r=t25Canvas.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;const hits=t25TapCandidates.filter(t=>Math.hypot(x-t.x,y-t.y)<38).sort((a,b)=>Math.hypot(x-a.x,y-a.y)-Math.hypot(x-b.x,y-b.y));if(hits.length){const target=T25_TARGETS.find(t=>t.x===hits[0].wx&&t.z===hits[0].wz);if(target){if(t25Distance(target)<=2.65)t25Interact();else t25Notify(target.title+'에 조금 더 가까이 가세요');}}});
+window.addEventListener('resize',()=>{if(town25dActive){t25Resize();t25Draw(t25Ent)}});
+window.__sandstarTown25D={manifest:()=>structuredClone(T25_MANIFEST),worldId:T25_ID,state:()=>({active:town25dActive,region:ssRegion,worldId:town25dActive?'village_hub_01':ssRegion,renderer:'WorldForge renderer-port canvas2d isometric',engine:town25dEngine?.state||'unloaded',engineWorldId:town25dEngine?.worldId||null,position:{...town25dPlayer},nearest:t25Closest()?.id,nearDistance:t25Distance(t25Closest()),saveKey:SAVE_KEY,activePortal:t25TrafficLock,frameCount:t25Frames,entities:t25Ent.length,lastAction:t25LastAction}),blocked:t25Blocked,move:(x,z)=>{if(!town25dActive||t25Blocked(x,z))return false;town25dPlayer={x,z};t25RefreshHUD();t25Draw(t25Ent);return true},action:t25Interact,travel:target=>{const t=T25_TARGETS.find(o=>o.target===target);return t?t25Travel(t):false},render:()=>t25Draw(t25Ent)};
+
+window.__sandstarTownM22={worldId:TOWN_WORLD_ID,region:()=>ssRegion,buildings:()=>BUILDING_DATA.map(x=>({...x})),tile:(x,y)=>tile(x,y),write:(x,y,t)=>setTile(x,y,t),surface:(x)=>terrain(x),enter:(target)=>ssM16RequestTravel(target),nearest:()=>ssM16CurrentGate().id,saveKey:SAVE_KEY};
+window.__sandstarPortalM16={get:()=>({current:ssM16CurrentGate().id,region:ssRegion,near:ssM16NearPortal(),locked:ssM16TransitionLocked,travelCount:ssM16TravelCount,lastResult:ssM16LastResult,saveKey:SAVE_KEY,lastTravelAt:ssM16LastTravelAt}),tapTile:ssM16TryPortalTap,request:ssM16RequestTravel,portalFoot:()=>{let a=ssM16CurrentGate();return {x:a.x,y:terrain(a.x)-1}},getSpawn:(region)=>{let a=ssM16ResolveSafeSpawn(region);return a?{...a}:null}};
+window.__sandstarM1={state:()=>({region:ssRegion,story:JSON.parse(JSON.stringify(game?.storyM1||{})),saveKey:SAVE_KEY,ropeMode:ropeABMode,player:p?{x:p.x,y:p.y}:null}),nearby:ssM1NearbyAction,interact:ssM1Act,transition:ssM1Transition,inspectCrystal:ssM1InspectCrystal,repairSpring:ssM1RepairSpring};
+
+let hasSave=readGame();resize();spawnPlayer();updHud();ssSavedWorldAtBoot=hasSave;
+$('app').classList.add('ss-at-title');ssUpdateSummary();ssShowView('ssHome');paused=true;
+requestAnimationFrame(loop);
+// Preserve the loading cover until the world and the menu have actually painted.
+requestAnimationFrame(()=>requestAnimationFrame(()=>{$('ssBootLoader').classList.add('dismissed')}));
+window.addEventListener('resize',resize);
+// ROPE-AB local A/B label is hidden on touch devices; its mode is never saved in world JSON.
+const ropeABIndicator=document.createElement('div');ropeABIndicator.id='ropeABIndicator';
+cv.insertAdjacentElement('afterend',ropeABIndicator);setRopeABMode(ropeABMode);
+window.__sandstarRopeAB={get:()=>({mode:ropeABMode,rightClicks:ropeABRightClicks,fireAttempts:ropeABFireAttempts,rope:{active:rope.active,attached:rope.attached,mode:rope.mode,anchor:rope.anchor?{...rope.anchor}:null},mineTarget:holdTarget}),screen:()=>({x:p.x*T-camera.x,y:(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y}),set:setRopeABMode,aim:(x,y)=>desktopRopeDirection(x,y)};
+// 2.18-H2: prevent content:// browser chrome and rotation from cutting off HUD.
+function hudSyncVisibleViewport(){
+ const v=window.visualViewport;
+ const h=(v&&Number.isFinite(v.height)&&v.height>100)?v.height:window.innerHeight;
+ if(Number.isFinite(h)&&h>100)document.documentElement.style.setProperty('--play-height',Math.round(h)+'px');
+ requestAnimationFrame(resize);
+}
+if(window.visualViewport)window.visualViewport.addEventListener('resize',hudSyncVisibleViewport);
+window.addEventListener('orientationchange',hudSyncVisibleViewport);
+hudSyncVisibleViewport();
+window.__sandstarTitleP0={state:()=>({title:ssIsTitle(),paused,hasSave:ssSavedWorldAtBoot,worldSeed:game.seed,worldMined:game.mined,worldCoins:game.coins}),open:ssReturnToTitle};
+window.__sandstarHUDH3={
+ snapshot:()=>({pad:hudPadDir?{...hudPadDir}:null,padPointer:hudPadPointerId,mineHeld:hudMineHeld,minePointer:hudMinePointerId,mineCompact:mineIsCompact(),mineActive:stickActive,mineDir:stickDir?{...stickDir}:null,ropeAim:ropePointerAim?.direction||null,ropePadUsed:!!ropePointerAim?.padUsed,ropeInvalid:!!ropePointerAim?.padInvalid,inputs:{...input},viewportHeight:document.getElementById('app').getBoundingClientRect().height}),
+};
+window.__sandstarHUDH2=window.__sandstarHUDH3;
+window.__sandstar213={audio:()=>({enabled:sfxState.enabled,volume:sfxState.volume,ready:sfxState.ready,unsupported:sfxState.unsupported,plays:sfxState.plays,prefKey:SOUND_PREF_KEY}),fx:()=>({pixels:miningPixels.length,pulses:orePulses.length}),testSfx:(name)=>{armAudio();return playSound(name)},prefs:(enabled,volume)=>{setSoundEnabled(enabled);setSoundVolume(volume)}};
+window.__sandstarAffinity={
+ get:()=>({id:game.pickaxeForge.affinity,rank:game.pickaxeForge.rank,advanced:affinityIsAdvanced(),active:equippedAffinity(),bonusOreDrops:game.pickaxeForge.bonusOreDrops||0,oreBonusRate:pickaxeOreBonusRate(),scanRadius:pickaxeScanRadius(),earthStoneBoost:pickaxeAffinityPower('stone'),earthCoalBoost:pickaxeAffinityPower('orecoal'),pickaxeRateStone:miningRate('stone'),pickaxeRateCopper:miningRate('copper'),switches:game.pickaxeForge.affinitySwitches||0}),
+ select:choosePickaxeAffinity,preview:forgeAffinityPanel,rate:(t)=>miningRate(t)
+};
+window.__sandstarForgeVisual={ready:()=>forgeAppearanceReady,tier:()=>forgeAppearanceTier(game.pickaxeForge?.rank||0),forRank:r=>forgeAppearanceTier(r),name:()=>FORGE_APPEARANCE_NAMES[forgeAppearanceTier(game.pickaxeForge?.rank||0)],frames:4,tiers:5,canvas:()=>[forgeAppearanceImage.naturalWidth,forgeAppearanceImage.naturalHeight]};
+window.__sandstarBuildings={nearby:()=>closestBuilding()?.id||null,coordinates:()=>BUILDING_DATA.map(x=>({...x,y:terrain(x.x)-1})),open:enterNearbyBuilding,openMarket:market,openForge:forgeMenu,section:(id)=>{marketSection=id;return market();},forgeSection:(id)=>{forgeSection=id;return forgeMenu();},artReady:()=>Object.values(BUILDING_IMAGES).every(i=>i.complete&&i.naturalWidth===96),debugTerrain:()=>({seed:game.seed,one:noise1(game.seed,14/31),two:noise1(game.seed+1,14/11),three:noise1(game.seed+3,14/5),terrain:terrain(14)})};
+window.__sandstarCharacter={
+ mobility:()=>window.__sandstarMobility.effective(),
+ state:()=>({level:deriveLevelFromTotalXp(game.character.totalXp).level,totalXp:game.character.totalXp,stats:{...game.character.stats},sp:getUnspentSp(),claimedMilestones:[...game.character.claimedMilestones],claimedCellCount:xpClaimBits.reduce((a,b)=>a+b.toString(2).replace(/0/g,'').length,0),relics:game.relics,pickaxeLevel:game.pickaxeLevel}),
+ required:xpRequiredForNext,derive:deriveLevelFromTotalXp,open:characterMenu,allocate:allocateStatPoint,reset:resetStatPoints,
+ cellClaimed:xpCellClaimed,grantDepth:claimMilestoneXp,
+ // Debug test injection changes local in-memory state only; call save explicitly to persist.
+ testXp:n=>{if(!Number.isSafeInteger(n)||n<0||n>MAX_CHARACTER_XP)return false;game.character.totalXp=n;updHud();return true},
+ testSetStat:(k,n)=>{if(!CHARACTER_STAT_IDS.includes(k)||!Number.isInteger(n)||n<0||n>8)return false;game.character.stats[k]=n;return true},
+ snapshot:()=>{prepareCharacterForSave();return JSON.parse(JSON.stringify(game))},save:()=>saveGame(true)
+};
+window.__sandstarMobility={
+ effective:()=>({...mobilityDerived(),ropeLeapRemaining:remainingRopeLeaps(),groundStableSeconds:ropeGroundStableSeconds}),
+ mineRate:t=>miningRate(t),
+ update:dt=>updatePhysics(dt),
+ jump:()=>{requestJump();return true;},
+ ropeCut:()=>cutRopeJump(),
+ // Only for local deterministic QA, not a player-facing override.
+ testSetCharges:n=>{if(!Number.isInteger(n)||n<0||n>mobilityDerived().ropeLeapMax)return false;ropeLeapRemaining=n;ropeGroundStableSeconds=0;return true;},
+ testSetRope:(anchor,targetY)=>{if(!anchor||!Number.isInteger(anchor.x)||!Number.isInteger(anchor.y)||!solid(tile(anchor.x,anchor.y)))return false;
+ const tgt=Number.isFinite(targetY)&&targetY>=1&&targetY<p.y?targetY:p.y;
+ rope={active:true,attached:tgt===p.y,anchor:{x:anchor.x,y:anchor.y,faceX:p.x,faceY:anchor.y+1},targetY:tgt};ropeAscentStartY=tgt<p.y?p.y:null;return true;},
+ testSetDirection:dir=>{if(![-1,0,1].includes(dir))return false;input.left=dir<0;input.right=dir>0;return true;},
+ testSetPlayer:(x,y)=>{if(!Number.isFinite(x)||!Number.isFinite(y)||x<1||x>WW-2||y<1||y>WH-2)return false;
+ releaseRope();p.x=x;p.y=y;p.vx=0;p.vy=0;p.grounded=false;ropeGroundStableSeconds=0;return true;}
+};
+
+window.__sandstarArtifacts={
+ get:()=>({trait:game.character.trait,freeChangeUsed:game.character.traitFreeChangeUsed,level:deriveLevelFromTotalXp(game.character.totalXp).level,slots:artifactSlotsFor(),coins:game.coins,system:JSON.parse(JSON.stringify(game.artifactSystem)),effects:getEffectiveStats(),legacyRelics:game.relics}),
+ trait:selectCharacterTrait,equip:equipArtifact,claim:tryAwardEarnedArtifacts,menu:(tab='artifacts')=>{characterTab=tab;characterMenu();},
+ // Test helpers are not player-facing; they mutate only runtime debug state and never grant inventory directly.
+ testProgress:(k,v)=>{if(!(k in game.artifactSystem.progress)||!Number.isFinite(v)||v<0)return false;game.artifactSystem.progress[k]=v;return true;}
+};
+window.__sandstarVision={
+  state:()=>({radius:effectiveSightRadius(),depth:visionDepth(),fade:visionFade(),visibleCells:visionCache.visible.size,exploredCells:visionExploredBits.reduce((n,b)=>n+b.toString(2).replace(/0/g,'').length,0),saveKey:SAVE_KEY,legacyRelics:game.relics}),
+  visible:(x,y)=>visionVisible(x,y),explored:(x,y)=>isExplored(x,y),solidMemory:(x,y)=>bitRead(visionSolidBits,x,y),
+  reveal:()=>{updateVisionCache(true);return true;},
+  snapshot:()=>{prepareVisionForSave();return {...game.vision};},
+  invalidate:()=>{visionCache.cx=-999;},
+  setPlayer:(x,y)=>{if(!Number.isFinite(x)||!Number.isFinite(y)||x<1||x>WW-2||y<1||y>WH-2)return false;releaseRope();p.x=x;p.y=y;p.vx=p.vy=0;visionCache.cx=-999;updateVisionCache();return true;}
+};
+
+window.__sandstarRopeUX={snapshot:()=>({gesture:ropePointerAim?.gesture||null,direction:ropePointerAim?.direction||null,preview:ropePreviewAnchor?{...ropePreviewAnchor}:null,hint:$('ropeHint').textContent,slop:ROPE_TOUCH_SLOP,hapticsEnabled:ropeHapticsEnabled,pending:ropeReelPending}),direction:(dx,dy,previous='up')=>ropeDirectionFromDrag(dx,dy,previous)};
+window.__sandstarDebug={economy:()=>({reserveLiftMaterials:game.economy.reserveLiftMaterials,reserveForgeMaterials:game.economy.reserveForgeMaterials,pending:liftNeedsRepair(),available:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,sellableOreCount(id)])),liftReservation:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,liftReservedOreCount(id)])),forgeReservation:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,nextForgeReserveOreCount(id)])),sold:game.economy.totalOreSold,earned:game.economy.totalCreditsEarned,metrics:JSON.parse(JSON.stringify(balanceStats())),next:forgeRule()?.items||[]}),liftArt:()=>({ready:liftDoorSprites.ready,failed:liftDoorSprites.failed,width:LIFT_SPRITE_WIDTH,height:LIFT_SPRITE_HEIGHT,open:liftDoorSprites.open.naturalWidth,locked:liftDoorSprites.locked.naturalWidth}),feedback:()=>miningFeedbackState(),tap:(x,y)=>tileAction(x,y,true),sprite:()=>({sizePixels:PLAYER_DRAW_SIZE,collisionHeightTiles:PLAYER_HEIGHT,reachTiles:effectiveMineReach(),ready:minerSpriteReady,toolsReady:minerToolsReady,animation:animName,frame:currentMinerFrame(),mining:isMiningAnimationActive(),direction:currentMiningDirection(),visualFacing:minerVisualFacing(),tool:game.tool,canvasSize:[cv.width,cv.height]}),get:()=>({x:p.x,y:p.y,seed:game.seed,mined:game.mined,coins:game.coins,inv:game.inv,edits:Object.keys(game.edits).length,pickaxeLevel:game.pickaxeLevel||1,tool:game.tool,oreFinds:game.oreFinds,relics:game.relics,worldGenVersion:game.worldGenVersion,forge:{...game.pickaxeForge},saveOkay}),teleport:(x,y)=>{releaseRope();ropeChainRemaining=ROPE_CHAIN_MAX;ropeGroundStableSeconds=0;ropeGrabCooldown=0;ropeSnap=null;p.x=x;p.y=y;p.vy=0;p.vx=0;jumpBuffer=0;coyoteTime=0;airLeapControl=false},mine:(x,y)=>{doMine(x,y,999);updHud()},canReach:(x,y)=>canReach(x,y),collides:(x,y)=>collides(x,y),tile:(x,y)=>tile(x,y),setTool:(tool)=>{if(TOOL_INFO[tool]){game.unlockedTools.push(tool);game.tool=tool;updHud()}},setCoins:(n)=>{game.coins=n;updHud()},resources:()=>({layerVersion:game.resourceLayerVersion,stock:{titanium:game.inv.titanium||0,starshard:game.inv.starshard||0},prices:ORE_SALE_ITEMS.filter(a=>a[0]==='titanium'||a[0]==='starshard').map(a=>({id:a[0],price:a[2]})),assets:window.__sandstarDuriOreArt.mapping()}),getProgress:()=>({key:holdLast,progress:holdProgress}),getStick:()=>({active:stickActive,dir:stickDir}),mobility:()=>({rope:{...rope},ropeJumpUsed:remainingRopeLeaps()===0,ropeLeapRemaining:remainingRopeLeaps(),ropeLeapMax:mobilityDerived().ropeLeapMax,ropeGroundStableSeconds,ropeGrabCooldown,ropeSnap:!!ropeSnap,vy:p.vy,vx:p.vx,grounded:p.grounded,jumpBuffer,coyoteTime,airLeapControl,ropeAim,ropeHold,ropeHoldTime,pointerDirection:ropePointerAim?.direction||null,candidate:ropeCandidate,transport:JSON.parse(JSON.stringify(game.transport)),nearby:nearbyStation?.id||null}),rope:()=>toggleRope(),fireRopeAim:dir=>fireDirectionalRope(dir),startSwing:dir=>startRopeSwing(dir),reel:delta=>adjustRopeLength(delta),transfer:dir=>transferRope(dir),chain:()=>({remaining:ropeChainRemaining,window:ropeChainWindow,limit:ROPE_CHAIN_MAX}),findAimAnchor:dir=>findDirectionalRopeAnchor(dir),findAnchor:()=>findRopeAnchor(),nearStation:()=>closestStation()?.id||null,stationMenu:()=>stationMenu(),travel:(id)=>travelStation(id),rescue:()=>rescuePlayer(),grantRepair:()=>{game.inv.stone+=STATION_COST.stone;game.inv.copper+=STATION_COST.copper;game.coins+=STATION_COST.coins;},aim:(dx,dy)=>setStickDirection(dx,dy),releaseAim:()=>stopMineStick(),holdMine:(dt)=>mineHold(dt),save:()=>saveGame(true)};
+})();
+</script>
+</body>
+</html>

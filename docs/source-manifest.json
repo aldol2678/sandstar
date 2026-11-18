@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "note": "Source recovery evidence. This is NOT a current production release declaration.",
+  "game_archive": {
+    "classification": "2026-11-18 predeployment QA candidate, NOT verified identical to Cloudflare Worker v20",
+    "source_drive_file_id": "13cA0OYYVChEwR8YaC5h8twJ4S2QHvXbr",
+    "source_url": "https://drive.google.com/file/d/13cA0OYYVChEwR8YaC5h8twJ4S2QHvXbr/view",
+    "original_filename": "SANDSTAR_M25D_UI1_REGION_BGM_QA_HUD_SAFE_20261118.html",
+    "sha256": "a4390853678d44349ae0b24ada7f4455e5590d97826a74dc0a329515812226c1",
+    "bytes": 5923918,
+    "parts": [
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-01.txt",
+        "bytes": 443460,
+        "git_blob_sha": "d2701d44b7511379634271f9fd826ec68211a0d5"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-02.txt",
+        "bytes": 440000,
+        "git_blob_sha": "cef7d1a4188073bc9ae6b024782fc63c88a50871"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-03.txt",
+        "bytes": 440000,
+        "git_blob_sha": "ce2e571fe0c9430d3d83247b1c8fedc33fe3ffc9"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-04.txt",
+        "bytes": 440000,
+        "git_blob_sha": "d227fa7d0cd931198aeb45b8365e35ef53c0c04a"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-05.txt",
+        "bytes": 440000,
+        "git_blob_sha": "f8d2d10839a9a0e5dafcd09425401b6686652009"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-06.txt",
+        "bytes": 440000,
+        "git_blob_sha": "f973916600c9335e7ac22ae8be014bf455a86203"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-07.txt",
+        "bytes": 440000,
+        "git_blob_sha": "e2617537689b8a55d72b790c6efa1bfad09e65b5"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-08.txt",
+        "bytes": 440000,
+        "git_blob_sha": "f8b8f2fd1739781c20ec6bdf929d37770e4d96d9"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-09.txt",
+        "bytes": 440000,
+        "git_blob_sha": "b9e6643ad881e242e0fb32dcceb761d72d55178d"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-10.txt",
+        "bytes": 440000,
+        "git_blob_sha": "4cfe3407118873b7a8989d17f92ff541058de61d"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-11.txt",
+        "bytes": 440000,
+        "git_blob_sha": "5199c1f006bcf0222ca6a595181cad43020b9737"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-12.txt",
+        "bytes": 440000,
+        "git_blob_sha": "54feaafcf697ca510c747ee948dcf0d5f2cdf89e"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-13.txt",
+        "bytes": 451116,
+        "git_blob_sha": "93d5a30cf2cdd71b03eb00eb8032bb76562e74c9"
+      },
+      {
+        "path": "recovered/m25d-ui1-region-bgm-qa/parts/part-14.txt",
+        "bytes": 189342,
+        "git_blob_sha": "eedb1328e26f25b0029de59c3a7b1a390f6ce183"
+      }
+    ]
+  },
+  "title_bridge": {
+    "classification": "Drive original source, SHA-256 matches existing deployment record. Live Worker source byte comparison unavailable.",
+    "path": "workers/title-bridge.js",
+    "source_drive_file_id": "1NEkOq_42-e3wr1ZCfS_7Z7ort4aUrVeF",
+    "source_url": "https://drive.google.com/file/d/1NEkOq_42-e3wr1ZCfS_7Z7ort4aUrVeF/view",
+    "bytes": 659846,
+    "sha256": "264797d9303ce719d39f994beffa50b924472d59c167034ea4f118e609aec369",
+    "cloudflare_worker": "sandstar-title-bridge",
+    "cloudflare_version_id": "7726327c-7759-4066-961a-6bc691730e43"
+  },
+  "live_worker_reference": {
+    "script": "sandstar",
+    "deployment_id": "f48a0478-2ef4-4025-88e0-448e93d71c87",
+    "version_number": 20,
+    "version_id": "6ff911f0-e9ae-450d-90f9-bd3d8ec59213",
+    "script_etag": "42e4a8e544c8fcdfcb4247fab47a58f45691c806bf92642e9fa569e56a2cf5e7",
+    "equivalence_with_game_archive": "unverified"
+  }
+}
