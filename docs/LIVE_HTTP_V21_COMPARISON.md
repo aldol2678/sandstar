@@ -2,6 +2,8 @@
 
 Date: 2026-11-19 KST · Status: **STATIC EVIDENCE ONLY / PROD EQUIVALENCE UNKNOWN**
 
+**Subsequent deployment:** Cloudflare `sandstar` v22 (`949c7699-9455-4617-a585-c9c55105ab06`) deployed at 2026-11-19 07:19:41 KST. This is **after the v21-era HTTP observation**; do not attribute this archived HTML to v22, and do not assume an immutable v21 byte match.
+
 ## Source ledger
 
 | Evidence | Bytes | Class |
