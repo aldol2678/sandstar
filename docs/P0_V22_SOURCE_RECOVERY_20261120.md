@@ -68,3 +68,37 @@
 - Cloudflare 배포, 세이브 키 변경, CI/Actions: **NOT PERFORMED**
 
 이 문서는 증거와 다음 수용 게이트만 기록하며, 운영 Worker·사용자 세이브·브랜치 `main`에는 변경을 가하지 않음.
+
+
+## 6. 추가 검증: v22 실제 배포 모듈 SHA-256 (2026-11-20)
+
+**Cloudflare 인증 버전 API에서 v22 배포 모듈 1개를 확인하고 직접 SHA-256을 재계산함.**
+
+- API: 읽기 전용 `GET /accounts/{account_id}/workers/workers/sandstar/versions/949c7699-9455-4617-a585-c9c55105ab06?include=modules`
+- 반환 버전 ID: `949c7699-9455-4617-a585-c9c55105ab06`
+- module: `main-inner.mjs`, `application/javascript+module`
+- base64 길이: **15,626,880 문자**
+- 디코딩된 모듈 크기: **11,720,159 bytes**
+- 실제 메모리 디코딩 후 직접 계산한 SHA-256: **`91dbad505cdad8fd1b90cb80a9583c25cbc241665c60e202286462c35066fb8d`**
+- 결과: Drive 기존 `SANDSTAR_worker_v22_source_evidence_20261120.json`과 해시 및 크기가 정확히 일치함.
+- **중요:** 이 결과는 배포 모듈 바이트의 인증 API 기반 지문이며, 원본 편집 프로젝트·Wrangler 작업 디렉터리 경로·lockfile·빌드 설정을 증명하지 않음. 배포 모듈 전체 바이트를 GitHub/로컬에 저장하는 단계는 **미완료**.
+
+**Drive에서 발견한 비공개 복구 증거**
+
+- `07_릴리스·아카이브/SANDSTAR_worker_v22_source_evidence_20261120.json` (ID `1Jvz0mYiUBGanLGxSchHHh5TCPzC5q4EJ`)
+- `07_릴리스·아카이브/SANDSTAR_v22_live_fingerprint_20261120.json` (ID `1PvSGe6N6BtiHXKmaRmOm_rMTVaDMYBF7`)
+- `02_소스코드·시스템/SANDSTAR_worker_v22_recovery_kit_20261120.zip` (ID `1dCSo2b-FVYILeSDuUxtd1lpZfL_4H9QG`)
+- `02_소스코드·시스템/SANDSTAR_capture_live_20261120.sh` (ID `1Niy87JwnsFB3NvtqpUjsUQlg8GACayeu`)
+- 과거 독립 Worker 소스 `07_릴리스·아카이브/sandstar-worker-main-20261111.mjs` (ID `1kpAFTb87Kl8o9s2q4FEcLdLtQVWhlQ6n`)는 v3 기준으로 **v22와 같다는 근거 없음**.
+
+복구 ZIP 내부의 `recover_sandstar_worker_v22.sh`는 API에서 모듈을 받아 해당 SHA-256과 크기를 모두 검사하고, 일치할 때만 로컬 파일을 생성하도록 작성돼 있음. **이 세션에서는 코드를 직접 실행하지 않고** `bash -n` 정적 문법 검사 PASS, ZIP 내 증거 JSON과 Drive 증거 JSON이 내용상 동일함을 확인. 토큰을 공유하지 않고 권한 있는 환경에서만 사용해야 함. 복구 키트는 실행 또는 보관 중 실제 사용되는 인증정보를 GitHub에 저장하면 안 됨.
+
+**새로운 게이트 판정:**
+
+1. Cloudflare v22 배포 모듈 **API 해시 검증 = PASS**
+2. 배포 모듈 **전체 파일 로컬/Drive/비공개 GitHub 재현 보관 = HOLD**
+3. **편집 가능한 원래 Wrangler 작업공간/빌드 설정 경로 = UNKNOWN**
+4. 운영본과 GitHub QA 후보 **실제 코드 차이 분석 = BLOCKED**
+5. 코드 정본 승격·운영 배포·CI·세이브 변경 = **NOT AUTHORIZED / NOT PERFORMED**
+
+기존 §2의 실패 진술은 기존 `workers/scripts` 경로에 대한 사실이며, 이 §6의 *별도 버전 API를 통한 해시 검증*과 구별함.
