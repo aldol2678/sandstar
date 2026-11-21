@@ -1,0 +1,650 @@
+  case 'plot.water':{
+   const plot=state.plots[cmd.target];if(!plot||plot.plantedAt===null)return bad('먼저 심어 주세요');
+   if(plot.watered)return bad('이미 물을 주었어요');
+   plot.watered=true;message='물을 주었어요';break;}
+  case 'plot.harvest':{
+   const plot=state.plots[cmd.target];if(!plot||plot.plantedAt===null)return bad('수확할 작물이 없어요');
+   const required=plot.crop==='legacy'?90:LIVING_CROPS[plot.crop].seconds;
+   if(!plot.watered||state.clock-plot.plantedAt<required)return bad('아직 수확 시기가 아니에요');
+   const amount=3+(hasBuff('harvest')?1:0),crop=plot.crop==='legacy'?'crop':plot.crop;
+   const seed=plot.crop==='legacy'?'seed':LIVING_CROPS[plot.crop].seed;
+   state.bag[crop]+=amount;state.bag[seed]++;
+   plot.plantedAt=null;plot.crop=null;plot.watered=false;state.stats.harvested++;
+   message=`${crop==='crop'?'채소':LIVING_CROPS[crop].name} ${amount}개와 씨앗 1개 수확`;break;}
+  case 'craft.rod':{
+   if(cmd.target!=='pond')return bad('낚시터에서 제작해 주세요');
+   if(state.rod)return bad('낚싯대가 이미 있어요');
+   if(stock('wood')<3)return bad('원목 3개가 필요해요');
+   inv.wood-=3;state.rod=true;message='나무 낚싯대 제작 완료';break;}
+  case 'pond.cast':{
+   if(cmd.target!=='pond'||!state.rod)return bad('낚싯대를 먼저 제작해 주세요');
+   if(state.fishing)return bad('이미 낚시 중이에요');
+   if(state.clock<state.pondReadyAt)return bad('물고기가 다시 모이는 중이에요');
+   const ids=Object.keys(LIVING_FISH),rank=(Math.floor(state.clock/12)+state.stats.fished+(Number.isSafeInteger(context.seed)?context.seed:0))>>>0;
+   state.fishing={id:ids[rank%ids.length],progress:0,tension:20,round:0};
+   message='입질이 왔어요! 감기와 줄 풀기를 조절해 보세요';break;}
+  case 'pond.reel':case 'pond.slacken':{
+   if(cmd.target!=='pond'||!state.fishing)return bad('먼저 낚싯대를 던져 주세요');
+   const f=state.fishing;const info=LIVING_FISH[f.id];
+   f.round++;
+   if(kind==='pond.reel'){f.progress=Math.min(100,f.progress+36);f.tension+=info.pull+(f.round%2===0?3:0);}
+   else{f.progress=Math.max(0,f.progress-8);f.tension=Math.max(0,f.tension-33);}
+   if(f.tension>=95){state.fishing=null;state.pondReadyAt=state.clock+6;message='줄이 끊어졌어요. 물고기가 도망갔어요';}
+   else if(f.progress>=100){const id=f.id;state.bag[id]++;state.stats.fished++;state.fishDex=[...new Set([...state.fishDex,id])];state.fishing=null;state.pondReadyAt=state.clock+(hasBuff('fish')?6:LIVING_CLOCK_FISH);message=LIVING_FISH[id].name+' 낚기 성공!';}
+   else{message=`낚싯줄 긴장 ${f.tension}% · 포획 ${f.progress}%`;}
+   break;}
+  case 'cook.make':{
+   if(cmd.target!=='kitchen'||!livingOwn(LIVING_RECIPES,cmd.item))return bad('조리법을 확인해 주세요');
+   const recipe=LIVING_RECIPES[cmd.item];
+   if(stock('wood')<recipe.wood)return bad('요리 연료 원목 1개가 필요해요');
+   for(const [item,n] of Object.entries(recipe.needs))if(bag(item)<n)return bad(`${item} 재료가 부족해요`);
+   inv.wood-=recipe.wood;for(const [item,n] of Object.entries(recipe.needs))state.bag[item]-=n;
+   state.bag[cmd.item]++;state.stats.cooked++;message=recipe.name+' 요리 완료';break;}
+  case 'food.eat':{
+   if(!livingOwn(LIVING_RECIPES,cmd.item)||bag(cmd.item)<1)return bad('먹을 요리가 없어요');
+   state.bag[cmd.item]--;state.foodBuff={type:LIVING_RECIPES[cmd.item].buff,until:state.clock+180};
+   message=LIVING_RECIPES[cmd.item].name+' 식사 완료 · 3분 생활 보너스';break;}
+  case 'market.sell':{
+   if(cmd.target!=='market')return bad('시장에 가야 해요');
+   const item=cmd.item;
+   const prices={crop:7,...Object.fromEntries(Object.entries(LIVING_CROPS).map(([k,v])=>[k,v.price])),...Object.fromEntries(Object.entries(LIVING_FISH).map(([k,v])=>[k,v.price])),...Object.fromEntries(Object.entries(LIVING_RECIPES).map(([k,v])=>[k,v.price]))};
+   if(!livingOwn(prices,item))return bad('판매 품목을 확인해 주세요');
+   if(bag(item)<1)return bad('판매 물품이 없어요');
+   state.bag[item]--;award=prices[item];state.stats.sold++;message='판매 완료 · +'+award+' 크레딧';break;}
+  case 'npc.deliver':{
+   const id=cmd.target.slice(4);if(!livingOwn(LIVING_NPCS,id)||cmd.target!=='npc:'+id)return bad('주민을 찾을 수 없어요');
+   const q=state.npcs[id];if(state.clock<q.readyAt)return bad('새 의뢰를 준비 중이에요');
+   if(id==='carpenter'){
+    if(stock('wood')<6)return bad('목수에게 원목 6개가 필요해요');inv.wood-=6;state.bag.sapling++;
+   }else if(id==='farmer'){
+    if(bag('wheat')<3)return bad('농부에게 밀 3개가 필요해요');state.bag.wheat-=3;state.bag.seed_potato+=2;
+   }else{
+    if(bag('river_fish')+bag('perch')+bag('carp')<2)return bad('어부에게 물고기 2마리가 필요해요');
+    let need=2;for(const fish of Object.keys(LIVING_FISH)){const use=Math.min(need,state.bag[fish]);state.bag[fish]-=use;need-=use;if(!need)break;}
+    state.bag.seed_carrot+=2;
+   }
+   q.completed++;q.readyAt=state.clock+LIVING_NPCS[id].cooldown;state.stats.quests++;award=LIVING_NPCS[id].payout;
+   message=`${LIVING_NPCS[id].name} 의뢰 완료 · +${award} 크레딧`;break;}
+  case 'home.build':{
+   if(cmd.target!=='home')return bad('주택 부지가 아니에요');
+   if(state.houseBuilt)return bad('이미 주택을 지었어요');
+   if(stock('wood')<12||stock('stone')<6)return bad('원목 12개와 돌 6개가 필요해요');
+   inv.wood-=12;inv.stone-=6;state.houseBuilt=true;message='첫 번째 정착 주택을 완성했어요';break;}
+  default:return bad('지원하지 않는 행동이에요');
+ }
+ state.revision++;state.appliedIds.push(cmd.id);if(state.appliedIds.length>64)state.appliedIds.shift();
+ state.events.push({id:cmd.id,kind,at:Math.floor(state.clock),actor:'local'});if(state.events.length>14)state.events.shift();
+ return {ok:true,state,inv,coins:context.coins+award,message};
+}
+let livingActionSeq=0,livingActiveTab='overview';
+function livingWorldTick(dt){if(!game||!game.livingP0||!Number.isFinite(dt)||dt<0)return;game.livingP0.clock=Math.min(1e9,game.livingP0.clock+dt)}
+function livingAction(type,target,item){
+ const townOnly=['market','kitchen','npc:carpenter'].includes(target);
+ if(townOnly&&ssRegion!==TOWN_WORLD_ID){flash('마을 바람장터에서 이용할 수 있어요');return {ok:false,reason:'village only'};}
+ if(!townOnly&&target!=='self'&&ssRegion!=='life_forest_01'){flash('잔빛숲으로 이동해야 할 수 있어요');return {ok:false,reason:'forest only'};}
+ const cmd={id:'local-'+Date.now()+'-'+(++livingActionSeq),type,target,item};
+ const r=applyLivingCommandPure(game.livingP0,cmd,{x:p.x,y:p.y,groundY:terrain(p.x)-1,inv:game.inv,coins:game.coins,seed:game.seed});
+ if(!r.ok){flash(r.reason);return r;}
+ const oldState=game.livingP0,oldInv=game.inv,oldCoins=game.coins;
+ game.livingP0=r.state;game.inv=r.inv;game.coins=r.coins;
+ if(!saveGame(true)){
+  game.livingP0=oldState;game.inv=oldInv;game.coins=oldCoins;
+  flash('저장에 실패해 행동을 취소했어요. 저장 공간을 확인해 주세요');return {ok:false,reason:'save failed'};
+ }
+ updHud();flash(r.message);return r;
+}
+function livingMenu(){
+ const w=game.livingP0=normalizeLivingP0(game.livingP0);
+ const near=x=>Math.abs(p.x-x)<=5.2&&Math.abs(p.y-(terrain(p.x)-1))<=5&&(x===23?ssRegion===TOWN_WORLD_ID:ssRegion==='life_forest_01');
+ const action=(label,type,target,item='',disabled=false)=>`<button type="button" data-live-type="${type}" data-live-target="${target}" data-live-item="${item}" ${disabled?'disabled':''}>${label}</button>`;
+ const tabs=[['overview','📍 개요'],['forest','🌲 숲'],['farm','🌾 농장'],['fish','🎣 낚시'],['cook','🍳 요리'],['town','🏘️ 마을']];
+ const tabsHtml=`<nav class="living-tabs" aria-label="생활 활동 분류">${tabs.map(([id,label])=>`<button type="button" class="${livingActiveTab===id?'selected':''}" data-live-tab="${id}" aria-pressed="${livingActiveTab===id}">${label}</button>`).join('')}</nav>`;
+ const rows=[],parts=[];
+ const push=s=>parts.push(s);
+ const row=(info,btn)=>`<div class="line"><div>${info}</div>${btn}</div>`;
+ const fmt=s=>Math.max(0,Math.ceil(s));
+ if(livingActiveTab==='overview'){
+  push('<h3>생활권 탐험 안내</h3>');
+  push('<p>광산 밖에서 다른 삶을 시작해 보세요. 한 구역에서 자원을 얻고, 다른 구역에서 제작·판매하는 순환이에요.</p>');
+  push('<div class="living-route">🏘️ 마을 장터 X23 · 마을 동쪽 X64 → 🌾 잔빛숲 농장 X34~40 → 🎣 강변 X64 → 🌲 숲 X82~106 → ✦ 별샘 X120</div>');
+  push(`<div class="line"><div>작물 수확 ${w.stats.harvested}회 · 낚시 ${w.stats.fished}마리 · 요리 ${w.stats.cooked}개 · 주민 의뢰 ${w.stats.quests}회</div></div>`);
+  push(`<div class="line"><div>씨앗 밀 ${w.bag.seed_wheat} · 감자 ${w.bag.seed_potato} · 당근 ${w.bag.seed_carrot} · 묘목 ${w.bag.sapling}</div></div>`);
+  if(w.foodBuff&&w.foodBuff.until>w.clock)push(`<p>🍽️ 활성 보너스: ${w.foodBuff.type==='wood'?'벌목':w.foodBuff.type==='harvest'?'농사':'낚시'} · ${fmt(w.foodBuff.until-w.clock)}초 남음</p>`);
+  push('<small>생활 시간은 월드에서 이동할 때 흐르고, 메뉴를 여는 동안은 멈춥니다. 기존 세이브와 월드 데이터는 보존돼요.</small>');
+ }
+ if(livingActiveTab==='forest'){
+  push('<h3>🌲 벌목과 묘목</h3><p>나무가 자라려면 120초. 벌목 2회마다 묘목을 1개 얻고, 잘린 자리에 심으면 25초 안에 다시 자라요.</p>');
+  for(const x of LIVING_SITES.trees){const remaining=w.trees[`tree:${x}`]-w.clock;
+   push(row(`나무 X${x} · ${remaining<=0?'벌목 가능':`재생 ${fmt(remaining)}초`}`,
+    remaining<=0?action('벌목 +3','tree.cut',`tree:${x}`,'',!near(x)):action('묘목 심기','tree.plant',`tree:${x}`,'',!near(x)||w.bag.sapling<1||remaining<=25)));
+  }
+  push(`<small>보유 원목 ${game.inv.wood||0} · 묘목 ${w.bag.sapling} · 벌목 횟수 ${w.stats.cut}</small>`);
+ }
+ if(livingActiveTab==='farm'){
+  push('<h3>🌾 밭 가꾸기</h3><p>씨앗을 심고 물을 준 뒤 성장을 기다려요. 밀 75초, 당근 90초, 감자 105초.</p>');
+  for(const x of LIVING_SITES.plots){const id=`plot:${x}`,plot=w.plots[id];let content='';
+   if(plot.plantedAt===null){content=`${action('밀','plot.plant',id,'wheat',!near(x)||w.bag.seed_wheat<1)} ${action('감자','plot.plant',id,'potato',!near(x)||w.bag.seed_potato<1)} ${action('당근','plot.plant',id,'carrot',!near(x)||w.bag.seed_carrot<1)}`;}
+   else if(!plot.watered)content=action('물 주기','plot.water',id,'',!near(x));
+   else{const seconds=plot.crop==='legacy'?90:LIVING_CROPS[plot.crop].seconds,remaining=seconds-(w.clock-plot.plantedAt);
+    content=action(remaining<=0?'수확하기':`성장 ${fmt(remaining)}초`,'plot.harvest',id,'',!near(x)||remaining>0);}
+   push(row(`밭 X${x} · ${plot.plantedAt===null?'빈 밭':plot.crop==='legacy'?'채소':LIVING_CROPS[plot.crop].name}`,content));
+  }
+  push(`<small>씨앗 밀 ${w.bag.seed_wheat} · 감자 ${w.bag.seed_potato} · 당근 ${w.bag.seed_carrot} · 작물 밀 ${w.bag.wheat} · 감자 ${w.bag.potato} · 당근 ${w.bag.carrot}</small>`);
+ }
+ if(livingActiveTab==='fish'){
+  push('<h3>🎣 긴장도 낚시</h3><p>줄을 감으면 포획도가 오르지만 긴장도도 올라요. 95%를 넘으면 줄이 끊어집니다. 줄 풀기로 긴장도를 낮춰 보세요.</p>');
+  if(!w.rod)push(row('나무 낚싯대 · 원목 3개',action('낚싯대 제작','craft.rod','pond','',!near(64)||(game.inv.wood||0)<3)));
+  else if(!w.fishing)push(row(`연못 X64 · ${w.pondReadyAt>w.clock?`재입질 ${fmt(w.pondReadyAt-w.clock)}초`:'입질 가능'}`,action('낚싯대 던지기','pond.cast','pond','',!near(64)||w.pondReadyAt>w.clock)));
+  else{const f=w.fishing;push(`<div class="living-gauge"><strong>${LIVING_FISH[f.id].name}</strong><div>포획 ${f.progress}%</div><progress value="${f.progress}" max="100"></progress><div>줄 긴장 ${f.tension}%</div><progress value="${f.tension}" max="100"></progress></div>`);
+   push(row('긴장도를 관리해 물고기를 낚으세요',`${action('줄 감기','pond.reel','pond','',!near(64))} ${action('줄 풀기','pond.slacken','pond','',!near(64))}`));}
+  push(`<p>물고기 도감: ${w.fishDex.map(id=>LIVING_FISH[id].name).join(' · ')||'아직 없음'} (${w.fishDex.length}/3)</p>`);
+  push(`<small>보유량 피라미 ${w.bag.river_fish} · 강농어 ${w.bag.perch} · 비단잉어 ${w.bag.carp}</small>`);
+ }
+ if(livingActiveTab==='cook'){
+  push('<h3>🍳 바람장터 부엌</h3><p>원목을 연료로 요리하고, 음식을 먹으면 생활 보너스가 월드 시간 180초 동안 적용돼요.</p>');
+  for(const [id,recipe] of Object.entries(LIVING_RECIPES)){
+   const requirements=Object.entries(recipe.needs).map(([item,n])=>`${LIVING_CROPS[item]?.name||LIVING_FISH[item]?.name||item} ${n}`).join(' · ');
+   const enough=(game.inv.wood||0)>=recipe.wood&&Object.entries(recipe.needs).every(([item,n])=>w.bag[item]>=n);
+   push(row(`${recipe.name} · ${requirements} · 원목 1`,action('요리하기','cook.make','kitchen',id,!near(23)||!enough)));
+   push(row(`보유 ${w.bag[id]}개 · ${recipe.buff==='wood'?'벌목 원목 +1':recipe.buff==='harvest'?'수확 +1':'낚시 재입질 단축'}`,action('먹기','food.eat','self',id,w.bag[id]<1)));
+  }
+ }
+ if(livingActiveTab==='town'){
+  push('<h3>🏘️ 마을과 의뢰</h3><p>주민에게 자원을 납품해 크레딧과 씨앗·묘목을 얻으세요. 의뢰는 월드 시간 180초 후 다시 열려요.</p>');
+  for(const [id,npc] of Object.entries(LIVING_NPCS)){
+   const q=w.npcs[id],remaining=q.readyAt-w.clock;
+   const demand=id==='carpenter'?'원목 6':id==='farmer'?'밀 3':'물고기 2';
+   const enough=id==='carpenter'?(game.inv.wood||0)>=6:id==='farmer'?w.bag.wheat>=3:w.bag.river_fish+w.bag.perch+w.bag.carp>=2;
+   push(row(`${npc.name} X${npc.x} · ${demand} · ${remaining>0?`${fmt(remaining)}초 재의뢰 대기`:`보상 ${npc.payout} 크레딧`}`,action('납품','npc.deliver','npc:'+id,'',!near(npc.x)||remaining>0||!enough)));
+  }
+  push('<h3>🛒 바람장터 판매</h3>');
+  const prices={crop:7,...Object.fromEntries(Object.entries(LIVING_CROPS).map(([k,v])=>[k,v.price])),...Object.fromEntries(Object.entries(LIVING_FISH).map(([k,v])=>[k,v.price])),...Object.fromEntries(Object.entries(LIVING_RECIPES).map(([k,v])=>[k,v.price]))};
+  for(const [item,price] of Object.entries(prices))if(w.bag[item]>0)push(row(`${LIVING_CROPS[item]?.name||LIVING_FISH[item]?.name||LIVING_RECIPES[item]?.name||'채소'} ${w.bag[item]}개 · ${price} 크레딧`,action('1개 판매','market.sell','market',item,!near(23))));
+  if(!Object.entries(prices).some(([id])=>w.bag[id]>0))push('<small>판매할 생산품이 없어요. 농장·낚시에서 물품을 구해 보세요.</small>');
+  push('<h3>🏡 집 짓기</h3>');push(row(w.houseBuilt?'주택 완성':'X53 · 원목 12 · 돌 6',action(w.houseBuilt?'건설 완료':'주택 건설','home.build','home','',w.houseBuilt||!near(53)||(game.inv.wood||0)<12||(game.inv.stone||0)<6)));
+ }
+ const t=Math.floor(w.clock);showModal('🌱 생활·정착',`<small>현재 X${Math.floor(p.x)} · 월드 ${Math.floor(t/60)}분 ${t%60}초 · 변경 ${w.revision}회 · 실험 저장소</small>${tabsHtml}<div class="living-content">${parts.join('')}</div>`);
+ document.querySelectorAll('[data-live-tab]').forEach(el=>el.addEventListener('click',()=>{livingActiveTab=el.dataset.liveTab;livingMenu()}));
+ document.querySelectorAll('[data-live-type]').forEach(el=>el.addEventListener('click',()=>{const r=livingAction(el.dataset.liveType,el.dataset.liveTarget,el.dataset.liveItem||undefined);if(r.ok)livingMenu()}));
+}
+function drawLivingWorld(){
+ if(ssRegion!=='life_forest_01'||!game||!game.livingP0)return;const w=game.livingP0;
+ const sx=x=>Math.round(x*T-camera.x),sy=x=>Math.round((terrain(x)-1)*T-camera.y);
+ ctx.save();ctx.textAlign='center';ctx.font='bold 11px sans-serif';
+ for(const x of LIVING_SITES.plots){const xx=sx(x),yy=sy(x);if(xx<-90||xx>viewW+90||yy<-90||yy>viewH+90)continue;
+  const plot=w.plots[`plot:${x}`];ctx.fillStyle='#75513c';ctx.fillRect(xx-2,yy+T-5,T+4,6);
+  if(plot.plantedAt!==null){const sec=plot.crop==='legacy'?90:LIVING_CROPS[plot.crop]?.seconds||90;const stage=plot.watered?Math.min(1,(w.clock-plot.plantedAt)/sec):.2;
+   ctx.fillStyle=stage>=1?'#d8c675':'#62a453';ctx.fillRect(xx+10,yy+4+Math.round(12*(1-stage)),5,Math.round(8+12*stage));ctx.fillRect(xx+5,yy+8,7,5);ctx.fillRect(xx+14,yy+11,8,5);}
+ }
+ for(const x of LIVING_SITES.trees){const xx=sx(x),yy=sy(x),ready=w.trees[`tree:${x}`]<=w.clock;
+  if(xx<-130||xx>viewW+130||yy<-130||yy>viewH+130)continue;
+  ctx.fillStyle='#65472e';ctx.fillRect(xx+9,yy-30,9,38);
+  if(ready){ctx.fillStyle='#438656';ctx.fillRect(xx-13,yy-54,53,22);ctx.fillRect(xx-5,yy-69,38,19);ctx.fillStyle='#76ac68';ctx.fillRect(xx+4,yy-62,17,8);}else{ctx.fillStyle='#7a9c59';ctx.fillRect(xx+4,yy-15,14,8);}
+ }
+ const pondX=sx(64),pondY=sy(64);
+ if(pondX>-150&&pondX<viewW+150&&pondY>-100&&pondY<viewH+100){ctx.fillStyle='#2c85ad';ctx.fillRect(pondX-34,pondY+8,79,15);ctx.fillStyle='#66b9d2';ctx.fillRect(pondX-28,pondY+10,45,3);ctx.fillStyle='#e5f3e8';ctx.fillText(w.fishing?'입질!':'낚시터',pondX+8,pondY-2);}
+ const homeX=sx(53),homeY=sy(53);
+ if(homeX>-150&&homeX<viewW+150&&homeY>-100&&homeY<viewH+100){if(w.houseBuilt){ctx.fillStyle='#c89c69';ctx.fillRect(homeX-24,homeY-55,68,57);ctx.fillStyle='#985b46';ctx.beginPath();ctx.moveTo(homeX-30,homeY-54);ctx.lineTo(homeX+10,homeY-88);ctx.lineTo(homeX+50,homeY-54);ctx.fill();ctx.fillStyle='#654630';ctx.fillRect(homeX+2,homeY-23,16,25);}else{ctx.strokeStyle='#d8ae80';ctx.lineWidth=2;ctx.strokeRect(homeX-17,homeY-6,48,8);ctx.fillStyle='#f1dba3';ctx.fillText('주택 부지',homeX+6,homeY-14);}}
+ ctx.restore();
+}
+window.__SANDSTAR_LIVING_P11__={getState:()=>game?.livingP0?JSON.parse(JSON.stringify(game.livingP0)):null,applyPure:applyLivingCommandPure,normalize:normalizeLivingP0,fresh:freshLivingP0,sites:LIVING_SITES,
+ act:(type,target,item)=>livingAction(type,target,item),menu:()=>livingMenu(),setTab:tab=>{if(['overview','forest','farm','fish','cook','town'].includes(tab)){livingActiveTab=tab;livingMenu();}},getSaveKey:()=>SAVE_KEY,getProductionSaveKey:()=>LEGACY_SAVE_KEY};
+// Preserve former QA contracts where harmless; no legacy instant fishing API is kept.
+window.__SANDSTAR_LIVING_P0__={getState:window.__SANDSTAR_LIVING_P11__.getState,applyPure:applyLivingCommandPure,normalize:normalizeLivingP0,sites:LIVING_SITES,act:window.__SANDSTAR_LIVING_P11__.act,menu:livingMenu,getSaveKey:()=>SAVE_KEY,getProductionSaveKey:()=>LEGACY_SAVE_KEY};
+// END SANDSTAR LIVING P1.1
+
+
+function ssM1ForestTerrain(x){x=Math.floor(x);if(x<18)return 79;if(x<70)return 79;if(x<82)return 79-Math.floor((x-70)/6);if(x<104)return 77;if(x<113)return 77+Math.floor((x-104)/5);return 78;}
+function ssM1ForestBaseTile(x,y){
+ if(x<0||x>=WW||y<0||y>=WH)return 'bedrock';
+ if(x===12||x===145)return y>=65?'bedrock':null;
+ const t=ssM1ForestTerrain(x);
+ // Raised branch platforms for the v10.2 five-direction elastic rope.
+ if(((x>=76&&x<=81)||(x>=94&&x<=99)||(x>=109&&x<=113))&&y===t-7)return 'wood';
+ if(y<t-1)return null;
+ if(y===t-1)return 'grass';
+ if(y<t+4)return 'dirt';
+ if(y>WH-6)return 'bedrock';
+ return 'stone';
+}
+function terrain(x){if(ssRegion===TOWN_WORLD_ID)return 79;if(ssRegion==='life_forest_01')return ssM1ForestTerrain(x);x=Math.floor(x);if(x>=19&&x<=67)return 79;let n=noise1(game.seed,x/31)*8+noise1(game.seed+1,x/11)*4+noise1(game.seed+3,x/5)*2;return Math.max(49,Math.min(90,Math.floor(76+(n-7))));}
+function advancedResourceTile(t,x,y,depth){
+  // Sparse, reproducible replacements of NATURAL iron/crystal. Edited tiles always override this in tile().
+  if(!game||game.resourceLayerVersion!==1)return t;
+  if(t==='iron'&&depth>=22&&rand(x,y,1191)<.19)return 'titanium';
+  if(t==='crystal'&&depth>=38&&rand(x,y,1192)<.18)return 'starshard';
+  return t;
+}
+function terrainType(x,y){if(ssRegion===TOWN_WORLD_ID)return ssTownTile(x,y);if(ssRegion==='life_forest_01')return ssM1ForestBaseTile(x,y);if(x<0||x>=WW||y<0||y>=WH)return 'bedrock';let s=terrain(x),biome=biomeAt(x);if(y<s-1){if(y>=s-7 && biome==='forest' && x>80){ // deterministic forest tree trunk
+    let cluster=Math.floor(x/12),tr=cluster*12+3+Math.floor(hash(cluster*13+game.seed)*3);if(x===tr&&hash(cluster*37+game.seed)>.22&&y>=terrain(tr)-6&&y<terrain(tr))return 'wood';
+  }return null}
+ if(y===s-1)return biome==='desert'?'sand':biome==='snow'?'snow':'grass';
+ let depth=y-s;
+ // P1.2: new-world-only caverns are air pockets, not mined edits or free loot.
+ if(game.worldGenVersion>=4&&ssCavernFeatureV4(x,y)?.kind)return null;
+ let cave=(Math.sin(x*.25+game.seed*.002)*.6+Math.cos(y*.22+x*.09)*.47+Math.sin(x*.09+y*.15+game.seed*.0001)*.4+rand(Math.floor(x/3),Math.floor(y/3),5)*.45);
+ if(depth>4 && cave>1.05 && y<WH-5)return null;
+ if(y>WH-5)return 'bedrock';
+ if(depth<6){return rand(x,y,2)<.025?'orecoal':(biome==='desert'&&depth<5?'sand':'dirt')}
+ if(game.worldGenVersion>=4){let rim=ssCavernOreV4(x,y,depth,biome);if(rim)return advancedResourceTile(rim,x,y,depth);}
+ if(game.worldGenVersion>=2){let type=game.worldGenVersion>=3?ssVeinTypeV3(x,y,depth,biome):veinType(x,y,depth,biome);if(type)return advancedResourceTile(type,x,y,depth);if(depth>12 && rand(Math.floor(x/17),Math.floor(y/14),333)<.12 && x%17===Math.floor(rand(Math.floor(x/17),Math.floor(y/14),334)*13)+2 && y%14===Math.floor(rand(Math.floor(x/17),Math.floor(y/14),335)*11)+2)return 'relic';}
+ // v3 uses coherent veins as the primary deposit source; sparse singles are background traces only.
+ if(game.worldGenVersion>=3){
+  if(depth>8&&rand(x,y,1131)>.995) return 'orecoal';
+  return (depth<12&&rand(x,y,12)<.24)?'dirt':'stone';
+ }
+ let r=rand(x,y,11),vein=rand(Math.floor(x/3),Math.floor(y/2),9);
+ if(depth>32&&r>.991&&vein>.38)return advancedResourceTile('crystal',x,y,depth);
+ if(depth>18&&r>.945&&vein>.47)return advancedResourceTile('iron',x,y,depth);
+ if(depth>6&&r>.922&&vein>.4)return 'copper';
+ if(depth>4&&r>.956)return 'orecoal';
+ return (depth<12&&rand(x,y,12)<.24)?'dirt':'stone';
+}
+// Deterministic clustered ore veins: geography + geology, not numbered floors.
+function veinType(x,y,depth,biome){if(depth<5)return null;let cx=Math.floor(x/9),cy=Math.floor(y/8);for(let ax=cx-1;ax<=cx+1;ax++)for(let ay=cy-1;ay<=cy+1;ay++){
+ if(rand(ax,ay,201)>.53)continue;
+ let mx=ax*9+2+rand(ax,ay,202)*5,my=ay*8+2+rand(ax,ay,203)*4;
+ let rx=1.2+rand(ax,ay,204)*1.7,ry=1.05+rand(ax,ay,205)*1.5;
+ if(((x-mx)/rx)**2+((y-my)/ry)**2>1)continue;
+ let r=rand(ax,ay,206);
+ if(biome==='forest'&&depth>9&&r>.91)return 'amber';
+ if((biome==='desert'||biome==='snow')&&depth>10&&r>.925)return 'opal';
+ if(depth>22&&r>.86)return 'crystal';
+ if(depth>12&&r>.64)return 'iron';
+ if(r>.27)return 'copper';return 'orecoal';
+ }return null;
+}
+// SANDSTAR MINING P1 (new-world-only): deterministic curved veins and lens deposits.
+// worldGenVersion 1/2 continues to use the original veinType and sparse fallback unchanged.
+function ssVeinTypeV3(x,y,depth,biome){
+ if(depth<6)return null;
+ const cellW=18,cellH=14,cx=Math.floor(x/cellW),cy=Math.floor(y/cellH);
+ let best=null,bestScore=Infinity;
+ for(let ax=cx-1;ax<=cx+1;ax++)for(let ay=cy-1;ay<=cy+1;ay++){
+  if(rand(ax,ay,1301)>.9)continue;
+  const mx=(ax+.5)*cellW+(rand(ax,ay,1302)-.5)*5;
+  const my=(ay+.5)*cellH+(rand(ax,ay,1303)-.5)*4;
+  const theta=(rand(ax,ay,1304)-.5)*Math.PI*1.5;
+  const cs=Math.cos(theta),sn=Math.sin(theta),dx=x+.5-mx,dy=y+.5-my;
+  const u=dx*cs+dy*sn,v=-dx*sn+dy*cs;
+  const halfLen=4.4+rand(ax,ay,1305)*4.8;
+  const width=.96+rand(ax,ay,1306)*.74;
+  const phase=rand(ax,ay,1307)*Math.PI*2;
+  const bend=.9*Math.sin(u*.32+phase);
+  const taper=.48+.52*Math.max(0,1-Math.abs(u)/halfLen);
+  let score=Infinity;
+  if(Math.abs(u)<=halfLen)score=Math.abs(v-bend)/(width*taper);
+  const isBranch=rand(ax,ay,1308)<.28;
+  if(isBranch){
+   const branchBase=rand(ax,ay,1309)*halfLen*.7-halfLen*.35;
+   const rel=u-branchBase;
+   const branchSide=rand(ax,ay,1310)<.5?-1:1;
+   if(rel>0&&rel<halfLen*.63){
+    const branchV=bend+branchSide*rel*.72;
+    score=Math.min(score,Math.abs(v-branchV)/(.56+.15*rand(ax,ay,1311)));
+   }
+  }
+  if(score>1||score>=bestScore)continue;
+  const r=rand(ax,ay,1312);
+  let ore=r>.9&&biome==='forest'&&depth>9?'amber':
+    r>.92&&(biome==='desert'||biome==='snow')&&depth>10?'opal':
+    r>.86&&depth>22?'crystal':r>.59&&depth>12?'iron':r>.24?'copper':'orecoal';
+  best=ore;bestScore=score;
+ }
+ return best;
+}
+// A hint is visible only on an *exposed* natural stone surface with actual ore
+// one or two blocks behind it. No arbitrary direction arrow or hidden ore reveal.
+function ssVeinTraceAt(x,y){
+ if(!game||game.worldGenVersion<3||ssRegion!=='mine')return null;
+ if(rand(x,y,1313)>.65)return null;
+ if(y<=terrain(x)+5)return null;
+ const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+ for(const [dx,dy] of dirs){
+  if(tile(x+dx,y+dy)!==null)continue;
+  for(let step=1;step<=2;step++){
+   const ore=tile(x-dx*step,y-dy*step);
+   if(ore&&ORES.has(ore))return ore;
+  }
+ }
+ return null;
+}
+function ssDrawVeinTrace(x,y,sx,sy){
+ const ore=ssVeinTraceAt(x,y);
+ if(!ore)return;
+ const palette={orecoal:'#9ea2b1',copper:'#e8a56a',iron:'#b9b9d4',crystal:'#93d9f0',titanium:'#c5c4da',starshard:'#b6f7e1',amber:'#f2c163',opal:'#d2b6ff'};
+ ctx.save();ctx.fillStyle=palette[ore]||'#e4b788';
+ const px=sx+8+Math.floor(rand(x,y,1314)*9),py=sy+7+Math.floor(rand(x,y,1315)*10);
+ ctx.fillRect(px,py,3,2);ctx.fillRect(px+4,py+2,2,2);ctx.restore();
+}
+// SANDSTAR P1.2: procedurally generated vertical fissures and hidden pocket caverns.
+// v1/v2/v3 untouched. This is geometry only: no inventory/XP/relic awards.
+// Each source cell has a stable ID, with no dynamic content placed in game.edits.
+const SS_CAVERN_CELL_W=38,SS_CAVERN_CELL_H=28;
+let ssCavernRetryAt=0;
+function ssCavernSourceV4(ax,ay){
+ if(ax<2||ax>13||ay<3||ay>6||rand(ax,ay,1401)>.58)return null;
+ const mx=Math.floor((ax+.5)*SS_CAVERN_CELL_W+(rand(ax,ay,1402)-.5)*8);
+ const my=Math.floor((ay+.5)*SS_CAVERN_CELL_H+(rand(ax,ay,1403)-.5)*9);
+ // Two safety bands: adequate underground cover and enough bedrock clearance.
+ if(mx<74||mx>WW-12||my<terrain(mx)+18||my>WH-13)return null;
+ return {id:`cv:${ax}:${ay}`,x:mx,y:my,rx:3.1+rand(ax,ay,1404)*1.6,
+  ry:2.3+rand(ax,ay,1405)*1.15,shaft:8+Math.floor(rand(ax,ay,1406)*7),
+  direction:rand(ax,ay,1407)<.5?-1:1,ax,ay};
+}
+function ssCavernFeatureV4(x,y){
+ if(!game||game.worldGenVersion<4||ssRegion!=='mine'||x<72||x>=WW-6||y<0||y>=WH-6)return null;
+ const cx=Math.floor(x/SS_CAVERN_CELL_W),cy=Math.floor(y/SS_CAVERN_CELL_H);
+ for(let ax=cx-1;ax<=cx+1;ax++)for(let ay=cy-1;ay<=cy+1;ay++){
+  const c=ssCavernSourceV4(ax,ay);if(!c)continue;
+  const dx=x+.5-(c.x+.5),dy=y+.5-(c.y+.5);
+  const room=(dx/c.rx)**2+(dy/c.ry)**2;
+  const irregular=1+.065*Math.sin((x+c.x)*.76+(y-c.y)*1.11);
+  if(room<=irregular)return {kind:'room',id:c.id,centerX:c.x,centerY:c.y,rx:c.rx,ry:c.ry};
+  // Vertical fissure leads down to the chamber: narrow, bends, and keeps the player
+  // reading the wall. It joins the roof rather than creating a second sealed pocket.
+  const roof=c.y-c.ry,top=roof-c.shaft;
+  if(y+.5>=top&&y+.5<=roof+1.2){
+   const t=Math.max(0,Math.min(1,(roof-(y+.5))/Math.max(1,c.shaft)));
+   const guideX=c.x+.5+c.direction*t*1.9+Math.sin((y+c.x)*.31)*.35;
+   if(Math.abs(x+.5-guideX)<=1.02)return {kind:'shaft',id:c.id,centerX:c.x,centerY:c.y,rx:c.rx,ry:c.ry};
+  }
+ }
+ return null;
+}
+function ssCavernOreV4(x,y,depth,biome){
+ if(depth<14||ssRegion!=='mine')return null;
+ const cx=Math.floor(x/SS_CAVERN_CELL_W),cy=Math.floor(y/SS_CAVERN_CELL_H);
+ for(let ax=cx-1;ax<=cx+1;ax++)for(let ay=cy-1;ay<=cy+1;ay++){
+  const c=ssCavernSourceV4(ax,ay);if(!c)continue;
+  const dx=(x+.5-c.x-.5)/c.rx,dy=(y+.5-c.y-.5)/c.ry;
+  const r=dx*dx+dy*dy;
+  // Sparse mineral pockets occur in unexcavated chamber walls, never as free drops.
+  if(r>1.08&&r<1.45&&rand(x,y,1422)>.82){
+   if(depth>26&&rand(ax,ay,1423)>.77)return 'crystal';
+   if(depth>17&&rand(ax,ay,1424)>.43)return 'iron';
+   return 'copper';
+  }
+ }
+ return null;
+}
+function ssCavernClueAt(x,y){
+ if(ssRegion!=='mine'||game.worldGenVersion<4||tile(x,y)!=='stone'||rand(x,y,1425)>.48)return false;
+ // Only decorate exposed faces. The clue never reveals the whole hidden map.
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  if(tile(x+dx,y+dy)!==null)continue;
+  for(let step=1;step<=2;step++)if(ssCavernFeatureV4(x-dx*step,y-dy*step))return true;
+ }
+ return false;
+}
+function ssDrawCavernClue(x,y,sx,sy){
+ if(!ssCavernClueAt(x,y))return;
+ const xx=sx+5+Math.floor(rand(x,y,1426)*12),yy=sy+7+Math.floor(rand(x,y,1427)*8);
+ ctx.save();ctx.fillStyle='#cce6c4';ctx.fillRect(xx,yy,3,2);ctx.fillStyle='#8ec3bd';ctx.fillRect(xx+5,yy-3,2,3);ctx.restore();
+}
+function ssDrawCavernSpecks(fromX,toX,fromY,toY){
+ if(ssRegion!=='mine'||game.worldGenVersion<4)return;
+ ctx.save();
+ for(let y=fromY;y<=toY;y++)for(let x=fromX;x<=toX;x++){
+  if(tile(x,y)!==null||rand(x,y,1428)<.93)continue;
+  const feature=ssCavernFeatureV4(x,y);
+  if(!feature||feature.kind!=='room')continue;
+  const sx=Math.round(x*T-camera.x),sy=Math.round(y*T-camera.y);
+  ctx.fillStyle='#a6dbd1';ctx.globalAlpha=.5+.2*Math.sin(frame*.04+rand(x,y,1429)*6);
+  ctx.fillRect(sx+11,sy+9,3,3);
+ }
+ ctx.restore();
+}
+function ssCavernCheckDiscovery(){
+ if(!p||!game||paused||ssRegion!=='mine'||game.worldGenVersion<4||ssM16TransitionLocked||performance.now()<ssCavernRetryAt)return false;
+ // Enter the open chamber proper. Merely seeing a faint wall clue does not count.
+ const fy=Math.floor(p.y-PLAYER_CENTER_FROM_FEET),fx=Math.floor(p.x);
+ const feature=ssCavernFeatureV4(fx,fy);
+ if(!feature||feature.kind!=='room'||tile(fx,fy)!==null||game.cavernDiscoveries.includes(feature.id))return false;
+ game.cavernDiscoveries.push(feature.id);
+ if(!saveGame(true)){game.cavernDiscoveries.pop();ssCavernRetryAt=performance.now()+10000;return false;}
+ flash('✦ 숨겨진 지하 공동 발견! · 탐사 기록 '+game.cavernDiscoveries.length+'곳');
+ return true;
+}
+
+// SANDSTAR P1.3: seeded cavern treasure, independent of buildable storage chests.
+// New worlds only (worldGenVersion >= 5). No combat/AI or terrain edits.
+const SS_TREASURE_MATS=Object.freeze({edge_stone:'날 정련석',reinforcement_core:'손잡이 보강심',vibration_core:'진동 코어',star_resin:'균열 수지'});
+const SS_TREASURE_RELICS=Object.freeze({miner_badge:{name:'오래된 광부 배지',grade:'일반'},star_tablet:{name:'별문양 석판',grade:'희귀'},geode_compass:{name:'결정 나침반',grade:'희귀'},ancient_miner_log:{name:'고대 광부 기록판',grade:'영웅'}});
+const SS_TREASURE_RECIPES=Object.freeze({cave_lamp:{name:'광산 조명 제작법',grade:'일반'},reinforced_rope:{name:'고급 로프 제작법',grade:'희귀'},geode_refiner:{name:'결정 정련기 설계도',grade:'희귀'},star_forge:{name:'별철 강화 설계도',grade:'영웅'}});
+// SANDSTAR P1.4: the treasure ledger becomes an actual forge/crafting resource.
+// No new generic currencies or combat; one-time equipment/bench upgrades only.
+const SS_P14_RECIPES=Object.freeze({
+ cave_lamp:{name:'광산 조명',items:[['wood',2],['copper',1],['edge_stone',1]],effect:'지하 시야 반경 +1칸 (최대 8)'},
+ reinforced_rope:{name:'고급 로프',items:[['wood',3],['iron',2],['reinforcement_core',1]],effect:'로프 등반 속도 +12% (최대 9.5칸/초)'},
+ geode_refiner:{name:'결정 정련기',items:[['iron',2],['crystal',2],['vibration_core',1]],effect:'대장간에서 수정 2개 → 날 정련석 1개 정련 가능'},
+ star_forge:{name:'별철 보조 대장간',items:[['titanium',1],['starshard',1],['star_resin',1],['edge_stone',1]],effect:'균열 수지를 곡괭이 강화 촉매로 사용 가능'}
+});
+const SS_P14_CATALYSTS=Object.freeze({
+ none:{name:'추가 촉매 없음',bonus:0},
+ edge_stone:{name:'날 정련석',bonus:8},
+ reinforcement_core:{name:'손잡이 보강심',bonus:12},
+ vibration_core:{name:'진동 코어',bonus:18},
+ star_resin:{name:'균열 수지',bonus:25,requires:'star_forge'}
+});
+let ssP14Catalyst='none'; // transient UI preference: never saved or auto-selected
+function ssP14Crafted(id,state=game){return !!state?.treasureP13?.crafted?.includes(id);}
+function ssP14ItemName(id){return SS_TREASURE_MATS[id]||MATERIAL_NAMES[id]||id;}
+function ssP14Available(id,state=game){
+ return Object.prototype.hasOwnProperty.call(SS_TREASURE_MATS,id)?Math.max(0,Math.floor(Number(state.treasureP13?.materials?.[id])||0)):forgeAvailable(id,state);
+}
+function ssP14RecipeReady(id,state=game){
+ const spec=SS_P14_RECIPES[id];
+ return !!spec&&state?.worldGenVersion>=5&&state.treasureP13.recipes.includes(id)&&!ssP14Crafted(id,state)&&spec.items.every(([item,qty])=>ssP14Available(item,state)>=qty);
+}
+function ssP14Craft(id){
+ if(!game||!canOpenBuilding('forge')||!ssP14RecipeReady(id))return false;
+ const spec=SS_P14_RECIPES[id];
+ const ok=safeMarketTransaction(d=>{
+  if(!ssP14RecipeReady(id,d))return false;
+  for(const [item,qty] of spec.items){
+   if(Object.prototype.hasOwnProperty.call(SS_TREASURE_MATS,item))d.treasureP13.materials[item]-=qty;
+   else d.inv[item]-=qty;
+  }
+  d.treasureP13.crafted.push(id);
+  return true;
+ });
+ if(ok){forgeSection='craft';forgeMenu();flash(spec.name+' 제작 완료 · 효과가 적용됐어요');playSound('pickup_ore');}
+ return ok;
+}
+function ssP14Refine(){
+ if(!game||!canOpenBuilding('forge')||!ssP14Crafted('geode_refiner')||forgeAvailable('crystal')<2)return false;
+ const ok=safeMarketTransaction(d=>{
+  if(!ssP14Crafted('geode_refiner',d)||forgeAvailable('crystal',d)<2)return false;
+  d.inv.crystal-=2;
+  const old=d.treasureP13.materials.edge_stone||0;
+  if(old>=999999)return false;
+  d.treasureP13.materials.edge_stone=old+1;
+  return true;
+ });
+ if(ok){forgeSection='craft';forgeMenu();flash('수정 정련 완료 · 날 정련석 +1');}
+ return ok;
+}
+function ssP14CatalystAvailable(id,state=game){
+ if(id==='none')return true;
+ const info=SS_P14_CATALYSTS[id];
+ return !!info&&(!info.requires||ssP14Crafted(info.requires,state))&&(state?.treasureP13?.materials?.[id]||0)>0;
+}
+function ssP14EffectiveCatalyst(state=game){return ssP14CatalystAvailable(ssP14Catalyst,state)?ssP14Catalyst:'none';}
+function ssP14ForgePanel(){
+ const active=ssP14EffectiveCatalyst(),base=forgeChance(),baseRule=forgeRule();
+ if(!baseRule)return '<p>곡괭이 +20까지 강화 완료. 추가 촉매는 필요 없어요.</p>';
+ const rows=Object.entries(SS_P14_CATALYSTS).map(([id,info])=>{
+  const count=id==='none'?'':` · 보유 ${game.treasureP13.materials[id]||0}`;
+  const req=info.requires&&!ssP14Crafted(info.requires)?' · 별철 강화 설계도 제작 필요':'';
+  const available=ssP14CatalystAvailable(id);
+  return `<button type="button" class="ss-p14-choose" data-ss-p14-catalyst="${id}" aria-pressed="${active===id}" ${available?'':'disabled'}>${active===id?'◉ ':'○ '}${info.name}${info.bonus?' (+'+info.bonus+'%p)':''}${count}${req}</button>`;
+ }).join('');
+ return `<section class="ss-p14-panel" aria-label="보물 촉매 선택"><h3>보물 강화 촉매</h3><p>기존 곡괭이 강화에 선택적으로 재료 1개를 사용해요. <strong>성공·실패 모두 촉매 1개 소모</strong>, 기존 강화 비용·실패 보정은 그대로예요.</p><div class="ss-p14-catalysts">${rows}</div><p class="ss-p14-prob">현재 시도 성공률 <b>${base}% → ${Math.min(100,base+SS_P14_CATALYSTS[active].bonus)}%</b></p></section>`;
+}
+function ssP14CraftPanel(){
+ const ledger=game.treasureP13;
+ const rows=Object.entries(SS_P14_RECIPES).map(([id,spec])=>{
+  const has=ledger.recipes.includes(id),crafted=ssP14Crafted(id),ready=ssP14RecipeReady(id);
+  const ingredients=spec.items.map(([mat,n])=>`${ssP14ItemName(mat)} ${ssP14Available(mat)}/${n}`).join(' · ');
+  return `<div class="ss-p14-craft-row"><strong>${spec.name}</strong><small>${!has?'설계도 미발견 · 보물상자에서 획득':crafted?'제작 완료 · 영구 적용':ingredients}</small><small>${spec.effect}</small><button type="button" data-ss-p14-craft="${id}" ${ready?'':'disabled'}>${crafted?'제작 완료':has?'제작하기':'설계도 필요'}</button></div>`;
+ }).join('');
+ const canRefine=ssP14Crafted('geode_refiner')&&forgeAvailable('crystal')>=2&&ssP14Available('edge_stone')<999999;
+ return `<section class="ss-p14-panel"><h3>탐사 설계도 제작</h3><p>보물도감에서 획득한 설계도를 <strong>도래마을 대장간</strong>에서 제작해요. 제작품은 저장되며 동일 품목을 중복 제작하지 않아요.</p>${rows}<div class="ss-p14-craft-row"><strong>결정 정련</strong><small>수정 ${forgeAvailable('crystal')}/2 → 날 정련석 +1</small><small>결정 정련기 제작 후 반복 사용 가능 · 실제 광석 소비</small><button type="button" id="ssP14Refine" ${canRefine?'':'disabled'}>정련하기</button></div></section>`;
+}
+function ssP14BindForge(){
+ document.querySelectorAll('[data-ss-p14-catalyst]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.ssP14Catalyst;if(!ssP14CatalystAvailable(id))return;ssP14Catalyst=id;forgeMenu();});
+ document.querySelectorAll('[data-ss-p14-craft]').forEach(btn=>btn.onclick=()=>ssP14Craft(btn.dataset.ssP14Craft));
+ if($('ssP14Refine'))$('ssP14Refine').onclick=ssP14Refine;
+}
+const SS_TREASURE_GRADES=Object.freeze({old:{name:'낡은 상자',color:'#b78a54'},supply:{name:'광부 보급 상자',color:'#a3c6cc'},deep:{name:'심부 보물상자',color:'#e1ba6e'}});
+function ssTreasureFresh(){return {schema:2,opened:[],materials:{},relics:[],recipes:[],history:[],crafted:[]};}
+function ssTreasureNormalize(raw){
+ const out=ssTreasureFresh();if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
+ const ids=a=>Array.isArray(a)?[...new Set(a.filter(x=>typeof x==='string'&&/^cv:(?:[0-9]|[1-9][0-9]*):(?:[0-9]|[1-9][0-9]*)$/.test(x)&&x.length<=24))].slice(0,400):[];
+ out.opened=ids(raw.opened);
+ for(const id of Object.keys(SS_TREASURE_MATS)){const n=Number(raw.materials?.[id]);out.materials[id]=Number.isSafeInteger(n)&&n>=0?Math.min(n,999999):0;}
+ out.relics=Array.isArray(raw.relics)?[...new Set(raw.relics.filter(id=>Object.prototype.hasOwnProperty.call(SS_TREASURE_RELICS,id)))]:[];
+ out.recipes=Array.isArray(raw.recipes)?[...new Set(raw.recipes.filter(id=>Object.prototype.hasOwnProperty.call(SS_TREASURE_RECIPES,id)))]:[];
+ out.crafted=Array.isArray(raw.crafted)?[...new Set(raw.crafted.filter(id=>out.recipes.includes(id)))]:[];
+ out.history=Array.isArray(raw.history)?raw.history.filter(o=>o&&out.opened.includes(o.id)&&typeof o.grade==='string'&&Object.prototype.hasOwnProperty.call(SS_TREASURE_GRADES,o.grade)).slice(-24).map(o=>({id:o.id,grade:o.grade})):[];
+ return out;
+}
+function ssTreasureCavern(c){
+ if(!c||!game||game.worldGenVersion<5||ssRegion!=='mine'||rand(c.ax,c.ay,1731)>.78)return null;
+ const depth=c.y-terrain(c.x),r=rand(c.ax,c.ay,1732);
+ const grade=depth<35?(r<.72?'old':'supply'):depth<68?(r<.35?'old':r<.89?'supply':'deep'):(r<.16?'old':r<.68?'supply':'deep');
+ const baseX=c.x+(rand(c.ax,c.ay,1733)<.5?-1:1);
+ let point=null;
+ for(const x of [baseX,c.x,baseX+2]){
+  for(let y=Math.floor(c.y);y<=Math.ceil(c.y+c.ry+1);y++){
+   if(ssCavernFeatureV4(x,y)?.kind!=='room')continue;
+   if(terrainType(x,y)!==null)continue;
+   if(terrainType(x,y+1)!==null){point={x,y};break;}
+  }
+  if(point)break;
+ }
+ // A small constructed pedestal is drawn if the floor was naturally carved away.
+ if(!point)point={x:c.x,y:c.y+1};
+ if(ssCavernFeatureV4(point.x,point.y)?.kind!=='room')return null;
+ return {id:c.id,x:point.x,y:point.y,grade,depth,ax:c.ax,ay:c.ay};
+}
+function ssTreasureAtCell(ax,ay){return ssTreasureCavern(ssCavernSourceV4(ax,ay));}
+function ssTreasureNear(){
+ if(!game||game.worldGenVersion<5||!p||ssRegion!=='mine'||ssM16TransitionLocked)return null;
+ const ax=Math.floor(p.x/SS_CAVERN_CELL_W),ay=Math.floor(p.y/SS_CAVERN_CELL_H);let best=null,dist=Infinity;
+ for(let i=ax-1;i<=ax+1;i++)for(let j=ay-1;j<=ay+1;j++){
+  const c=ssTreasureAtCell(i,j);if(!c||tile(c.x,c.y)!==null)continue;
+  const d=Math.hypot(p.x-(c.x+.5),(p.y-PLAYER_CENTER_FROM_FEET)-(c.y+.5));
+  if(d<=3&&d<dist){best=c;dist=d;}
+ }
+ return best;
+}
+function ssTreasureSyncAction(){
+ const el=$('ssTreasureAction');if(!el)return;
+ const c=ssTreasureNear();el.hidden=!c||ssIsTitle();
+ if(c){const opened=game.treasureP13?.opened.includes(c.id);el.textContent=opened?'▣ 열린 보물상자':'▣ '+SS_TREASURE_GRADES[c.grade].name;el.disabled=false;}
+}
+function ssTreasureDraw(fromX,toX,fromY,toY){
+ if(!game||game.worldGenVersion<5||ssRegion!=='mine')return;
+ const ax0=Math.floor(fromX/SS_CAVERN_CELL_W)-1,ax1=Math.floor(toX/SS_CAVERN_CELL_W)+1;
+ const ay0=Math.floor(fromY/SS_CAVERN_CELL_H)-1,ay1=Math.floor(toY/SS_CAVERN_CELL_H)+1;
+ ctx.save();
+ for(let ax=ax0;ax<=ax1;ax++)for(let ay=ay0;ay<=ay1;ay++){
+  const c=ssTreasureAtCell(ax,ay);if(!c||c.x<fromX||c.x>toX||c.y<fromY||c.y>toY||tile(c.x,c.y)!==null)continue;
+  const sx=Math.round(c.x*T-camera.x),sy=Math.round(c.y*T-camera.y),opened=game.treasureP13.opened.includes(c.id);
+  const col=SS_TREASURE_GRADES[c.grade].color;
+  ctx.fillStyle='#35271d';ctx.fillRect(sx+2,sy+14,23,11);
+  ctx.fillStyle=opened?'#6a6256':col;ctx.fillRect(sx+3,sy+10,21,11);
+  ctx.fillStyle='#30261c';ctx.fillRect(sx+3,sy+8,21,5);
+  ctx.fillStyle=opened?'#696059':'#dbb96d';ctx.fillRect(sx+11,sy+13,5,6);
+  ctx.fillStyle='#e7d4ad';ctx.fillRect(sx+4,sy+20,3,3);ctx.fillRect(sx+20,sy+20,3,3);
+  if(!opened){ctx.fillStyle='#ffedb4';ctx.globalAlpha=.4+.2*Math.sin(frame*.06);ctx.fillRect(sx+11,sy+4,5,3);ctx.globalAlpha=1;}
+ }
+ ctx.restore();
+}
+// Every roll uses only the world's seed and cavern coordinates, independent of time or UI reopens.
+function ssTreasureRoll(c){
+ const grade=c.grade,r=(salt)=>rand(c.ax,c.ay,salt);
+ const pick=(values,salt)=>values[Math.min(values.length-1,Math.floor(r(salt)*values.length))];
+ const pools={old:['orecoal','copper'],supply:['copper','iron','crystal','amber'],deep:['iron','crystal','titanium','starshard','opal']};
+ const ores={type:'ore',id:pick(pools[grade],1740),qty:grade==='old'?1+Math.floor(r(1741)*2):grade==='supply'?1+Math.floor(r(1741)*2):1};
+ const loot=[ores];
+ const matPool=grade==='old'?['edge_stone']:grade==='supply'?['edge_stone','reinforcement_core','vibration_core']:Object.keys(SS_TREASURE_MATS);
+ if(r(1742)<({old:.4,supply:.8,deep:1}[grade]))loot.push({type:'material',id:pick(matPool,1743),qty:grade==='deep'?2:1});
+ const relicPool=grade==='deep'?['star_tablet','geode_compass','ancient_miner_log']:grade==='supply'?['miner_badge','star_tablet']:['miner_badge'];
+ if(r(1744)<({old:.08,supply:.15,deep:.32}[grade]))loot.push({type:'relic',id:pick(relicPool,1745),qty:1});
+ const recipePool=grade==='deep'?['reinforced_rope','geode_refiner','star_forge']:grade==='supply'?['cave_lamp','reinforced_rope']:['cave_lamp'];
+ if(r(1746)<({old:.05,supply:.12,deep:.25}[grade]))loot.push({type:'recipe',id:pick(recipePool,1747),qty:1});
+ return loot;
+}
+function ssTreasureRewardName(item){
+ if(item.type==='ore')return MATERIAL_NAMES[item.id]+' ×'+item.qty;
+ if(item.type==='material')return SS_TREASURE_MATS[item.id]+' ×'+item.qty;
+ if(item.type==='relic')return SS_TREASURE_RELICS[item.id].name;
+ if(item.type==='recipe')return SS_TREASURE_RECIPES[item.id].name;
+ return '미확인';
+}
+function ssTreasureClaim(id){
+ const c=ssTreasureNear();if(!c||c.id!==id||menuType!=='지하 보물상자'||ssM16TransitionLocked)return false;
+ if(game.treasureP13.opened.includes(id))return false;
+ const loot=ssTreasureRoll(c),original=game,draft=structuredClone(game),record=draft.treasureP13;
+ for(const item of loot){
+  if(item.type==='ore'){
+   draft.inv[item.id]=(draft.inv[item.id]||0)+item.qty;
+   draft.cargoTrial.carried[item.id]=(draft.cargoTrial.carried[item.id]||0)+item.qty;
+  }else if(item.type==='material')record.materials[item.id]=(record.materials[item.id]||0)+item.qty;
+  else if(item.type==='relic'){
+   if(!record.relics.includes(item.id))record.relics.push(item.id);
+   else record.materials.edge_stone=(record.materials.edge_stone||0)+2;
+  }else if(item.type==='recipe'){
+   if(!record.recipes.includes(item.id))record.recipes.push(item.id);
+   else record.materials.edge_stone=(record.materials.edge_stone||0)+2;
+  }
+ }
+ if(ssCargoLoad(draft)>SS_CARGO_MAX+.00001){flash('가방 화물 한도 초과 · 승강장에 먼저 입고해 주세요');return false;}
+ record.opened.push(id);record.history.push({id,grade:c.grade});record.history=record.history.slice(-24);
+ game=draft;
+ if(!saveGame(true)){game=original;flash('저장 실패: 보물상자 보상을 취소했어요');return false;}
+ updHud();ssTreasureJournal(loot,'보물 획득 완료!');return true;
+}
+function ssTreasureOpenMenu(c){
+ if(!c||!game||ssIsTitle()||ssM16TransitionLocked)return false;
+ const near=ssTreasureNear();if(!near||near.id!==c.id){flash('보물상자 가까이 다가가세요');return false;}
+ if(game.treasureP13.opened.includes(c.id)){ssTreasureJournal([], '이미 열어본 보물상자예요');return true;}
+ showModal('지하 보물상자',`<p><strong>${SS_TREASURE_GRADES[c.grade].name}</strong> · 심도 약 ${Math.max(0,Math.floor(c.depth))}m</p><p>광석 · 강화재료 · 수집형 유물 · 레시피 중 보상을 획득할 수 있어요. 개봉 후에는 다시 획득할 수 없습니다.</p><button id="ssTreasureClaim" type="button">▣ 상자 열기</button><p><small>강화재료 및 설계도는 탐사 장부에 보관됩니다. 강화재료는 대장간에서 촉매로 사용하고 설계도는 대장간의 '보물 제작'에서 만들 수 있어요.</small></p>`);
+ $('ssTreasureClaim').onclick=()=>ssTreasureClaim(c.id);return true;
+}
+function ssTreasureJournal(loot=[],message=''){
+ const t=game.treasureP13;
+ const matList=Object.keys(SS_TREASURE_MATS).filter(id=>t.materials[id]>0).map(id=>`<div class="ss-treasure-line">${SS_TREASURE_MATS[id]} ×${t.materials[id]}</div>`).join('')||'<p>아직 획득한 강화재료가 없어요.</p>';
+ const relicList=t.relics.map(id=>`<div class="ss-treasure-line">✦ ${SS_TREASURE_RELICS[id].name} <small>· ${SS_TREASURE_RELICS[id].grade}</small></div>`).join('')||'<p>아직 발견한 유물이 없어요.</p>';
+ const recipeList=t.recipes.map(id=>`<div class="ss-treasure-line">▤ ${SS_TREASURE_RECIPES[id].name} <small>· ${SS_TREASURE_RECIPES[id].grade}${ssP14Crafted(id)?' · 제작 완료':' · 미제작'}</small></div>`).join('')||'<p>아직 발견한 레시피가 없어요.</p>';
+ const award=loot.length?`<h3>${message}</h3><div class="ss-treasure-line">${loot.map(ssTreasureRewardName).join(' · ')}</div>`:message?`<p>${message}</p>`:'';
+ showModal('탐사 보물도감',`${award}<p>보물상자 개봉 <strong>${t.opened.length}곳</strong> · 신규 월드 전용</p><details open><summary>강화재료</summary>${matList}</details><details><summary>수집형 유물</summary>${relicList}</details><details><summary>희귀 레시피</summary>${recipeList}</details><p><small>수집형 유물은 현재 장착 유물과 별개입니다. 설계도 제작은 도래마을 대장간의 '보물 제작' 탭에서 할 수 있어요. 수집형 유물은 기존 장착 유물과 별개로 유지해요.</small></p>`);
+}
+function ssTreasureTryTap(q){
+ if(!game||game.worldGenVersion<5||ssRegion!=='mine')return false;
+ const ax=Math.floor(q.x/SS_CAVERN_CELL_W),ay=Math.floor(q.y/SS_CAVERN_CELL_H);
+ for(let i=ax-1;i<=ax+1;i++)for(let j=ay-1;j<=ay+1;j++){
+  const c=ssTreasureAtCell(i,j);if(!c||tile(c.x,c.y)!==null)continue;
+  if(Math.abs(q.x-c.x)<=1&&Math.abs(q.y-c.y)<=1){ssTreasureOpenMenu(c);return true;}
+ }
+ return false;
+}
+
+const key=(x,y)=>x+','+y;
+// 2.9 lift foundation: a permanent reinforced floor with an unobstructed approach.
+// The footprint is a read-layer projection. It overrides stale edits from older
+// saves, but does not erase or migrate the player's saved edits dictionary.
+function stationProtectedType(x,y){
+ for(const st of STATION_DATA){
+  const sx=Math.floor(st.x),base=st.foot,cfg=st.protect;
+  if(x<sx-cfg.halfWidth||x>sx+cfg.halfWidth)continue;
+  if(y===base||y===base+1)return 'stationrock';
+  if(y>=base-cfg.clearance&&y<base)return null;
+ }
+  // Restore the historic surface apron over all former settlement coordinates.
+  // Overrides old excavated cells in the read layer only; edits stay in the mine save.
+  if(ssRegion==='mine'&&x>=19&&x<=67){
+   if(y===78)return 'grass';

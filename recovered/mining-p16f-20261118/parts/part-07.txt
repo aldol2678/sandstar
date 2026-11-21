@@ -1,0 +1,650 @@
+ return null;
+}
+function finishRopeSurfaceExit(){
+ const plan=rope.surfaceExitPlan;
+ if(!plan||Math.abs(p.y-plan.exitY)>.1)return false;
+ const beforeX=p.x;
+ moveStep(plan.landingX-p.x,0);
+ if(Math.abs(p.x-plan.landingX)>.07){p.x=beforeX;flash('지표 턱이 막혀 있어요. 방향을 바꿔주세요');return false;}
+ noteRopeAscent();releaseRope();p.vx=0;p.vy=0;p.grounded=false;
+ flash('로프를 타고 지표 가장자리로 올라왔어요');return true;
+}
+// Contextual rope grapple: the old vertical anchor rule stays unchanged unless
+// a verified, unobstructed surface exit is the only remaining route.
+function releaseRope(){ropeAutoMoveEnabled=false;rope={active:false,anchor:null,targetY:0,attached:false,mode:'vertical'};ropeHangPaused=false;ropeAscentStartY=null;ropeAim=0;ropeHoldChainDelay=0;ropePreviewAnchor=null;ropeReelPending=0;ropeChainWindow=0;ropeLeapLedgePlan=null;ropeAutoChain=false;}
+function cutRopeJump(){
+ // Jump during rope ascent or hanging: visibly sever the cable and propel upwards.
+ if(!rope.active)return false;
+ const anchor=rope.anchor;
+ if(anchor){
+  ropeSnap={ax:anchor.faceX,ay:anchor.faceY,bx:p.x,by:p.y-PLAYER_CENTER_FROM_FEET,life:.33,maxLife:.33};
+  for(let i=0;i<11;i++){
+   const t=.12+i/12;
+   particles.push({x:(anchor.faceX+(p.x-anchor.faceX)*t)*T,
+    y:(anchor.faceY+(p.y-PLAYER_CENTER_FROM_FEET-anchor.faceY)*t)*T,
+    vx:(i%2?1:-1)*(38+i*3),vy:-60-(i%4)*17,life:.18+(i%3)*.055,
+    color:i%2?'#fff4b3':'#b2f1d4'});
+  }
+ }
+ const launchDir=(input.right?1:0)-(input.left?1:0)||ropeAim;
+ const swingCut=rope.mode==='swing', inheritedVx=p.vx, inheritedVy=p.vy;
+ const surfacePlan=ropeSurfaceExitPlan();
+ const chainAvailable=ropeChainRemaining>0;
+ releaseRope();ropeChainWindow=chainAvailable?p16RopeRule().chainWindow:0;ropeHold=false;ropeGrabCooldown=mobilityDerived().ropeCooldown;jumpBuffer=0;coyoteTime=0;
+ const boosted=remainingRopeLeaps()>0;
+ if(boosted){
+  // Swing exits inherit actual tangential velocity instead of resetting horizontal motion.
+  // Other rope modes retain the proven 2.18-F rope-leap trajectory.
+  const impulse=mobilityDerived().ropeLeapImpulse;
+  p.vy=swingCut?Math.max(-impulse*1.25,Math.min(-impulse*.45,inheritedVy-impulse*.72)):-impulse;
+  // Clear, near-surface shafts get sufficient vertical reach for a safe ledge exit.
+  if(surfacePlan){p.vy=Math.min(p.vy,-18.8);ropeLeapLedgePlan=surfacePlan;}
+  ropeLeapRemaining--;ropeGroundStableSeconds=0;airLeapControl=true;
+  const intent=launchDir;
+  if(swingCut){
+   p.vx=Math.max(-SWING_MAX_SPEED,Math.min(SWING_MAX_SPEED,inheritedVx+(intent?.6:0)));
+   if(Math.abs(p.vx)>.12)p.facing=Math.sign(p.vx);
+  }else if(intent){p.vx=approach(p.vx,intent*4.65,4.1);p.facing=intent;}
+
+  popText(Math.floor(p.x),Math.floor(p.y-1),intent<0?'✦ 왼쪽 로프 도약!':intent>0?'✦ 오른쪽 로프 도약!':'✦ 로프 도약!','#e3ffc3');shake=Math.max(shake,1.5);
+ }else{p.vy=Math.min(p.vy,swingCut?Math.min(inheritedVy,-2.4):-2.4);airLeapControl=false;}
+ p.grounded=false;updateMobilityHud();return boosted;
+}
+function ropeSightOK(faceX,faceY){let sx=p.x,sy=p.y-PLAYER_CENTER_FROM_FEET;for(let i=1;i<20;i++){
+ let f=i/20,tx=sx+(faceX-sx)*f,ty=sy+(faceY-sy)*f;
+ // Rope cable must not cut through rock; the last 5% is reserved for the anchor face.
+ if(solid(tile(Math.floor(tx),Math.floor(ty))))return false;
+}return true}
+function findRopeAnchor(ignoreActive=false){if(paused||!p||(rope.active&&!ignoreActive))return null;
+ // Prefer the collision-verified surface exit over tall forest trunks, which
+ // otherwise keep chaining the rope above the lip and strand the player in air.
+ const nearestExit=ropeSurfaceExitPlan();
+ if(nearestExit&&p.y>nearestExit.exitY+.15)
+  return {...nearestExit.anchor,targetY:nearestExit.exitY,surfaceExitPlan:nearestExit};
+ let c=Math.floor(p.x),foot=p.y;
+ for(let rise=9;rise>=3;rise--){let y=Math.floor(foot-rise),targetY=y+2.05;if(targetY>foot-1.05||y<0)continue;
+  let clear=true;for(let v=foot-.12;v>=targetY;v-=.13){if(collides(p.x,v)){clear=false;break}}
+  if(!clear||collides(p.x,targetY))continue;
+  for(let off=0;off<=2;off++)for(const side of off===0?[0]:[-1,1]){
+   let x=c+off*side,t=tile(x,y);if(!solid(t)||t==='bedrock')continue;
+   let faceX=off===0?p.x:x+(side<0?1.02:-.02),faceY=y+1.01;
+   if(Math.hypot(faceX-p.x,faceY-(foot-PLAYER_CENTER_FROM_FEET))>11.4)continue;
+   if(!ropeSightOK(faceX,faceY))continue;
+   return {x,y,faceX,faceY,targetY};
+  }
+ }
+ // When the last upper anchor is missing, continue up a fully excavated shaft
+ // using a solid bank next to the mouth; never forge an anchor in empty space.
+ const exit=ropeSurfaceExitPlan();
+ return exit?{...exit.anchor,targetY:exit.exitY,surfaceExitPlan:exit}:null;
+}
+// 2.18-F: aim in a cone, stop on the first real solid surface, and validate
+// the entire player-sized path before committing to a diagonal/horizontal pull.
+function ropeDirectionFromDrag(dx,dy,previous='up'){
+ return ropeDirectionFromGesture(dx,dy,previous);
+}
+function findDirectionalRopeAnchor(direction){
+ const base=ROPE_FIRE_DIRECTIONS[direction];
+ if(!base||paused||!p)return null;
+ const sx=p.x,sy=p.y-PLAYER_CENTER_FROM_FEET;
+ for(const spread of (direction==='left'||direction==='right'?[0,-5,5]:[0,-7,7,-14,14])){
+  const rad=spread*Math.PI/180,ux=base[0]*Math.cos(rad)-base[1]*Math.sin(rad),uy=base[0]*Math.sin(rad)+base[1]*Math.cos(rad);
+  const visited=new Set();
+  for(let dist=.2;dist<=11.2;dist+=.12){
+   const ix=Math.floor(sx+ux*dist),iy=Math.floor(sy+uy*dist),k=ix+','+iy;
+   if(visited.has(k))continue;visited.add(k);
+   const t=tile(ix,iy);
+   if(!solid(t))continue;
+   // A protected surface cannot become a rope transport shortcut.
+   if(t==='bedrock'||t==='stationrock'||t==='bed'||t==='chest')break;
+   if(dist<2.2)break;
+   const entryX=Math.abs(ux)>1e-6?(ux>0?(ix-sx)/ux:(ix+1-sx)/ux):-Infinity;
+   const entryY=Math.abs(uy)>1e-6?(uy>0?(iy-sy)/uy:(iy+1-sy)/uy):-Infinity;
+   const side=entryX>=entryY;
+   const faceX=side?(ux>0?ix:ix+1):Math.max(ix+.08,Math.min(ix+.92,sx+ux*entryY));
+   const faceY=side?Math.max(iy+.08,Math.min(iy+.92,sy+uy*entryX)):(uy>0?iy:iy+1);
+   const hitDistance=Math.hypot(faceX-sx,faceY-sy);
+   if(hitDistance<2.1||hitDistance>11.4||!ropeSightOK(faceX,faceY))break;
+   // Stop short of the wall instead of pulling the character into the rock.
+   const stopDistance=1.6,vecX=(faceX-sx)/hitDistance,vecY=(faceY-sy)/hitDistance;
+   const targetX=faceX-vecX*stopDistance,targetY=faceY-vecY*stopDistance+PLAYER_CENTER_FROM_FEET;
+   if(targetX<1||targetX>WW-2||targetY<1||targetY>WH-2||collides(targetX,targetY))break;
+   let clear=true;
+   const journey=Math.hypot(targetX-p.x,targetY-p.y),steps=Math.ceil(journey/.13);
+   for(let i=1;i<=steps;i++){
+    const f=i/steps;
+    if(collides(p.x+(targetX-p.x)*f,p.y+(targetY-p.y)*f)){clear=false;break;}
+   }
+   if(clear)return {x:ix,y:iy,faceX,faceY,targetX,targetY,direction};
+   break;
+  }
+ }
+ return null;
+}
+function fireDirectionalRope(direction){
+ if(paused||rope.active)return false;
+ const airborne=!collides(p.x,p.y+.055);
+ const chaining=airborne&&ropeChainWindow>0&&ropeChainRemaining>0;
+ if(ropeGrabCooldown>0&&!chaining)return false;
+ if(direction==='up'){toggleRope();return rope.active;}
+ if(!ROPE_FIRE_DIRECTIONS[direction])return false;
+ const a=findDirectionalRopeAnchor(direction);
+ if(!a){flash('그 방향에는 연결 가능한 암벽이나 빈 이동 통로가 없어요');return false;}
+ if(chaining){
+  ropeChainRemaining--;ropeChainWindow=0;ropeGrabCooldown=0;
+  const dist=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+  rope={active:true,anchor:a,targetX:a.targetX,targetY:a.targetY,attached:true,mode:'swing',swingLength:Math.min(ROPE_MAX_LENGTH,Math.max(ROPE_MIN_LENGTH,dist+.14)),swingElapsed:0};
+ }else{rope={active:true,anchor:a,targetX:a.targetX,targetY:a.targetY,originX:p.x,originY:p.y,attached:false,mode:'pull'};ropeChainWindow=0;}
+ ropeHangPaused=false;ropeAscentStartY=p.y;ropeStatusNotice=.95;ropePreviewAnchor=null;
+ holdTarget=null;holdLast=null;holdProgress=0;stopMineStick();
+ return true;
+}
+// 2.18-G: Explicit swing from a completed directional pull. Never change a
+// vertical rope or a partially completed pull until the player presses left/right.
+function startRopeSwing(direction){
+ if(!rope.active||!rope.attached||rope.mode!=='pull')return false;
+ const a=rope.anchor; if(!a)return false;
+ const dist=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+ // Let out a little line to create a useful, controllable pendulum arc.
+ // Cap the length, but do not move the character abruptly when switching modes.
+ rope.mode='swing';rope.swingLength=Math.min(ROPE_MAX_LENGTH,Math.max(dist+.8,Math.min(5.4,dist+2.4)));
+ rope.swingElapsed=0;rope.swingStarted=true;rope.attached=true;
+ p.vx=direction?Math.max(-SWING_MAX_SPEED,Math.min(SWING_MAX_SPEED,2.7*direction)):p.vx;
+ p.vy=0;ropeHold=false;ropeHoldTime=0;ropeAim=direction;
+ return true;
+}
+// 2.18-H: change swing-line length without jumping through solid terrain.
+// A short reel physically moves the character closer to the anchor via tile collision.
+function adjustRopeLength(delta){
+ if(!Number.isFinite(delta)||!rope.active||!rope.attached)return false;
+ if(rope.mode==='pull')startRopeSwing(0);
+ if(rope.mode!=='swing')return false;
+ const old=rope.swingLength,newLen=Math.max(ROPE_MIN_LENGTH,Math.min(ROPE_MAX_LENGTH,old+delta));
+ if(Math.abs(newLen-old)<1e-6)return false;
+ const a=rope.anchor,rx=p.x-a.faceX,ry=p.y-PLAYER_CENTER_FROM_FEET-a.faceY;
+ const dist=Math.hypot(rx,ry);
+ if(newLen<dist-1e-5){
+  const step=dist-newLen,ux=rx/dist,uy=ry/dist;
+  const ox=p.x,oy=p.y;
+  moveStep(-ux*step,-uy*step);
+  const reached=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+  if(reached>newLen+.015){
+   // The player was blocked: never shorten below the real tether radius.
+   rope.swingLength=Math.max(ROPE_MIN_LENGTH,Math.min(old,reached));
+   return rope.swingLength<old-1e-5;
+  }
+  if(collides(p.x,p.y)){p.x=ox;p.y=oy;return false;}
+ }
+ rope.swingLength=newLen;return true;
+}
+function transferRope(direction){
+ if(paused||!rope.active||!rope.attached||ropeChainRemaining<=0)return false;
+ if(!ROPE_FIRE_DIRECTIONS[direction])return false;
+ const a=direction==='up'?findRopeAnchor(true):findDirectionalRopeAnchor(direction);
+ if(!a){flash('그 방향에는 연결 가능한 다른 암벽이 없어요');return false;}
+ if(Math.hypot(a.faceX-rope.anchor.faceX,a.faceY-rope.anchor.faceY)<.9){
+  flash('이미 연결된 암벽이에요');return false;
+ }
+ // Retarget without detaching or dropping the player; keep tangential momentum.
+ const dist=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+ if(dist>ROPE_MAX_LENGTH||dist<1.6||!ropeSightOK(a.faceX,a.faceY))return false;
+ const before=rope;
+ rope={active:true,anchor:a,targetX:a.targetX??p.x,targetY:a.targetY??p.y,
+  attached:true,mode:'swing',swingLength:Math.max(ROPE_MIN_LENGTH,Math.min(ROPE_MAX_LENGTH,dist+.12)),swingElapsed:0};
+ ropeHangPaused=false;ropeChainRemaining--;ropeChainWindow=0;ropeGrabCooldown=0;ropeReelPending=0;
+ ropeAim=0;ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;
+ updateMobilityHud();return true;
+}
+// A taut, inextensible cable with soft gravity and tangential input.
+// Each step checks the original tile collider before applying rope tension.
+function updateRopeSwing(dt,dir){
+ if(!rope.active||rope.mode!=='swing')return;
+ const reelDirection=(input.reelIn?1:0)-(input.reelOut?1:0);
+ if(reelDirection)adjustRopeLength(-reelDirection*p16RopeReelSpeed()*dt);
+ if(ropeReelPending){
+  const change=Math.sign(ropeReelPending)*Math.min(Math.abs(ropeReelPending),p16RopeReelSpeed()*dt);
+  if(!adjustRopeLength(change))ropeReelPending=0;
+  else ropeReelPending-=change;
+ }
+ const a=rope.anchor,ox=a.faceX,oy=a.faceY;
+ if(!solid(tile(a.x,a.y))){releaseRope();flash('암벽이 사라져 로프가 풀렸어요');return;}
+ const len=rope.swingLength;
+ if(!Number.isFinite(len)||len<1.6){releaseRope();return;}
+ const substeps=Math.max(1,Math.ceil(dt/(1/90)));
+ const step=dt/substeps;
+ for(let i=0;i<substeps;i++){
+  const rx=p.x-ox,ry=p.y-PLAYER_CENTER_FROM_FEET-oy,rad=Math.hypot(rx,ry);
+  const nx=rad>1e-5?rx/rad:0,ny=rad>1e-5?ry/rad:1;
+  // Horizontal intent is projected into the rope tangent, so holding a direction
+  // pumps momentum without exerting a physically impossible radial force.
+  const tx=-ny,ty=nx;
+  const drive=(dir*tx)*SWING_DRIVE;
+  p.vx+=tx*drive*step;
+  p.vy+=(SWING_GRAVITY+ty*drive)*step;
+  const brake=p16RopeRank()>=3&&dir!==0&&Math.sign(p.vx)!==Math.sign(dir)&&Math.abs(p.vx)>.3;
+  const damping=Math.pow(brake?.976:.998,step*60);
+   p.vx*=damping;p.vy*=damping;
+   if(ropeABMode==='B'&&rad>len){
+    // Damped spring along the radial direction; retain existing tile collision checks.
+    const outward=p.vx*nx+p.vy*ny;
+    const tension=Math.max(0,Math.min(45,(rad-len)*24+outward*4.2));
+    p.vx-=nx*tension*step;p.vy-=ny*tension*step;
+   }
+  let vel=Math.hypot(p.vx,p.vy);
+  if(vel>SWING_MAX_SPEED){p.vx*=SWING_MAX_SPEED/vel;p.vy*=SWING_MAX_SPEED/vel;}
+  const beforeX=p.x,beforeY=p.y;
+  moveStep(p.vx*step,p.vy*step);
+  const qx=p.x-ox,qy=p.y-PLAYER_CENTER_FROM_FEET-oy,qdist=Math.hypot(qx,qy);
+  // The cable may slacken, but can never extend farther than its length.
+   const safetyLength=ropeABMode==='B'?len*1.12:len;
+   if(qdist>safetyLength){
+    const ux=qx/qdist,uy=qy/qdist;
+    const x=ox+ux*safetyLength,y=oy+uy*safetyLength+PLAYER_CENTER_FROM_FEET;
+   if(!collides(x,y)){
+    // One continuous correction is enough at small substeps; do not teleport
+    // across solid tiles after an axial moveStep collision.
+    const steps=Math.ceil(Math.hypot(x-p.x,y-p.y)/.10);
+    let clear=true;
+    for(let k=1;k<=steps;k++){
+     if(collides(p.x+(x-p.x)*k/steps,p.y+(y-p.y)*k/steps)){clear=false;break;}
+    }
+    if(clear){p.x=x;p.y=y;}
+    else{releaseRope();flash('로프가 장애물에 걸려 풀렸어요');return;}
+   }else{releaseRope();flash('스윙 경로가 막혀 로프가 풀렸어요');return;}
+   const outward=p.vx*ux+p.vy*uy;
+   if(outward>0){p.vx-=outward*ux;p.vy-=outward*uy;}
+  }
+  // A collision can zero a component of velocity; the player must stay valid.
+  if(collides(p.x,p.y)){p.x=beforeX;p.y=beforeY;p.vx=0;p.vy=0;releaseRope();return;}
+ }
+ if(dir)p.facing=dir;
+ rope.swingElapsed+=dt;
+ p.grounded=false;coyoteTime=0;
+ moveCamera(dt);
+}
+// P1.6-E: A rope button only connects or disconnects. Vertical traversal is
+// entirely owned by directional input. Rope state is transient as before.
+function detachRopeWithoutJump(){
+ if(!rope.active)return false;
+ const a=rope.anchor;
+ if(a){ropeSnap={ax:a.faceX,ay:a.faceY,bx:p.x,by:p.y-PLAYER_CENTER_FROM_FEET,life:.24,maxLife:.24};}
+ const preserveSwing=rope.mode==='swing';
+ releaseRope();
+ if(!preserveSwing){p.vx=0;p.vy=0;}
+ p.grounded=false;ropeGrabCooldown=Math.max(ropeGrabCooldown,.18);
+ input.reelIn=false;input.reelOut=false;
+ ropeStatusNotice=.6;
+ flash('로프 해제 · 점프 없이 자유낙하');
+ return true;
+}
+function toggleRope(){
+ if(paused||ssM16TransitionLocked)return false;
+ if(rope.active)return detachRopeWithoutJump();
+ ropeAutoMoveEnabled=false;
+ if(ropeGrabCooldown>0&&!(ropeChainWindow>0&&ropeChainRemaining>0&&!collides(p.x,p.y+.055)))return false;
+ const chaining=ropeChainWindow>0&&ropeChainRemaining>0&&!collides(p.x,p.y+.055);
+ const a=ropeCandidate||findRopeAnchor();
+ if(!a){flash('위쪽에 잡을 수 있는 암벽과 빈 통로가 필요해요');return false;}
+ if(chaining){
+  ropeChainRemaining--;ropeChainWindow=0;ropeGrabCooldown=0;
+  const d=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+  rope={active:true,anchor:a,targetY:a.targetY,attached:true,mode:'swing',swingLength:Math.max(ROPE_MIN_LENGTH,Math.min(ROPE_MAX_LENGTH,d+.12)),swingElapsed:0};
+  ropeHangPaused=false;
+ }else{
+  rope={active:true,anchor:a,targetY:a.targetY,attached:false,mode:'vertical',surfaceExitPlan:a.surfaceExitPlan||null};
+  ropeHangPaused=true;
+ }
+ ropeAutoChain=false;ropeAscentStartY=p.y;ropeStatusNotice=.95;
+ p.vy=0;p.vx=0;
+ holdTarget=null;holdLast=null;holdProgress=0;stopMineStick();
+ hudRefreshPadInput();
+ return true;
+}
+
+function moveCamera(dt){camera.x+=(p.x*T-viewW*.5-camera.x)*Math.min(1,dt*5.3);
+ let aimY=p.y*T-viewH*.48;camera.y+=(aimY-camera.y)*Math.min(1,dt*4.3);
+ camera.x=Math.max(0,Math.min(WW*T-viewW,camera.x));camera.y=Math.max(0,Math.min(WH*T-viewH,camera.y));}
+function updatePhysics(dt){
+ const dir=(input.right?1:0)-(input.left?1:0);
+ ropeGrabCooldown=Math.max(0,ropeGrabCooldown-dt);
+ ropeChainWindow=Math.max(0,ropeChainWindow-dt);
+ ropeStatusNotice=Math.max(0,ropeStatusNotice-dt);
+ jumpBuffer=Math.max(0,jumpBuffer-dt);
+ if(rope.active){
+  // Opt-in auto never wins over an explicit player command.
+  if(ropeAutoMoveEnabled&&(input.reelIn||input.reelOut||dir||ropePointerAim))ropeAutoMoveEnabled=false;
+  if(rope.mode==='swing')ropeAutoMoveEnabled=false;
+  ropeAim=dir;
+  if(jumpBuffer>0){cutRopeJump();input.jump=false;jumpBuffer=0;}
+  else if(!solid(tile(rope.anchor.x,rope.anchor.y))){releaseRope();airLeapControl=false;flash('암벽이 사라져 로프가 풀렸어요');}
+  else if(rope.mode==='swing'){updateRopeSwing(dt,dir);return;}
+  else if(ropeHangPaused&&rope.mode!=='pull'){
+   // Left/right intentionally starts a pendulum swing, even mid-climb.
+   if(dir){
+    const a=rope.anchor;
+    const dist=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+    rope.mode='swing';rope.attached=true;
+    rope.swingLength=Math.min(ROPE_MAX_LENGTH,Math.max(ROPE_MIN_LENGTH,dist+.08));
+    rope.swingElapsed=0;rope.swingStarted=true;ropeHangPaused=false;ropeAutoChain=false;
+    p.vx=dir*2.4;p.vy=0;
+    updateRopeSwing(dt,dir);return;
+   }
+   // While ↑/↓ is released the player remains at the exact same height.
+   p.vx=0;p.vy=0;p.grounded=false;coyoteTime=0;
+   const step=(input.reelOut?1:0)-((input.reelIn||ropeAutoMoveEnabled)?1:0);
+   if(step){
+    const speed=p16RopeClimbSpeed(ropeAutoMoveEnabled?false:true)*ssCargoRopeFactor()*dt;
+    const lower=Number.isFinite(ropeAscentStartY)?ropeAscentStartY:p.y;
+    const upper=Number.isFinite(rope.targetY)?rope.targetY:p.y;
+    const desired=Math.max(Math.min(upper,lower),Math.min(Math.max(upper,lower),p.y+step*speed));
+    moveStep(0,desired-p.y); // never teleport through a tile
+    if(!rope.attached&&Math.abs(p.y-rope.targetY)<=.065){rope.attached=true;noteRopeAscent();}
+   }
+   // Automatic ascent is gone. An already-held ↑ is the only way to continue
+   // to another vertical anchor. Search only once per held press at the top.
+   // This avoids an expensive repeated raycast while ↑ is held at the roof.
+   if(!input.reelIn&&!ropeAutoMoveEnabled)rope.nextSearchSpent=false;
+   if((input.reelIn||ropeAutoMoveEnabled)&&rope.attached&&p.y<=rope.targetY+.065&&!rope.nextSearchSpent){
+    rope.nextSearchSpent=true;
+    if(rope.surfaceExitPlan){
+     if(finishRopeSurfaceExit()){hudRefreshPadInput();moveCamera(dt);return;}
+     rope.surfaceExitPlan=null;
+    }
+    const next=findRopeAnchor(true);
+    if(next&&next.targetY<p.y-.08){
+     rope={active:true,anchor:next,targetY:next.targetY,attached:false,mode:'vertical',surfaceExitPlan:next.surfaceExitPlan||null};
+     ropeAscentStartY=p.y;ropeHangPaused=true;ropeStatusNotice=.7;
+    }else if(ropeAutoMoveEnabled){
+     ropeAutoMoveEnabled=false;
+     flash('자동 상승 종료 · 더 높은 연결 지점이 없어요');
+    }
+   }
+   moveCamera(dt);return;
+  }
+  else {
+   // 2.18-F directional pulls remain stationary when attached; movement input
+   // starts swinging while legacy vertical climbs retain their old behavior.
+   if(rope.mode==='pull'&&rope.attached&&dir){
+    startRopeSwing(dir);updateRopeSwing(dt,dir);return;
+   }
+   p.vy=0;p.vx=0;p.grounded=false;coyoteTime=0;
+   if(rope.mode==='pull'){
+    const step=((input.reelIn||ropeAutoMoveEnabled)?1:0)-(input.reelOut?1:0);
+    if(step){
+     const endX=step>0?rope.targetX:(rope.originX??p.x);
+     const endY=step>0?rope.targetY:(rope.originY??p.y);
+     const dx=endX-p.x,dy=endY-p.y,distance=Math.hypot(dx,dy);
+     if(distance<=.06){
+      if(step>0&&!rope.attached){rope.attached=true;noteRopeAscent();}
+      if(step<0)rope.attached=false;
+      if(step>0&&ropeAutoMoveEnabled)ropeAutoMoveEnabled=false;
+     }else{
+      const travel=Math.min(distance,p16RopeClimbSpeed(ropeAutoMoveEnabled?false:true)*ssCargoRopeFactor()*dt),beforeX=p.x,beforeY=p.y;
+      moveStep(dx/distance*travel,dy/distance*travel);
+      if(Math.hypot(p.x-beforeX,p.y-beforeY)<.003&&dt>.004){
+       // Blocked terrain must not disconnect a stationary player.
+       ropeStatusNotice=.35;
+      }else if(step>0&&Math.hypot(rope.targetX-p.x,rope.targetY-p.y)<=.065){
+       rope.attached=true;noteRopeAscent();
+       if(ropeAutoMoveEnabled)ropeAutoMoveEnabled=false;
+      }else if(step<0){rope.attached=false;}
+     }
+    }
+   }
+   else if(p.y>rope.targetY+.04){const prev=p.y;moveStep(0,-Math.min(p.y-rope.targetY,p16RopeClimbSpeed(false)*ssCargoRopeFactor()*dt));
+    if(p.y>prev-.005){releaseRope();airLeapControl=false;flash('위쪽 통로가 막혀 로프가 풀렸어요')}}
+   else {p.y=rope.targetY;if(!rope.attached){rope.attached=true;noteRopeAscent();}}
+   if(rope.active&&rope.surfaceExitPlan&&rope.attached){
+    if(!finishRopeSurfaceExit()){rope.surfaceExitPlan=null;ropeAutoChain=false;}
+    moveCamera(dt);return;
+   }
+   // Vertical connections use the manual ↑/↓ state above; no auto-chain or
+   // long-press chaining is permitted in the fallback physics branch.
+   moveCamera(dt);return;
+  }
+ }
+ const onFloor=collides(p.x,p.y+.055);
+ p.grounded=onFloor;
+ if(onFloor){airLeapControl=false;coyoteTime=COYOTE_WINDOW;}
+ else coyoteTime=Math.max(0,coyoteTime-dt);
+ if(jumpBuffer>0&&coyoteTime>0){p.vy=-mobilityDerived().jumpImpulse;p.grounded=false;input.jump=false;jumpBuffer=0;coyoteTime=0;}
+ const target=dir*mobilityDerived().moveSpeed*ssCargoMoveFactor();
+ const accel=onFloor?(dir?39:55):(airLeapControl?(dir?27:17):(dir?19:12));
+ p.vx=approach(p.vx,target,accel*dt);
+ if(dir)p.facing=dir;
+ p.vy=Math.min(14.5,p.vy+23*dt);
+ moveStep(p.vx*dt,p.vy*dt);
+ // After an intentional rope-cut leap, help the character land on a verified
+ // nearby ledge once their feet actually clear the surface. No wall teleport.
+ if(ropeLeapLedgePlan){
+  const plan=ropeLeapLedgePlan;
+  if(p.vy<0&&p.y<=plan.exitY+.03){
+   if(!dir){
+    moveStep(plan.landingX-p.x,0);
+    if(Math.abs(p.x-plan.landingX)<=.07){p.vx=0;ropeLeapLedgePlan=null;flash('도약 후 지표 가장자리에 착지할 수 있어요');}
+   }else{ropeLeapLedgePlan=null;} // respect explicit player steering
+  }
+  if(ropeLeapLedgePlan&&(p.grounded||(p.vy>0&&p.y>plan.surfaceY+1.5)))ropeLeapLedgePlan=null;
+ }
+ if(p.x<1){p.x=1;p.vx=Math.max(0,p.vx)}
+ if(p.x>WW-2){p.x=WW-2;p.vx=Math.min(0,p.vx)}
+ if(collides(p.x,p.y+.055)&&p.vy>=0){p.grounded=true;airLeapControl=false;coyoteTime=COYOTE_WINDOW;}
+ refillRopeLeapsOnGround(dt);
+ moveCamera(dt);
+}
+
+// Lift stations: two discoveries in a continuous world, not fixed numbered floors.
+function transportState(){return game.transport}
+function stationById(id){return STATION_DATA.find(x=>x.id===id)||STATION_DATA[0]}
+function closestStation(){if(ssRegion!=='mine')return null;let best=null,distance=Infinity;for(const station of STATION_DATA){let d=Math.hypot(p.x-station.x,(p.y-.4)-(station.foot-.5));if(d<distance){best=station;distance=d}}return distance<=5.4?best:null}
+function rememberStation(station){const tr=transportState();if(!tr.discovered.includes(station.id)){
+ tr.discovered.push(station.id);saveGame(true);flash(station.name+' 발견! 승강장을 살펴보세요');}
+ if(tr.unlocked.includes(station.id))tr.lastSafeId=station.id;}
+function updateMobilityHud(){nearbyStation=closestStation();if(nearbyStation)rememberStation(nearbyStation);
+  ssTreasureSyncAction();const lift=$('stationAction'),shelter=closestShelter(),building=nearbyStation||shelter?null:closestBuilding();
+  lift.classList.toggle('visible',!!(nearbyStation||building||shelter));lift.classList.toggle('building-context',!!building);lift.classList.toggle('shelter-context',!!shelter);
+   if(shelter){lift.textContent='⌂ 쉼터 휴식';lift.setAttribute('aria-label','가까운 지하 쉼터에서 휴식하고 저장하기');}
+   else if(nearbyStation){lift.innerHTML=`${asset('station','md')}<span>${transportState().unlocked.includes(nearbyStation.id)?'승강장 이동':'승강장 수리'}</span>`;lift.setAttribute('aria-label','승강장 이용');}
+  else if(building){lift.innerHTML=`${shopIcon(building.id==='forge'?'forge':'sell')}<span>${building.name} 입장</span>`;lift.setAttribute('aria-label',building.name+' 입장');}
+
+ if(!rope.active)ropeCandidate=ropeGrabCooldown>0?null:findRopeAnchor();
+ const jumpButton=$('jump'),boostReady=rope.active&&remainingRopeLeaps()>0;
+ jumpButton.classList.toggle('ropeboost',boostReady);
+ $('jumpLabel').textContent=rope.active?`도약 ${remainingRopeLeaps()}/${mobilityDerived().ropeLeapMax}`:'점프';
+ jumpButton.setAttribute('aria-label',rope.active?`로프 도약 남은 횟수 ${remainingRopeLeaps()}회, 최대 ${mobilityDerived().ropeLeapMax}회`:'점프');
+ p16UpdateRopeDeviceHud();
+ const b=$('ropeBtn');
+ b.classList.add('visible');b.classList.toggle('attached',rope.active);b.classList.toggle('hang-paused',ropeHangPaused);b.disabled=false;
+ b.innerHTML=`<img class="duri-rope-coil" alt="" aria-hidden="true" src="data:image/png;base64,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"><span class="duri-rope-label">${rope.active?'로프 해제':'로프 연결'}</span>`;
+ b.setAttribute('aria-label',rope.active?'로프 해제. 누르면 도약 없이 자유낙하. 왼쪽 패드 위아래로 이동하거나 줄 조절, 좌우로 스윙, 드래그로 연결점 변경':'로프 연결. 탭으로 연결하고 드래그로 연결점 조준');
+ jumpButton.dataset.aim=rope.active&&boostReady?(ropeAim<0?'left':ropeAim>0?'right':'up'):'up';
+}
+function stationMenu(){const station=closestStation();if(!station){flash('승강장 근처에서 이용할 수 있어요');return}
+ rememberStation(station);let tr=transportState(),unlocked=tr.unlocked.includes(station.id);
+ let costLabel=`돌 ${STATION_COST.stone}개 · 구리 ${STATION_COST.copper}개 · ${STATION_COST.coins} 크레딧`;
+ let canPay=(game.inv.stone||0)>=STATION_COST.stone&&(game.inv.copper||0)>=STATION_COST.copper&&game.coins>=STATION_COST.coins;
+ let rows=STATION_DATA.map(s=>{let found=tr.discovered.includes(s.id),active=tr.unlocked.includes(s.id),current=s.id===station.id;
+ return `<div class="line"><div><strong>${found?s.name:'??? 미발견 정거장'}</strong><br><small>${current?'현재 위치 · ':''}${active?'개방됨':found?'수리 필요':'탐험해서 발견하세요'}</small></div><button data-dest="${s.id}" ${!active||current?'disabled':''}>${current?'현재 역':'이동'}</button></div>`}).join('');
+ let repair=unlocked?'':`<div class="line"><div><strong>${asset('station','sm')} 승강장 복구</strong><br><small>${costLabel}</small><br><small>현재: 돌 ${game.inv.stone||0} · 구리 ${game.inv.copper||0} · 크레딧 ${game.coins}</small></div><button class="cta" id="repairLift" ${canPay?'':'disabled'}>수리</button></div>`;
+ showModal(station.name,`<p>정거장을 발견하고 복구하면 다른 개방된 정거장까지 이동할 수 있어요. 직접 탐험한 지역만 이동망에 등록됩니다.</p>${repair}${rows}<p class="note">승강장 이용료 없음 · 미발견 지역은 바로 이동할 수 없음 · 긴급 구조는 ☰ 전체 메뉴에서 무료로 사용 가능</p>`);
+ if(!unlocked)$('repairLift').onclick=()=>{
+  const ok=safeMarketTransaction(draft=>{
+   if((draft.inv.stone||0)<STATION_COST.stone||(draft.inv.copper||0)<STATION_COST.copper||draft.coins<STATION_COST.coins)return false;
+   if(!draft.transport||!Array.isArray(draft.transport.unlocked)||draft.transport.unlocked.includes(station.id))return false;
+   draft.inv.stone-=STATION_COST.stone;draft.inv.copper-=STATION_COST.copper;draft.coins-=STATION_COST.coins;
+   draft.transport.unlocked.push(station.id);draft.transport.lastSafeId=station.id;return true;
+  });
+  if(ok){stationMenuRefresh(station);flash(station.name+' 개방!');}
+ };
+ document.querySelectorAll('[data-dest]').forEach(el=>el.onclick=()=>travelStation(el.dataset.dest));
+}
+function stationMenuRefresh(station){closeModal();stationMenu()}
+function safeLanding(station){for(let off of [0,-.5,.5,-1,1,-1.5,1.5,-2,2]){
+ let x=station.x+off;if(!collides(x,station.foot))return {x,y:station.foot};
+ }return null;}
+function travelStation(id){let s=STATION_DATA.find(t=>t.id===id),tr=transportState();if(!s||!tr.unlocked.includes(s.id)||!tr.discovered.includes(s.id)){flash('아직 개방하지 않은 정거장이에요');return false}
+ const landing=safeLanding(s);if(!landing){flash('도착 위치가 막혀 있어 이동할 수 없어요');return false}
+ releaseRope();stopMineStick();input.left=input.right=input.jump=input.act=false;holdTarget=null;holdLast=null;holdProgress=0;
+ p.x=landing.x;p.y=landing.y;p.vx=0;p.vy=0;tr.lastSafeId=s.id;camera.x=p.x*T-viewW*.5;camera.y=p.y*T-viewH*.48;
+ closeModal();saveGame(true);updHud();flash(s.name+' 도착');return true}
+function rescuePlayer(){const tr=transportState();const dest=stationById(tr.lastSafeId);if(!travelStation(dest.id))travelStation('surface');}
+function tileColor(t){return ({grass:'#729e50',dirt:'#9c7047',stone:'#8293a5',stationrock:'#6d7f90',orecoal:'#343f4d',copper:'#db9562',iron:'#adc4c6',crystal:'#a6e5ed',titanium:'#9ed2e0',starshard:'#e0d2ff',amber:'#eab05e',opal:'#b2a4ed',relic:'#e7c27a',wood:'#bd7f4e',wall:'#cb955f',glass:'#a6e6ec',bed:'#d98e90',chest:'#b99b62'})[t]||'#bca78c'}
+const stationAtlas=new Image();
+let stationAtlasReady=false;
+stationAtlas.onload=()=>{stationAtlasReady=true;tileCache.clear();};
+stationAtlas.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAQCAYAAACm53kpAAAB/UlEQVR4nOWXz0sbQRzFP7FBPMRbUExsT03xoieDh1IlglZbSsUoKoigQi8Vbz3VoyK0CP4FnnLpLy8iTUshtAUvSpQIIoKIhyh6ElZEhKqHdcbMZHeiIUIXHyzsm+973+/wdtlMfJFo7MJX9oBicHH+DwAv+/0AL7riRTVYnP+M1/1lgrwZaCP5fYFgVdB4CZ0Or/r94qZ7aByAxoYnxtSEzm3da34ZwOzMtNGo65K/lhzXveaXAaxkthRhrDmq8NSfZWNj3X9brGS2iFf+AOCb9dxRY6o7za8O1QBwsLfvOlcGkNnYVAo61xEKBl31e9ksXwePlXpPIkAoHDb6401qr7PTUwDKKyoAlLppvkDbVQBONeH351VKhJ5E4K5alxQygKdNUZMuDzvbOwrP9X+ZzwLIt0CEkatx9u8qutTvv5rvum6aL3BiHbvWhP9O3oDe7i4APp0IXlyfWMuz0mzIABmAZVkAvH1sp94+ZT/Fn+/DCn/d1+/YSPiLhWVZUFmgl6Eu1kaqFgGYO3xp5B+wPygygHR6DYDRtD3lYaTO5vZhS3Khe1Rbq2xArN8UTv401VfMuVdu3W3+SMfNuIA8CU6+G2ZjfbXgxt10/4t/LBlmLHn9a6Pzo/oJWj8eSp53EtST1VHoJOY1vwygo/OV0VhI51W/777/Hb4E/ZgvJFK18FgAAAAASUVORK5CYII=';
+const tileCache=new Map();
+function sprite(t,v=0){let cacheKey=t+v;if(tileCache.has(cacheKey))return tileCache.get(cacheKey);let c=document.createElement('canvas');c.width=c.height=16;let g=c.getContext('2d');g.imageSmoothingEnabled=false;const f=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(x,y,w,h)};
+ const specks=(color,num)=>{for(let i=0;i<num;i++){let rx=Math.floor(hash(i*53+v*677+t.length*131)*15),ry=Math.floor(hash(i*37+v*131+t.length*521)*15);f(rx,ry,1+(i%3===0?1:0),1,color)}};
+ if(t==='dirt'||t==='grass'||t==='sand'||t==='snow'){
+  f(0,0,16,16,t==='sand'?'#c8ac6d':t==='snow'?'#a8b9c6':'#987249');f(1,2,14,13,t==='sand'?'#d4ba7e':t==='snow'?'#d4e6eb':'#ac8255');specks('#7c563e',12);
+  if(t==='snow'){f(0,0,16,4,'#ecf8f5');f(0,3,16,2,'#b5d2e0')}if(t==='sand'){f(0,0,16,2,'#ebcc84')}if(t==='grass'){f(0,0,16,4,'#487d43');f(0,0,16,2,'#89c878');for(let x=0;x<15;x+=3)f(x,2,2,3,'#59954a')}
+ }else if(['stone','stationrock','orecoal','copper','iron','crystal','titanium','starshard','amber','opal','relic','bedrock'].includes(t)){
+  if(t==='stationrock'){f(0,0,16,16,'#53606d');f(1,1,14,14,'#7a8897');f(2,2,12,12,'#8e9aa8');f(3,4,10,2,'#bec9d1');f(4,8,8,1,'#5d6a77');f(1,7,14,1,'#44515c');for(let i=2;i<14;i+=4)f(i,1,1,14,'#5c6d7a');}else{f(0,0,16,16,t==='bedrock'?'#2d3440':'#677b8a');f(1,1,14,14,t==='bedrock'?'#3e4754':'#8493a0');f(3,4,5,2,'#a2aeb5');f(10,12,4,1,'#566d7d');f(8,0,1,5,'#627487');specks('#6e8290',7);}
+  if(t==='orecoal'||t==='copper'||t==='iron'||t==='crystal'||t==='titanium'||t==='starshard'||t==='amber'||t==='opal'||t==='relic'){
+   let col={orecoal:'#27313a',copper:'#eaa46c',iron:'#c8d6cb',crystal:'#8af7e8',titanium:'#98d6f0',starshard:'#d8b1ff',amber:'#f7c36b',opal:'#dbb7ff',relic:'#efd88d'}[t],dark={orecoal:'#1d2630',copper:'#945c42',iron:'#6c8a91',crystal:'#448da9',titanium:'#4c728c',starshard:'#735298',amber:'#b17e46',opal:'#7265bd',relic:'#987942'}[t];
+   f(2,4,5,4,dark);f(3,4,4,2,col);f(10,9,4,5,dark);f(11,9,3,3,col);if(t==='crystal'||t==='opal'||t==='starshard'){f(6,1,2,7,t==='opal'?'#e9bfff':'#aff7f9');f(7,0,1,8,'#e7ffff');f(12,8,1,6,'#d4fdff')}if(t==='amber'){f(2,2,11,9,'#845435');f(4,3,7,7,'#f3b75f');f(7,5,3,3,'#ffe4a8')}if(t==='relic'){f(2,2,12,12,'#705b84');f(3,3,10,10,'#d4b66f');f(6,5,5,6,'#815c9c');f(8,2,1,13,'#f7e2a5')}
+  }
+ }else if(t==='wood'){
+  f(0,0,16,16,'#78502e');f(2,0,12,16,'#b7814b');f(4,0,2,16,'#dda25e');f(11,0,2,16,'#916135');f(6,6,4,3,'#885e37');f(7,7,2,1,'#e4b476')
+ }else if(t==='wall'){
+  f(0,0,16,16,'#af8252');for(let y=0;y<16;y+=5){f(0,y,16,1,'#704f35');f(0,y+1,16,1,'#dba867')}f(v%2?7:4,0,1,5,'#7e5e3f');f(v%2?5:11,6,1,5,'#866343')
+ }else if(t==='glass'){
+  f(0,0,16,16,'#5a9eaa');f(1,1,14,14,'#98dce180');f(2,2,3,11,'#ddffff');f(8,2,3,2,'#e8ffff');f(13,6,1,6,'#c9f8ec');f(0,7,16,1,'#6eafb3')
+ }else if(t==='torch'){
+  f(7,7,3,9,'#7a4a2e');f(7,5,4,6,'#d3a36e');f(5,2,7,7,'#f7ae4b');f(6,0,5,6,'#ffe49c');f(7,1,3,4,'#fff8ca')
+ }else if(t==='bed'){
+  f(1,10,14,4,'#5d3f37');f(2,7,12,5,'#c8797e');f(2,6,4,4,'#fff5d9');f(2,13,2,3,'#57392b');f(12,13,2,3,'#57392b');f(5,6,9,2,'#e6a5a2')
+ }else if(t==='chest'){
+  f(1,4,14,11,'#755537');f(2,5,12,9,'#bb8d55');f(2,7,12,2,'#755032');f(7,8,3,4,'#f8d38a');f(2,12,12,1,'#e4aa5a');f(1,3,14,3,'#ce9c5b')
+ }
+ if(t==='stationrock'&&stationAtlasReady){
+  g.clearRect(0,0,16,16);
+  g.drawImage(stationAtlas,(v&3)*16,0,16,16,0,0,16,16);
+ }
+ tileCache.set(cacheKey,c);return c;
+}
+
+// SANDSTAR 2.12: original terrain & ore atlas, embedded for offline single-file play.
+const TERRAIN_ATLAS_INFO = {"schema": "sandstar.pixelatlas.v1", "pack": "SANDSTAR Terrain & Ore Pack P0", "created": "2026-11-10", "origin": "original procedural pixel art generated in-session; no external copyrighted assets", "tile_width": 16, "tile_height": 16, "columns": 4, "rows": 16, "pixel_art": true, "tile_types": ["grass", "dirt", "sand", "snow", "stone", "bedrock", "orecoal", "copper", "iron", "crystal", "amber", "opal", "relic", "wood", "wall", "glass"], "variants": 4, "row_map": {"grass": 0, "dirt": 1, "sand": 2, "snow": 3, "stone": 4, "bedrock": 5, "orecoal": 6, "copper": 7, "iron": 8, "crystal": 9, "amber": 10, "opal": 11, "relic": 12, "wood": 13, "wall": 14, "glass": 15}, "reuse": {"reused_as_is": ["SANDSTAR_Lift_P0/stationrock_atlas_4x16.png", "SANDSTAR_2.11_Lift_Sprite/lift_door_80x107.png", "SANDSTAR_2.11_Lift_Sprite/lift_door_locked_80x107.png", "SANDSTAR_Miner_P0/sandstar_miner_24f_32x40.png", "SANDSTAR_UI_Icon_P0/ui_icons_16x16.png"], "not_found_as_reusable": ["No dedicated terrain/ore atlas found in current /mnt/data set", "No existing seamless dirt/stone/ore variant pack found for direct drop-in reuse"]}};
+const terrainOreAtlas = new Image();
+let terrainOreAtlasReady = false;
+terrainOreAtlas.onload = () => { terrainOreAtlasReady = true; tileCache.clear(); };
+terrainOreAtlas.onerror = () => { terrainOreAtlasReady = false; };
+terrainOreAtlas.src = 'data:image/png;base64,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';
+const TERRAIN_TILE_ROW = {"grass": 0, "dirt": 1, "sand": 2, "snow": 3, "stone": 4, "bedrock": 5, "orecoal": 6, "copper": 7, "iron": 8, "crystal": 9, "amber": 10, "opal": 11, "relic": 12, "wood": 13, "wall": 14, "glass": 15};
+const spriteLegacy = sprite;
+sprite = function(t,v=0){
+  if(terrainOreAtlasReady && Object.prototype.hasOwnProperty.call(TERRAIN_TILE_ROW,t)){
+    const variant=(v&3), cacheKey='terrainAtlas:'+t+':'+variant;
+    if(tileCache.has(cacheKey)) return tileCache.get(cacheKey);
+    const c=document.createElement('canvas'); c.width=c.height=16;
+    const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
+    const row=TERRAIN_TILE_ROW[t];
+    g.drawImage(terrainOreAtlas, variant*16, row*16, 16, 16, 0, 0, 16, 16);
+    tileCache.set(cacheKey,c); return c;
+  }
+  return spriteLegacy(t,v);
+};
+window.__sandstarTerrainArt = ()=>({ready:terrainOreAtlasReady,width:terrainOreAtlas.naturalWidth,height:terrainOreAtlas.naturalHeight,rowMap:TERRAIN_TILE_ROW,variants:4});
+
+function drawSky(){let depth=Math.max(0,p.y-terrain(p.x));let grd=ctx.createLinearGradient(0,0,0,viewH),biome=biomeAt(p.x);let colors=biome==='desert'?['#89b9c1','#ead5a1','#f1ca8f']:biome==='snow'?['#8398b8','#bed6e8','#e9f6fa']:['#73aebc','#b1d4c0','#e5d5ae'];grd.addColorStop(0,colors[0]);grd.addColorStop(.45,colors[1]);grd.addColorStop(1,colors[2]);ctx.fillStyle=grd;ctx.fillRect(0,0,viewW,viewH);
+ let sunX=viewW*.75-camera.x*.015,sunY=Math.max(30,viewH*.18-camera.y*.02);ctx.fillStyle='#fff0b5';ctx.beginPath();ctx.arc(sunX,sunY,32,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffe7ad33';ctx.beginPath();ctx.arc(sunX,sunY,47,0,Math.PI*2);ctx.fill();
+ for(let layer=0;layer<3;layer++){let base=viewH*(.55+layer*.14)-camera.y*(.06+layer*.03),xShift=camera.x*(.09+layer*.09);ctx.beginPath();ctx.moveTo(0,viewH);for(let sx=-30;sx<=viewW+40;sx+=15){let wx=sx+xShift;let h=Math.sin(wx*.011+layer*2)*31+Math.cos(wx*.026+layer)*15;ctx.lineTo(sx,base+h)}ctx.lineTo(viewW,viewH);ctx.closePath();ctx.fillStyle=['#8eabb0','#6b98a0','#508783'][layer];ctx.fill()}
+ for(let i=0;i<13;i++){let x=((i*211+hash(i+game.seed)*130-camera.x*.17)%(viewW+150)+viewW+150)%(viewW+150)-30,y=60+hash(i*37+game.seed)*viewH*.25-camera.y*.012;ctx.fillStyle='#e7f4dcce';ctx.fillRect(x,y,45,9);ctx.fillRect(x+11,y-7,26,9)}
+ if(depth>0){ctx.fillStyle=`rgba(16,29,43,${Math.min(.85,depth/14)})`;ctx.fillRect(0,0,viewW,viewH)}
+}
+// 2.18-H3 DURI OreArt-P0: visual-only preview of four verified 32px sprites.
+// Existing tile IDs, mined drops, progression, rarity, saveGame and price rules DO NOT change.
+const DURI_ORE_ART_URLS=Object.freeze({
+ "ore_starshard":"data:image/png;base64,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",
+ "ore_titanium":"data:image/png;base64,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",
+ "fossil_amber":"data:image/png;base64,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",
+ "ancient_cache":"data:image/png;base64,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"
+});
+const duriOreImages=Object.fromEntries(Object.entries(DURI_ORE_ART_URLS).map(([name,url])=>{const image=new Image();image.src=url;return [name,image]}));
+const DURI_ORE_VISUAL_PREF='sandstar-duri-ore-visual-preview-v1';
+let duriOrePreviewEnabled=true;
+try{duriOrePreviewEnabled=localStorage.getItem(DURI_ORE_VISUAL_PREF)!=='0'}catch(_){}
+const DURI_ORE_VISUAL_MAP=Object.freeze({
+ titanium:'ore_titanium',starshard:'ore_starshard',amber:'fossil_amber',relic:'ancient_cache'
+});
+function duriOreVisualForTile(t,x,y){
+ if(!duriOrePreviewEnabled)return null;
+  // Real resource tiles: no iron/crystal disguise, no impact on rarity or rewards.
+ return DURI_ORE_VISUAL_MAP[t]||null;
+}
+function duriDrawOreWorldTile(t,x,y,sx,sy){
+ const key=duriOreVisualForTile(t,x,y),img=key&&duriOreImages[key];
+ if(!img||!img.complete||img.naturalWidth!==32)return false;
+ ctx.drawImage(img,Math.round(sx),Math.round(sy),T+1,T+1);
+ return true;
+}
+function duriOreGallery(){
+ const entries=[
+  ['ore_starshard','별조각 원석','독립 자원 · 심층 수정 광맥에서 획득'],
+  ['ore_titanium','티타늄','독립 자원 · 중층 철 광맥에서 획득'],
+  ['fossil_amber','호박석 화석','기존 호박석 블록의 외형'],
+  ['ancient_cache','고대 궤짝','기존 고대 유물 블록의 외형']
+ ];
+ const html='<p>두리 에셋 4종입니다. <b>티타늄·별조각은 별도 채굴 자원</b>으로 저장·판매할 수 있습니다. 고대 궤짝은 기존 고대 유물의 외형이며 개봉 기능은 아직 없습니다.</p>' +
+ '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'+
+ entries.map(([id,label,note])=>'<div style="padding:10px;border-radius:10px;background:#152c3a;border:1px solid #6a8580;text-align:center"><img src="'+DURI_ORE_ART_URLS[id]+'" width="76" height="76" alt="'+label+'" style="image-rendering:pixelated;display:block;margin:0 auto 5px"><strong>'+label+'</strong><br><small>'+note+'</small></div>').join('')+'</div>';
+ showModal('두리 광물·유물 비주얼',html);
+}
+window.__sandstarDuriOreArt={
+ ready:()=>Object.fromEntries(Object.entries(duriOreImages).map(([k,v])=>[k,v.complete&&v.naturalWidth===32])),
+ mapping:()=>({...DURI_ORE_VISUAL_MAP}),
+ imageForTile:(t,x,y)=>duriOreVisualForTile(t,x,y),
+ getEnabled:()=>duriOrePreviewEnabled,
+ setEnabled:(on)=>{duriOrePreviewEnabled=!!on;try{localStorage.setItem(DURI_ORE_VISUAL_PREF,duriOrePreviewEnabled?'1':'0')}catch(_){}return duriOrePreviewEnabled},
+ preview:duriOreGallery,visualOnly:false
+};
+/* 2.18-H3 shelter P0: quarry shelter supports local rest/checkpoint save; three other facility sprites remain decorative. */
+const DURI_FACILITY_ASSETS=Object.freeze({"station_shelter": "data:image/png;base64,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", "wall_lantern": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFl0lEQVR4nOWWTWwUZRjH/+87n7uzu7S72+5SKNhKF2gtpRRq+VAIjYoaEQ8ExehJ48GDB2+ejCYmHtSQGBMOXkiUkCiJUQzSqPgBSKgEC6XtFmih3e3u9mO3uzvfM+94oE00MWGa7M3/dZ785zfP+3/meQEfeqyv9/zB5570tm55JE1B6T+fcYQSjlDix+e/RB9cAng83aHqOizHbiOUiALHU1EQ+KAciHdt6bh58OATTnNTUwoACFkZC++nyHFcQAca4lHEdvWclSRxMwhtVFUNd8YnThmmMdjb1/3d1OlsyvO82gO4rkt1XYeu64wAexcXK7dNw/7csewLFb16pqrqDUFFuQOAAFgRgS8AAgLDMLBYWqSKolRnC/N9rufOERBseij+sssF3ikWy2dX+nLAZwZM02KSJDnRWBS5mcJO13PnACAgi1z75tUfG6bVnpvJfQAAK4yAzxB6HmzH4Qv5AkzLvA0AsbAUeKyj/tPpu7nGNcEKnt2hfLghGUh53sohHqiuri3F7u5OvbVlnUcpJwkcJa/2r/1jfUxpl3lpuyLJr4REMfLSrtgfa6NyM+Afwl8HmMsLoiBLkgTGmN3VqvROzlS/uDuv3kzU05E1Mfp91bLKv45UXtjcJL0J3E+jH/kK4e30xG5e4Ds8l80AHgtKdNu9vDEAAJ3r5HPJen7XRNZqnK04BYHjOwEK5rHaAaimNgQTQ8ttFQhJwOHqn+kMvXVof3O7tlhyDveYJ86PWW8blntLoITaDL4IfAEA/z5T4hG5KULf7+uQ+xPNDWyemtiwrnwgu4g2ClYJSESwdZg1BVj+wa0KCHK5apeGpszXLM+cGBwfZPMlnamaI07N8x8l6pgYFNBW1nHD14f5BQAAgXL06Z7IdKnE0gHO4nZ3Bvf07Gxn99KT9OZYESPTTiFf5n5ubiRHrk05LdmSMfkgT19TsCybuSw3Z/zY0x7Yq5psi6a5qCwWaLliwLCBsu5EezaLRyQJhZmSVfDj6RtgeQm3NUvG0Lj+S9UgJxuTCuqiCSdaJ7OGOh6RoDAxOOJ8mYhQ6oHVNgNsKdOKRPcsqtax9Kx99cxvM2/cmLKcuQWVL8zpdGqBO2c57idBIXg0KHCyZrtqzQDui3KxILdJ05h6YM+O1/o31iOOBX7BGOYnk02Y62g98vOV4a8VzkU0JK3XitrNmgAs79iQxAfD1IYcUgKPN0cPP//0UxCunuJ5T0N6NuGkw4H4dDLZC3sy3xAmqekiHgjgLwNLsxIJ0rDo2VAkYXtCcOuE4QtMFK8h/ByHJn6WrjXyqJO83XAZS67iWvxY+wJYntX4KrqBJxxcQ41k1AxsNYe6fY0Q9u1GfKOBebeIilZcXxfhqmti6K8ZwLLiIfpwtmSMi8rq82tEBYO5IWeadsNiR3DRI4x6NlrD8eHRWXzVECKP1g5gqQXRAN9zu0B/n1ero1EmoTehsD8vZ3D8vZNoCvLYFlJge3b+2qQ5EKZcvHYAS7KZazFBWH19Mv/r5dnC0OnBoiyUcmzfdgM//KTSc7M2zo5l37NATNX2Z+2vamkPjExZA9tapQNbV4v7P7t459ylkoMbw1X27YlBNjoPeuxKdtyyWepQX/1Xf97Tf/djvcLLEyE7W+TjjzRzr2cKdjWZ4EOxZBTpsTlUNAeVKrTUWjG4oJOhgevaPgesWGMAgIAGXuwNaEefaGRtPSk6OJTHxGgGlDFEA5xxeawqf3PN2lU0nEt+/PzfB3D/JCIBEvIcD5MZ09L4nHjjr2kK28FY1kZylcCyRRf1Cm0sGv58/YdwqVdxhfYlYzwcUMjEoxXVxZVbOkIShcc8XhYJwjJ5coW2/kVBhVSD+Ma2jcqBzlTDo9WFhXgmrzOe5+hM0UmPZuyBTNl913CduZV6/z/1N2uhfNHDXZRoAAAAAElFTkSuQmCC", "oxygen_capsule": "data:image/png;base64,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", "safety_net": "data:image/png;base64,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"});
+const duriFacilityImages=Object.fromEntries(Object.entries(DURI_FACILITY_ASSETS).map(([name,raw])=>{
+ const img=new Image();img.src=raw;return [name,img];
+}));
+const DURI_FACILITY_PREVIEW_KEY='sandstar-duri-facilities-preview-v1'; // Toggle affects the remaining decorative sprites; shelter remains visible.
+let duriFacilitiesVisible=true;
+try{duriFacilitiesVisible=localStorage.getItem(DURI_FACILITY_PREVIEW_KEY)!=='0'}catch(_){}
+function duriFacilityPlacements(){
+ const st=STATION_DATA.find(v=>v.id==='quarry');if(!st)return [];
+ const sx=st.x,base=st.foot;
+ return [
+  {id:'station_shelter',x:sx-4.3,foot:base,w:76,h:76,label:'지하 쉼터'},
+  {id:'wall_lantern',x:sx-3.35,foot:base-2.1,w:24,h:24,label:'벽걸이 랜턴'},
+  {id:'oxygen_capsule',x:sx+3.15,foot:base,w:26,h:39,label:'산소 캡슐'},
+  {id:'safety_net',x:sx+1.85,foot:base,w:56,h:30,label:'안전망'}
+ ];
+}
+function drawDuriFacilities(){
+  if(ssRegion===TOWN_WORLD_ID)return;
+  ctx.save();ctx.imageSmoothingEnabled=false;
+  for(const item of duriFacilityPlacements()){
+   if(!duriFacilitiesVisible&&item.id!=='station_shelter')continue;
+  const img=duriFacilityImages[item.id];if(!img||!img.complete||!img.naturalWidth)continue;
+  const sx=Math.round(item.x*T-camera.x),sy=Math.round(item.foot*T-camera.y-item.h);
+  if(sx>viewW+item.w||sx+item.w<0||sy>viewH+item.h||sy+item.h<0)continue;
+  ctx.drawImage(img,sx,sy,item.w,item.h);
+ }
+ ctx.restore();
+}
+// Local-only shelter P0: use the existing station proximity UX, no remote save or health economy.
+function closestShelter(){
+  if(ssRegion!=='mine')return null;
+  if(!p)return null;
+  const place=duriFacilityPlacements().find(item=>item.id==='station_shelter');if(!place)return null;
+  const centerX=place.x+(place.w/T)*.5;
+  return Math.abs(p.x-centerX)<=2.15&&Math.abs(p.y-place.foot)<=1.65?place:null;
+}
+function shelterTileHit(q){
+  const a=duriFacilityPlacements().find(item=>item.id==='station_shelter');
+  return !!a&&q.x+.5>=a.x&&q.x+.5<=a.x+a.w/T&&q.y+.5>=a.foot-a.h/T&&q.y+.5<=a.foot;
+}
+function shelterRestReady(){
+  return !!(closestShelter()&&!rope.active&&!collides(p.x,p.y)&&collides(p.x,p.y+.055));
+}
+function shelterMenu(){
+  if(!closestShelter()){flash('지하 쉼터 가까이에서 이용할 수 있어요');return false;}
+  const meta=normalizeShelterState(game.shelter),ready=shelterRestReady();

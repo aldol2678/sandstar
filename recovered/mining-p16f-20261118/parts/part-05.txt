@@ -1,0 +1,650 @@
+   if(y===79||y===80)return 'stationrock';
+  }
+ return undefined;
+}
+function isStationProtected(x,y){return stationProtectedType(Math.floor(x),Math.floor(y))==='stationrock';}
+function stationGeneratedTile(x,y){return stationProtectedType(x,y);}
+function ssTownTile(x,y){
+  if(x<0||x>=WW||y<0||y>=WH)return 'bedrock';
+  if(x<17||x>79)return y>=67?'bedrock':null;
+  if(y<78)return null;
+  if(y===78)return 'grass';
+  if(y<=80)return 'stationrock';
+  if(y<=86)return 'dirt';
+  return 'stone';
+}
+function tile(x,y){
+  x=Math.floor(x);y=Math.floor(y);
+  if(ssRegion===TOWN_WORLD_ID)return ssTownTile(x,y);
+ if(ssRegion==='life_forest_01'){
+  if(x<0||x>=WW||y<0||y>=WH)return 'bedrock';
+  const k=key(x,y),edits=game?.storyM1?.forestEdits;
+  if(edits&&Object.prototype.hasOwnProperty.call(edits,k))return edits[k];
+  return ssM1ForestBaseTile(x,y);
+ }
+ if(x<0||x>=WW||y>=WH)return 'bedrock';if(y<0)return null;
+ const fixed=stationGeneratedTile(x,y);
+ if(fixed!==undefined)return fixed; // security boundary precedes older saved edits
+ const k=key(x,y);
+ if(Object.prototype.hasOwnProperty.call(game.edits,k))return game.edits[k];
+ return terrainType(x,y);
+}
+function setTile(x,y,t){
+ x=Math.floor(x);y=Math.floor(y);
+  if(ssRegion===TOWN_WORLD_ID)return false; // All town terrain is permanent.
+ if(ssRegion==='life_forest_01'){
+  if(x<14||x>=144||y<0||y>=WH-6)return false;
+  // Protect the gate, crops, water, and story spring from permanent digging.
+  if((x>=M1_FOREST_GATE_X-3&&x<=M1_FOREST_GATE_X+3)||(x>=M1_FOREST_SPRING_X-3&&x<=M1_FOREST_SPRING_X+3)||(x>=33&&x<=42&&y<=81)||(x>=61&&x<=68&&y<=81))return false;
+  const edits=game.storyM1.forestEdits,k=key(x,y),base=ssM1ForestBaseTile(x,y);
+  if(t===base)delete edits[k];else edits[k]=t;
+  return true;
+ }
+ if(stationGeneratedTile(x,y)!==undefined)return false; // cannot carve/place inside station protection
+ const k=key(x,y),b=terrainType(x,y);
+ if(t===b)delete game.edits[k];else game.edits[k]=t;
+ onVisibleTileChanged(x,y,t);
+ return true;
+}
+function solid(t){return SOLIDS.has(t)||t==='bedrock'}
+let p;
+function spawnPlayer(){visionCache.cx=-999;resetSpriteAnimation();releaseRope();ropeChainRemaining=p16RopeChainCap();ropeGroundStableSeconds=0;
+ ropeLeapRemaining=Number.isSafeInteger(game?.character?.mobility?.ropeLeapRemaining)?game.character.mobility.ropeLeapRemaining:mobilityDerived().ropeLeapMax;
+ clampRopeLeaps();ropeGrabCooldown=0;ropeSnap=null;jumpBuffer=0;coyoteTime=0;airLeapControl=false;ropeHold=false;ropeHoldTime=0;ropeCandidate=null;nearbyStation=null;let x=Number.isFinite(game.playerX)?game.playerX:(game.spawnX||SPAWN_X)+.5;let y=Number.isFinite(game.playerY)?game.playerY:(game.spawnY!=null?game.spawnY:terrain(x)-1);p={x,y,vy:0,vx:0,grounded:false,facing:1,fall:0};if(collides(p.x,p.y)){p.x=SPAWN_X+.5;p.y=terrain(p.x)-1};camera.x=p.x*T-viewW*.46;camera.y=p.y*T-viewH*.47;baselineLegacyDepth();}
+// v10.1: preserve unreadable save bytes until the player backs them up.
+let ssSaveReadIssue=null,ssLivingFromLegacy=false;
+function ssExportUnreadableSave(){
+ if(!ssSaveReadIssue||typeof ssSaveReadIssue.raw!=='string'){
+  flash('저장소에서 원본 파일을 읽을 수 없어요. 브라우저 저장소 권한을 확인하세요.');return false;
+ }
+ try{
+  const blob=new Blob([ssSaveReadIssue.raw],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='SANDSTAR_unreadable_save_backup.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1200);
+  ssSaveReadIssue.backupAttempted=true;
+  flash('손상된 저장 원본 다운로드를 요청했어요. 다운로드 폴더를 확인하세요.');return true;
+ }catch(e){flash('원본 다운로드에 실패했어요. 저장 기록을 덮어쓰지 않았어요.');return false;}
+}
+function resetKey(){
+ // Commit the new world to persistent storage *before* replacing the in-memory world.
+ // A blocked/quota-full write must never strand a player in an unsaved fresh world.
+ const fresh=newGame();
+ try{localStorage.setItem(SAVE_KEY,JSON.stringify(fresh));}
+ catch(e){saveOkay=false;flash('저장 실패: 기존 월드를 유지했어요. 파일 백업을 확인하세요.');return false;}
+ releaseRope();game=fresh;ssRegion=TOWN_WORLD_ID;artifactTravelCheckpoint=0;
+ xpClaimBits=new Uint8Array(XP_BIT_BYTES);visionExploredBits=new Uint8Array(VISION_BIT_BYTES);
+ visionSolidBits=new Uint8Array(VISION_BIT_BYTES);visionCache.cx=-999;
+ spawnPlayer();p16ResetDrillMotion(true);p16HammerFractures.clear();p16DReset();ssM15ManualMining=false;ssM15Scene='';saveOkay=true;ssLivingFromLegacy=false;flash('새로운 흙별을 만들었어요');return true;
+}
+function readGame(){
+ ssSaveReadIssue=null;let raw=null;
+ try{
+  raw=localStorage.getItem(SAVE_KEY);
+  // Read-only inheritance: C1 first, then older candidates. Never write into those keys.
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_ROPE_C1_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_HAMMER_B1_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_DRILL_A3_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_DRILL_A2_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_DRILL_A1_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_FORGE_P15_SAVE_KEY);
+  if(raw===null)raw=localStorage.getItem(PREVIOUS_CRAFT_SAVE_KEY);
+   if(raw===null)raw=localStorage.getItem(PREVIOUS_TREASURE_SAVE_KEY);
+  // New experiment has its own independent key, preserving previous game and opened chests.
+  if(raw!==null){
+   const d=JSON.parse(raw);
+   if(!d||d.version!==1||!Number.isFinite(d.seed)||!d.inv||typeof d.edits!=='object')throw Error('invalid world format');
+   game=normalizeSave(d);ssRegion=game.storyM1.region;return true;
+  }
+ }catch(e){
+  saveOkay=false;
+  ssSaveReadIssue={raw,backupAttempted:false};
+ }
+ game=newGame();ssRegion=TOWN_WORLD_ID;xpClaimBits=new Uint8Array(XP_BIT_BYTES);
+ visionExploredBits=new Uint8Array(VISION_BIT_BYTES);visionSolidBits=new Uint8Array(VISION_BIT_BYTES);
+ visionCache.cx=-999;return false;
+}
+function saveGame(silent=false){if(town25dActive&&game?.town25dV1)game.town25dV1.position={x:town25dPlayer.x,z:town25dPlayer.z};if(archWorldActive&&game?.archWorldV1){game.archWorldV1.position={x:archPlayer.x,z:archPlayer.z};game.archWorldV1.cameraYaw=archYaw;}if(farmWorldActive&&game?.farmWorldV1)game.farmWorldV1.position={x:farmPlayer.x,y:farmPlayer.y};if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){game.playerX=p.x;game.playerY=p.y;if(game.storyM1){game.storyM1.region=ssRegion;if(ssRegion==='mine')game.storyM1.minePos={x:p.x,y:p.y};else if(ssRegion===TOWN_WORLD_ID)game.storyM1.townPos={x:p.x,y:p.y};else game.storyM1.forestPos={x:p.x,y:p.y};}}try{prepareCharacterForSave();prepareVisionForSave();localStorage.setItem(SAVE_KEY,JSON.stringify(game));saveOkay=true;if(!silent)flash('월드 저장 완료');return true}catch(e){saveOkay=false;if(!silent)flash('브라우저 저장이 막혔어요. 메뉴에서 파일로 내보내세요.');return false}}
+function exportGame(){prepareCharacterForSave();prepareVisionForSave();let blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SANDSTAR_ZANBIT_M1_world_'+game.seed+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);flash('월드 파일 내보내기 완료')}
+function importGame(file){if(!file||file.size>4e6){flash('4MB 이하 JSON 파일만 가져올 수 있어요');return}let fr=new FileReader();fr.onload=()=>{const previous=game,previousBits=xpClaimBits,previousVision=visionExploredBits,previousSolid=visionSolidBits,previousP=p;try{let d=JSON.parse(fr.result);if(d.version!==1||!Number.isFinite(d.seed)||!d.inv||typeof d.edits!=='object'||!Number.isFinite(d.spawnX))throw Error('format');game=normalizeSave(d);ssRegion=game.storyM1.region;spawnPlayer();baselineLegacyDepth();if(!saveGame(true)){game=previous;ssRegion=game.storyM1?.region||'mine';xpClaimBits=previousBits;visionExploredBits=previousVision;visionSolidBits=previousSolid;visionCache.cx=-999;p=previousP;spawnPlayer();flash('저장할 수 없어 파일 불러오기를 취소했어요.');return;}closeModal();flash('월드를 불러왔어요 ✓')}catch(e){game=previous;ssRegion=game.storyM1?.region||'mine';xpClaimBits=previousBits;visionExploredBits=previousVision;visionSolidBits=previousSolid;visionCache.cx=-999;p=previousP;flash('올바른 흙별 월드 파일이 아니에요')}};fr.readAsText(file)}
+function showModal(title,html){rangeHintTime=0;invalidReach=null;miningHitFX=null;miningBreakFX=null;paused=true;input.left=input.right=input.jump=input.act=input.reelIn=input.reelOut=false;jumpBuffer=0;coyoteTime=0;ropeHold=false;ropePointerAim=null;ropePreviewAnchor=null;ropeGestureFeedback();stopMineStick();holdTarget=null;holdLast=null;holdProgress=0;menuType=title;$('dialog').classList.remove('venue-dialog','ss-ui-modal','ss-inventory-modal','ss-bag-modal','ss-profile-modal','ss-settings-modal');$('dialog').innerHTML=`<h2>${title}</h2>${html}<div class="stack"><button class="cta" id="backBtn">월드로 돌아가기</button></div>`;$('overlay').classList.add('open');$('backBtn').onclick=closeModal;if(title==='인벤토리'||title==='가방'||title==='광부 프로필'||title==='설정'||title==='광부 성장'){$('dialog').insertAdjacentHTML('afterbegin','<button id="ssUiClose" class="ss-ui-close" type="button" aria-label="닫기">×</button>');$('ssUiClose').onclick=closeModal;} }
+function closeModal(){$('overlay').classList.remove('open');paused=ssIsTitle();menuType=''}
+function flash(t){$('toast').textContent=t;$('toast').classList.add('on');toastUntil=performance.now()+2350}
+function tip(s){$('tiptext').textContent=s}
+function updHud(){ssM15SyncScene();updateMobilityHud();ssM1SyncHUD();let depth=Math.max(0,Math.floor(p.y-terrain(p.x)));const place=placeInfo(depth,biomeAt(p.x));$('placeBadge').innerHTML=`<span class="icontext tight">${asset(ssRegion==='life_forest_01'?'forest':place.icon,'sm')}<span>Lv.${deriveLevelFromTotalXp(game.character.totalXp).level} · ${ssRegion==='life_forest_01'?'잔빛숲':ssRegion===TOWN_WORLD_ID?'도래마을':place.label}</span></span>`;let t=TOOL_INFO[game.tool]||TOOL_INFO.pickaxe;$('toolStatus').innerHTML=`${asset(t.icon,'sm')} ${t.name} ${game.tool==='drill'?'모터 '+P16_DRILL_MOTORS[p16DrillRank()].name+' · ':game.tool==='hammer'?'코어 '+P16_HAMMER_CORES[p16HammerRank()].name+' · ':''}Lv.${game.pickaxeLevel}${game.tool==='pickaxe'&&game.pickaxeForge.rank?' · +'+game.pickaxeForge.rank:''}`;p16UpdateDrillHud();p16UpdateHammerHud();p16DUpdateHud();$('coords').textContent=ssRegion==='life_forest_01'?`잔빛숲 X ${Math.floor(p.x)}`:`X ${Math.floor(p.x)} · 깊이 ${depth}m`;ssCargoHud();$('coins').textContent=game.coins;$('mined').textContent=game.mined;$('debug').textContent=`x=${p.x.toFixed(2)} y=${p.y.toFixed(2)} inv=${game.inv.dirt} edits=${Object.keys(game.edits).length} save=${saveOkay?'ok':'blocked'}`}
+// SANDSTAR UI P0 · inventory and profile are live views of the existing save data.
+let ssInventoryCategory='all',ssBagCategory='all',ssInventoryOrder='default',ssInventorySelection='',ssBagSelection='';
+const SS_ITEM_GROUPS=Object.freeze({orecoal:'ore',copper:'ore',iron:'ore',titanium:'ore',crystal:'gem',starshard:'gem',amber:'gem',opal:'gem'});
+const SS_ITEM_GLYPHS=Object.freeze({dirt:'🟫',stone:'🪨',wood:'🪵',wall:'🧱',glass:'▣',torch:'✦',bed:'▰',chest:'▣',orecoal:'◈',copper:'◆',iron:'⬢',crystal:'✧',titanium:'◆',starshard:'✦',amber:'◇',opal:'◉'});
+function ssInventoryEntries(){
+ const items=[];
+ for(const id of (game.unlockedTools||['pickaxe'])){
+  const info=TOOL_INFO[id];if(!info||items.some(x=>x.key==='tool:'+id))continue;
+  items.push({key:'tool:'+id,id,category:'tool',name:info.name,count:1,icon:asset(info.icon,'md'),details:game.tool===id?'현재 사용 중':info.tag});
+ }
+ for(const id of Object.keys(MATERIAL_NAMES)){
+  if(id==='relic')continue;const qty=Math.max(0,Math.floor(Number(game.inv?.[id])||0));
+  if(!qty)continue;
+  items.push({key:'item:'+id,id,category:SS_ITEM_GROUPS[id]||'material',name:MATERIAL_NAMES[id],count:qty,icon:`<span class="ss-item-symbol" aria-hidden="true">${SS_ITEM_GLYPHS[id]||'◈'}</span>`,details:`보유 ${qty}개`});
+ }
+ for(const id of game.artifactSystem?.ownedIds||[]){
+  const info=ARTIFACT_INFO[id];if(!info)continue;
+  items.push({key:'artifact:'+id,id,category:'artifact',name:info.name,count:1,icon:`<span class="ss-item-symbol" aria-hidden="true">${info.icon}</span>`,details:info.tag});
+ }
+ return items;
+}
+function ssInventoryViewModel(kind='inventory'){
+ const group=kind==='bag'?'bag':'inventory';
+ const category=group==='bag'?ssBagCategory:ssInventoryCategory;
+ let list=ssInventoryEntries().filter(item=>{
+  const belongs=group==='bag'?item.category==='tool'||item.category==='artifact':item.category==='ore'||item.category==='gem'||item.category==='material';
+  return belongs&&(category==='all'||item.category===category);
+ });
+ if(ssInventoryOrder==='name')list.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+ else if(ssInventoryOrder==='count')list.sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,'ko'));
+ return list;
+}
+function ssOpenItems(kind='inventory'){
+ const isBag=kind==='bag',title=isBag?'가방':'인벤토리';
+ const previousScroll=$('overlay').classList.contains('open')&&menuType===title ? $('dialog').scrollTop : 0;
+ const items=ssInventoryViewModel(kind),selection=isBag?ssBagSelection:ssInventorySelection;
+ const selectedKey=items.some(x=>x.key===selection)?selection:(items[0]?.key||'');
+ if(isBag)ssBagSelection=selectedKey;else ssInventorySelection=selectedKey;
+ const selected=items.find(x=>x.key===selectedKey);
+ const tabs=isBag?[['all','전체'],['tool','도구'],['artifact','유물']]:[['all','전체'],['ore','광물'],['gem','보석'],['material','재료']];
+ const active=isBag?ssBagCategory:ssInventoryCategory;
+ const categories=tabs.map(([id,label])=>`<button type="button" role="tab" data-ss-item-tab="${id}" class="${active===id?'active':''}" aria-selected="${active===id}">${label}</button>`).join('');
+ const slots=items.map(item=>`<button type="button" class="ss-inv-item ${item.key===selectedKey?'selected':''}" data-ss-item-key="${item.key}" aria-label="${item.name}${item.count>1?' '+item.count+'개':''}" aria-pressed="${item.key===selectedKey}"><span class="ss-item-art">${item.icon}</span><span class="ss-item-qty">${item.count>1?item.count:''}</span></button>`).join('');
+ const empty=items.length?'':'<p class="ss-inv-empty">보유한 아이템이 없어요.</p>';
+ const extra=Array.from({length:Math.max(0,Math.min(6,15-items.length))},()=>'<span class="ss-inv-empty-slot" aria-hidden="true"></span>').join('');
+ const labels={tool:'도구',artifact:'유물',ore:'광물',gem:'보석',material:'재료'};
+ const detail=selected?`<div class="ss-item-detail"><span class="ss-detail-art">${selected.icon}</span><div><strong>${selected.name}</strong><small>${labels[selected.category]}</small><p>${selected.details}</p></div></div>`:'<div class="ss-item-detail empty">아이템을 선택해 주세요.</div>';
+ const actions=isBag?`<div class="ss-ui-actions"><button id="ssBagEquip" type="button" ${!selected?'disabled':''}>${selected?.category==='tool'?(game.tool===selected.id?'사용 중':'도구 장착'):'유물 장착 관리'}</button><span class="ss-inv-counter">${items.length}종</span></div>`:`<div class="ss-ui-actions"><button id="ssInvSort" type="button">정렬: ${ssInventoryOrder==='default'?'기본':ssInventoryOrder==='name'?'이름':'수량'}</button><span class="ss-inv-counter">${items.length}종</span></div>`;
+ showModal(title,`<nav class="ss-inv-tabs" role="tablist" aria-label="${title} 분류">${categories}</nav><div class="ss-inv-grid" role="group" aria-label="보유 아이템">${slots}${extra}${empty}</div>${detail}${actions}`);
+ $('dialog').classList.add('ss-ui-modal',isBag?'ss-bag-modal':'ss-inventory-modal');$('backBtn').textContent='닫기';
+ $('dialog').classList.remove('ss-profile-modal','ss-settings-modal',isBag?'ss-inventory-modal':'ss-bag-modal');
+ $('dialog').scrollTop=previousScroll;
+ for(const tab of $('dialog').querySelectorAll('[data-ss-item-tab]'))tab.onclick=()=>{if(isBag){ssBagCategory=tab.dataset.ssItemTab;ssBagSelection='';}else{ssInventoryCategory=tab.dataset.ssItemTab;ssInventorySelection='';}ssOpenItems(kind);$('dialog').scrollTop=0;};
+ for(const button of $('dialog').querySelectorAll('[data-ss-item-key]'))button.onclick=()=>{if(isBag)ssBagSelection=button.dataset.ssItemKey;else ssInventorySelection=button.dataset.ssItemKey;ssOpenItems(kind);};
+ if(isBag){
+  $('ssBagEquip').disabled=!selected||(selected.category==='tool'&&game.tool===selected.id);
+  $('ssBagEquip').onclick=()=>{
+   if(!selected)return;
+   if(selected.category==='artifact'){characterTab='artifacts';characterMenu();return;}
+   if(selected.category!=='tool')return;
+   const ok=safeMarketTransaction(draft=>{
+    if(!draft.unlockedTools.includes(selected.id)||draft.tool===selected.id)return false;
+    draft.tool=selected.id;return true;
+   });
+   if(ok){holdLast=null;holdProgress=0;ssOpenItems('bag');flash('장착 완료');}
+   else flash('장착할 수 없거나 저장에 실패했어요.');
+  };
+ }else $('ssInvSort').onclick=()=>{ssInventoryOrder=ssInventoryOrder==='default'?'name':ssInventoryOrder==='name'?'count':'default';ssOpenItems('inventory');};
+}
+function inventoryMenu(){ssOpenItems('inventory');}
+function bagMenu(){ssOpenItems('bag');}
+function ssProfileModel(){
+ const progress=deriveLevelFromTotalXp(game.character.totalXp);
+ const depth=Math.max(0,Math.floor(p.y-terrain(p.x)));
+ const place=placeInfo(depth,biomeAt(p.x));
+ const stats=CHARACTER_STAT_IDS.map(id=>({id,name:CHARACTER_STAT_NAMES[id],points:Math.min(8,Math.max(0,Math.floor(Number(game.character.stats[id])||0)))}));
+ const tool=TOOL_INFO[game.tool]||TOOL_INFO.pickaxe;
+ const trait=TRAIT_INFO[game.character.trait]||null;
+ const slots=artifactSlotsFor(progress.level);
+ const relics=Array.from({length:2},(_,i)=>{
+  const unlocked=i<slots;
+  const id=unlocked?game.artifactSystem.equippedIds[i]:null;
+  return {unlocked,name:unlocked?(ARTIFACT_INFO[id]?.name||'비어 있음'):'Lv.12 해금',icon:unlocked?(ARTIFACT_INFO[id]?.icon||'＋'):'🔒'};
+ });
+ return {level:progress.level,place:place.label,sp:getUnspentSp(),tool,toolId:game.tool,forge:game.pickaxeForge.rank||0,skill:game.pickaxeLevel||1,trait:trait?.name||'미선택',stats,relics,ownedCount:game.artifactSystem.ownedIds.length};
+}
+function profileMenu(){
+ const m=ssProfileModel();
+ const icons={agility:'➜',jump:'⇧',climb:'⌁',observation:'◉',focus:'✦',endurance:'◇',reach:'⌖'};
+ const rows=m.stats.map(x=>`<div class="ss-stat-card"><span class="ss-stat-icon" aria-hidden="true">${icons[x.id]}</span><span>${x.name}</span><b>${x.points}/8</b></div>`).join('');
+ const relics=m.relics.map((item,i)=>`<div class="ss-gear-row"><span class="ss-gear-icon">${item.icon}</span><span>유물 ${i+1}</span><strong>${item.name}</strong></div>`).join('');
+ showModal('광부 프로필',`<div class="ss-profile-head"><span class="ss-avatar"><span class="ss-navicon ss-miner" aria-hidden="true"></span></span><div><strong>광부</strong><span>Lv.${m.level} · ${m.place}</span><small>미사용 ${m.sp} SP</small></div></div><h3 class="ss-ui-subhead">능력치</h3><div class="ss-profile-stats">${rows}</div><h3 class="ss-ui-subhead">현재 착용</h3><div class="ss-gear-list"><div class="ss-gear-row"><span class="ss-gear-icon">${asset(m.tool.icon,'md')}</span><span>도구</span><strong>${m.tool.name} · Lv.${m.skill}</strong></div><div class="ss-gear-row"><span class="ss-gear-icon">✦</span><span>특성</span><strong>${m.trait}</strong></div>${relics}</div><div class="ss-ui-actions"><button id="ssProfileStats">성장</button><button id="ssProfileTraits">특성</button><button id="ssProfileBag">가방 열기</button></div>`);
+ $('dialog').classList.add('ss-ui-modal','ss-profile-modal');$('backBtn').textContent='닫기';
+ $('dialog').classList.remove('ss-inventory-modal','ss-settings-modal');
+ for(const [btn,tab] of [['ssProfileStats','stats'],['ssProfileTraits','traits']])$(btn).onclick=()=>{characterTab=tab;characterMenu();};$('ssProfileBag').onclick=bagMenu;
+}
+function menu(openSave=false){
+ showModal('설정',`<div class="ss-settings-list">
+  <div class="ss-setting-item"><strong>배경음악</strong><button type="button" id="bgmToggle" aria-pressed="true"></button></div>
+  <div class="ss-setting-item"><strong>배경음악 크기</strong><input type="range" id="bgmLevel" min="0" max="100" step="5" aria-label="배경음악 음량"></div>
+  <div class="ss-setting-item"><strong>효과음</strong><button type="button" id="soundToggle" aria-pressed="false"></button></div>
+  <div class="ss-setting-item"><strong>음량</strong><input id="soundLevel" type="range" min="0" max="100" step="5" aria-label="효과음 음량"></div>
+  <div class="ss-setting-item"><strong>진동</strong><button type="button" id="ropeHapticToggle" aria-pressed="false"></button></div>
+  <div class="ss-setting-item"><strong>로프 물리 A/B</strong><button type="button" id="ssRopeABGame" aria-label="로프 물리 고정 또는 탄성 전환"></button></div>
+  <div class="ss-setting-item"><strong>전체 화면</strong><button type="button" id="ssGameFullscreen">전환</button></div>
+ </div>
+ <details class="ss-ui-details" id="ssSavePanel"><summary>저장 관리</summary><div class="ss-ui-actions"><button id="saveBtn">지금 저장</button><button id="exportBtn">월드 백업</button><button id="importBtn">파일 불러오기</button></div><small>${saveOkay?'자동 저장 켜짐':'저장 실패 · 월드 백업 권장'}</small></details>
+ <div class="ss-ui-actions ss-menu-footer"><button type="button" id="titleReturnBtn">메인화면</button><button type="button" id="ssEmergencyRescue">긴급 구조</button></div><small id="ssGameFullscreenMessage" class="ss-screen-message" role="status" aria-live="polite"></small>`);
+ $('dialog').classList.add('ss-ui-modal','ss-settings-modal');$('backBtn').textContent='닫기';if(openSave){$('ssSavePanel').open=true;}
+ $('dialog').classList.remove('ss-inventory-modal','ss-bag-modal','ss-profile-modal');
+ $('bgmToggle').textContent=ssBgm.enabled?'켜짐':'꺼짐';$('bgmToggle').setAttribute('aria-pressed',String(ssBgm.enabled));$('bgmLevel').value=Math.round(ssBgm.volume*100);
+ $('bgmToggle').onclick=()=>{ssBgmSetEnabled(!ssBgm.enabled);$('bgmToggle').textContent=ssBgm.enabled?'켜짐':'꺼짐';$('bgmToggle').setAttribute('aria-pressed',String(ssBgm.enabled));};
+ $('bgmLevel').oninput=e=>ssBgmSetVolume(Number(e.target.value)/100);
+ $('soundToggle').textContent=sfxState.enabled?'켜짐':'꺼짐';$('soundToggle').setAttribute('aria-pressed',String(sfxState.enabled));$('soundLevel').value=Math.round(sfxState.volume*100);
+ $('soundToggle').onclick=()=>{setSoundEnabled(!sfxState.enabled);$('soundToggle').textContent=sfxState.enabled?'켜짐':'꺼짐';$('soundToggle').setAttribute('aria-pressed',String(sfxState.enabled));if(sfxState.enabled){armAudio();playSound('pickup_ore')}};
+ $('soundLevel').oninput=e=>setSoundVolume(e.target.value/100);
+ $('ropeHapticToggle').textContent=ropeHapticsEnabled?'켜짐':'꺼짐';$('ropeHapticToggle').setAttribute('aria-pressed',String(ropeHapticsEnabled));
+ $('ropeHapticToggle').onclick=()=>{ropeHapticsEnabled=!ropeHapticsEnabled;try{localStorage.setItem(ROPE_HAPTIC_KEY,ropeHapticsEnabled?'1':'0')}catch(_){}$('ropeHapticToggle').textContent=ropeHapticsEnabled?'켜짐':'꺼짐';$('ropeHapticToggle').setAttribute('aria-pressed',String(ropeHapticsEnabled));if(ropeHapticsEnabled)ropeHaptic(8)};
+ $('ssRopeABGame').textContent=ropeABMode==='A'?'A · 고정':'B · 탄성';
+ $('ssRopeABGame').onclick=()=>{setRopeABMode(ropeABMode==='A'?'B':'A');$('ssRopeABGame').textContent=ropeABMode==='A'?'A · 고정':'B · 탄성';};
+ $('ssGameFullscreen').onclick=async()=>{
+  const note=$('ssGameFullscreenMessage');
+  try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else{note.textContent='전체 화면을 지원하지 않는 브라우저예요.';return;}
+   note.textContent=document.fullscreenElement?'전체 화면으로 전환했어요.':'전체 화면을 종료했어요.';
+  }catch(_){note.textContent='브라우저에서 전체 화면을 허용하지 않았어요.';}
+ };
+ $('saveBtn').onclick=()=>saveGame();$('exportBtn').onclick=exportGame;$('importBtn').onclick=()=>$('fileImport').click();
+ $('titleReturnBtn').onclick=ssReturnToTitle;
+ $('ssEmergencyRescue').onclick=()=>{if(confirm('마지막 안전 정거장으로 이동할까요?'))rescuePlayer();};
+}
+
+
+// 2026-11-12: Hamburger option A. Anchored, scrollable section dropdown.
+// No new persistence model: all destinations delegate to preexisting transactions/menus.
+let ssHubWasPaused=false;
+function ssHubIsOpen(){return !$('ssHub').hidden;}
+function ssPositionHub(){
+ if(!ssHubIsOpen())return;
+ const app=$('app').getBoundingClientRect(),trigger=$('menuBtn').getBoundingClientRect();
+ const width=Math.min(316,Math.max(240,app.width-20));
+ const left=Math.max(8,Math.min(app.width-width-8,trigger.right-app.left-width));
+ let top=Math.max(8,trigger.bottom-app.top+8);
+ if(top>app.height-95)top=8; // small landscape viewport
+ $('ssHub').style.left=Math.round(left)+'px';
+ $('ssHub').style.top=Math.round(top)+'px';
+ $('ssHub').style.width=Math.round(width)+'px';
+ $('ssHub').style.maxHeight=Math.max(74,Math.floor(app.height-top-8))+'px';
+}
+function ssHubOpen(){
+ if(ssIsTitle()||$('overlay').classList.contains('open'))return;
+ ssHubWasPaused=paused;
+ paused=true;
+ input.left=input.right=input.jump=input.act=input.reelIn=input.reelOut=false;
+ jumpBuffer=0;ropeHold=false;ropePointerAim=null;ropePreviewAnchor=null;ropeGestureFeedback();
+ hudReleaseMine();stopMineStick();
+ const progress=deriveLevelFromTotalXp(game.character.totalXp);
+ $('ssHubSummary').textContent=`Lv.${progress.level} · ${game.coins} 코인`;
+ $('ssHubSp').textContent=`${getUnspentSp()} SP`;
+ $('ssHubTrait').textContent=TRAIT_INFO[game.character.trait]?.name||'미선택';
+ $('ssHubArtifact').textContent=`${game.artifactSystem.equippedIds.length}/${artifactSlotsFor(progress.level)} 장착`;
+ $('ssHubBackdrop').hidden=false;$('ssHub').hidden=false;
+ $('menuBtn').setAttribute('aria-expanded','true');
+ ssPositionHub();
+ $('ssHubClose').focus({preventScroll:true});
+}
+function ssHubClose(restoreFocus=false){
+ if(!ssHubIsOpen())return;
+ $('ssHub').hidden=true;$('ssHubBackdrop').hidden=true;
+ $('menuBtn').setAttribute('aria-expanded','false');
+ paused=ssIsTitle()||$('overlay').classList.contains('open')||ssHubWasPaused;
+ if(restoreFocus)$('menuBtn').focus({preventScroll:true});
+}
+function ssHubToggle(){if(ssHubIsOpen())ssHubClose(true);else ssHubOpen();}
+function ssHubNavigate(target){
+ if(!ssHubIsOpen())return;
+ ssHubClose();
+ switch(target){
+  case 'profile': profileMenu();break;
+  case 'stats': case 'traits': case 'artifacts': characterTab=target;characterMenu();break;
+  case 'cargo': ssCargoMenu();break;case 'treasure': ssTreasureJournal();break;
+  case 'living': livingMenu();break;
+  case 'settings': menu();break;
+  case 'save': menu(true);break;
+  case 'guide': ssQuickGuide();break;
+  case 'rescue': if(confirm('마지막 안전 정거장으로 무료 이동할까요?'))rescuePlayer();break;
+  case 'title': ssReturnToTitle();break;
+ }
+}
+$('ssTreasureAction').onclick=()=>{const c=ssTreasureNear();if(c)ssTreasureOpenMenu(c);};$('ssHubClose').onclick=()=>ssHubClose(true);
+$('ssHubBackdrop').onclick=()=>ssHubClose();
+for(const btn of $('ssHub').querySelectorAll('[data-ss-hub]'))btn.onclick=()=>ssHubNavigate(btn.dataset.ssHub);
+window.addEventListener('resize',ssPositionHub);
+window.addEventListener('orientationchange',ssPositionHub);
+
+// Economy 2.14: one-write transaction semantics for market trades. No cross-request mutation.
+const ORE_SALE_ITEMS=[['orecoal','석탄',5],['copper','구리',12],['iron','철',29],['crystal','수정',84],['titanium','티타늄',115],['starshard','별조각',285],['amber','호박석',135],['opal','오팔',220]];
+function liftNeedsRepair(state=game){return !(state.transport&&Array.isArray(state.transport.unlocked)&&state.transport.unlocked.includes('quarry'));}
+function liftReservedOreCount(id,state=game){
+ if(id!=='copper'||!liftNeedsRepair(state)||!state.economy||!state.economy.reserveLiftMaterials)return 0;
+ return Math.min(STATION_COST.copper,Math.max(0,Math.floor(Number(state.inv.copper)||0)));
+}
+function nextForgeReservePlan(state=game){
+ if(!state.economy?.reserveForgeMaterials)return [];
+ const level=state.pickaxeForge?.rank||0;
+ return FORGE_RULES[level+1]?.items||[];
+}
+function nextForgeReserveOreCount(id,state=game){
+ const held=Math.max(0,Math.floor(Number(state.inv[id])||0));
+ const lift=liftReservedOreCount(id,state);
+ const wanted=nextForgeReservePlan(state).find(([type])=>type===id)?.[1]||0;
+ return Math.min(wanted,Math.max(0,held-lift));
+}
+function reservedOreCount(id,state=game){
+ return liftReservedOreCount(id,state)+nextForgeReserveOreCount(id,state);
+}
+function sellableOreCount(id,state=game){return Math.max(0,Math.floor(Number(state.inv[id])||0)-reservedOreCount(id,state));}
+function safeMarketTransaction(changeState){
+ // Clone avoids accidental changes to the live world/inventory when localStorage rejects a write.
+ let previous=game, draft;
+ try{
+  draft=JSON.parse(JSON.stringify(previous));
+  if(changeState(draft)!==true)return false;
+  ssCargoReconcile(previous,draft);
+  game=draft;
+  if(!saveGame(true)){
+   game=previous;
+   updHud();
+   flash('저장 실패: 거래가 취소됐어요. 저장 공간을 확인하거나 월드를 내보내세요.');
+   return false;
+  }
+  updHud();
+  return true;
+ }catch(err){game=previous;saveOkay=false;updHud();flash('거래 중 오류가 발생해 변경을 취소했어요.');return false;}
+}
+// SANDSTAR 2.15-A: deterministic, one-write, no-break pickaxe forge.
+// Existing pickaxeLevel (shared skill Lv1..6) remains independent from +0..+10.
+const FORGE_RULES=[
+ null,
+ {cost:60,rate:100,items:[['stone',2]]},
+ {cost:90,rate:100,items:[['stone',4]]},
+ {cost:120,rate:100,items:[['copper',2]]},
+ {cost:180,rate:90,items:[['copper',3]]},
+ {cost:240,rate:80,items:[['iron',2]]},
+ {cost:320,rate:70,items:[['iron',3]]},
+ {cost:450,rate:60,items:[['iron',4],['orecoal',4]]},
+ {cost:600,rate:50,items:[['crystal',1],['iron',3]]},
+ {cost:800,rate:40,items:[['amber',1],['crystal',2]]},
+ {cost:1100,rate:30,items:[['opal',1],['crystal',3]]},
+ // P1.5 experimental upper progression; original +0..+10 rules unchanged.
+ {cost:1300,rate:65,items:[['iron',4],['crystal',2]]},
+ {cost:1550,rate:60,items:[['titanium',1],['crystal',2]]},
+ {cost:1800,rate:55,items:[['titanium',1],['amber',1]]},
+ {cost:2050,rate:50,items:[['titanium',2],['crystal',2]]},
+ {cost:2350,rate:45,items:[['starshard',1],['opal',1]]},
+ {cost:2650,rate:40,items:[['titanium',2],['starshard',1]]},
+ {cost:3000,rate:35,items:[['titanium',3],['starshard',2]]},
+ {cost:3400,rate:30,items:[['starshard',2],['opal',2]]},
+ {cost:3850,rate:25,items:[['titanium',4],['starshard',3]]},
+ {cost:4300,rate:20,items:[['starshard',4],['opal',2],['titanium',2]]}
+];
+const FORGE_MAX_RANK=20,FORGE_PITY_STEP=20,FORGE_BONUS_PER_RANK=.02;
+function forgeRankBonus(rank){const r=Math.max(0,Math.min(FORGE_MAX_RANK,Number(rank)||0));return Math.min(r,10)*.02+Math.max(0,r-10)*.01;}
+
+let forgeTapLockUntil=0,ssForgeLastOutcome=null;
+// 2.15-C: player-selected pickaxe affinity, never random. Works only when wielding the pickaxe.
+const PICKAXE_AFFINITY_IDS=['earth','ore','scan'];
+const PICKAXE_AFFINITY_INFO={
+ earth:{name:'암쇄',short:'대지',description:'돌·석탄 채굴 특화',color:'#ddb38b'},
+ ore:{name:'정광',short:'정밀',description:'광석 추가 획득 특화',color:'#8be7d2'},
+ scan:{name:'탐맥',short:'공명',description:'근거리 광맥 탐지 특화',color:'#d2b5ff'}
+};
+const AFFINITY_SWAP_COST=120;
+function equippedAffinity(state=game){
+ const f=state.pickaxeForge;
+ return state.tool==='pickaxe' && f && f.rank>=3 && PICKAXE_AFFINITY_IDS.includes(f.affinity)?f.affinity:'none';
+}
+function affinityIsAdvanced(state=game){return (state.pickaxeForge?.rank||0)>=7;}
+function affinityStage(state=game){const rank=state.pickaxeForge?.rank||0;return rank>=20?3:rank>=15?2:rank>=7?1:0;}
+function pickaxeAffinityPower(t,state=game){
+ if(equippedAffinity(state)!=='earth'||(t!=='stone'&&t!=='orecoal'))return 1;
+ return [1.10,1.16,1.21,1.25][affinityStage(state)];
+}
+function pickaxeOreBonusRate(state=game){return equippedAffinity(state)==='ore'?[.03,.06,.075,.09][affinityStage(state)]:0;}
+function pickaxeScanRadius(state=game){return equippedAffinity(state)==='scan'?[3,4,5,6][affinityStage(state)]:0;}
+// P1.5 secondary equipment properties. Pickaxe-only, one selected, no random rolls.
+const PICKAXE_SECONDARY_INFO=Object.freeze({
+ cleave:{name:'절삭',description:'고경도 광석 채굴력 +8% (+17부터 +12%)'},
+ lantern:{name:'잔광',description:'지하 시야 +1칸 (+17부터 +2칸)'},
+ line:{name:'결속',description:'로프 상승속도 +6% (+17부터 +10%)'}
+});
+const PICKAXE_SECONDARY_IDS=Object.keys(PICKAXE_SECONDARY_INFO),SECONDARY_SWAP_COST=250;
+function equippedSecondary(state=game){const f=state?.pickaxeForge;return state?.tool==='pickaxe'&&f?.rank>=12&&PICKAXE_SECONDARY_IDS.includes(f.secondary)?f.secondary:'none';}
+function secondaryBoosted(state=game){return (state?.pickaxeForge?.rank||0)>=17;}
+function pickaxeSecondaryPower(t,state=game){
+ return equippedSecondary(state)==='cleave'&&['iron','crystal','titanium','starshard','amber','opal'].includes(t)?(secondaryBoosted(state)?1.12:1.08):1;
+}
+function secondarySwitchCost(id,state=game){
+ const f=state?.pickaxeForge;
+ if(!PICKAXE_SECONDARY_IDS.includes(id)||!f||f.rank<12||f.secondary===id)return null;
+ return !f.secondary||f.secondary==='none'?0:SECONDARY_SWAP_COST;
+}
+function choosePickaxeSecondary(id){
+ const cost=secondarySwitchCost(id);if(cost===null||game.coins<cost)return false;
+ const ok=safeMarketTransaction(d=>{
+  const price=secondarySwitchCost(id,d);if(price===null||d.coins<price)return false;
+  d.coins-=price;d.pickaxeForge.secondary=id;
+  d.pickaxeForge.secondarySwitches=Math.min(99999999,(d.pickaxeForge.secondarySwitches||0)+1);
+  d.economy.balanceMetrics.affinityCreditsSpent+=price;
+  return true;
+ });
+ if(ok){forgeMenu();flash('보조 속성 '+PICKAXE_SECONDARY_INFO[id].name+' 적용');}
+ return ok;
+}
+function secondaryForgePanel(){
+ const f=game.pickaxeForge,unlocked=f.rank>=12,active=equippedSecondary(),advanced=f.rank>=17;
+ const labels={cleave:`고경도 광석 채굴력 +${advanced?12:8}%`,lantern:`지하 시야 +${advanced?2:1}칸 (상한 8)`,line:`로프 상승속도 +${advanced?10:6}% (상한 9.5)`};
+ const rows=PICKAXE_SECONDARY_IDS.map(id=>{
+  const cost=secondarySwitchCost(id),selected=active===id,disabled=!unlocked||selected||(cost!==null&&game.coins<cost);
+  const action=selected?'장착 중':!unlocked?'잠금':cost===0?'첫 선택 무료':`${cost}C 교체`;
+  return `<button class="ss-p15-attr" data-secondary="${id}" aria-pressed="${selected}" ${disabled?'disabled':''}><strong>${PICKAXE_SECONDARY_INFO[id].name}</strong><small>${labels[id]} · ${action}</small></button>`;
+ }).join('');
+ return `<section class="ss-p14-panel"><h3>보조 속성 · +12 해금</h3><p>주 속성과 별도로 <strong>한 가지만</strong> 선택 가능해요. +17 달성 시 자동 성장하며, 곡괭이 장착 중에만 적용돼요. 첫 선택 무료, 교체 250C.</p><div class="ss-p15-attrs">${rows}</div></section>`;
+}
+
+function affinitySwitchCost(id,state=game){
+ if(!PICKAXE_AFFINITY_IDS.includes(id) || (state.pickaxeForge?.rank||0)<3 || state.pickaxeForge.affinity===id)return null;
+ // First-ever affinity selection is free; changes cost credits only. Lift repair supplies stay reserved.
+ return state.pickaxeForge.affinity==='none'?0:AFFINITY_SWAP_COST;
+}
+function choosePickaxeAffinity(id){
+ const cost=affinitySwitchCost(id);if(cost===null)return false;
+ if(game.coins<cost){flash(`속성 교체에는 ${cost} 크레딧이 필요해요`);return false;}
+ const success=safeMarketTransaction(draft=>{
+  const required=affinitySwitchCost(id,draft);
+  if(required===null || draft.coins<required)return false;
+  draft.coins-=required;draft.economy.balanceMetrics.affinityCreditsSpent+=required;
+  draft.pickaxeForge.affinity=id;
+  draft.pickaxeForge.affinitySwitches=(draft.pickaxeForge.affinitySwitches||0)+1;
+  return true;
+ });
+ if(success){forgeMenu();flash(`곡괭이 속성 ${PICKAXE_AFFINITY_INFO[id].name} 적용!`);playSound('pickup_ore');}
+ return success;
+}
+function forgeAffinityPanel(){
+ const f=game.pickaxeForge,unlocked=f.rank>=3,attr=f.affinity||'none',high=f.rank>=7;
+ const current=attr==='none'?'미부여':PICKAXE_AFFINITY_INFO[attr].name;
+ const tier=affinityStage();const effects={earth:`돌·석탄 채굴력 +${[10,16,21,25][tier]}%`,ore:`광석 +1개 획득 확률 ${[3,6,7.5,9][tier]}%`,scan:`주변 ${[3,4,5,6][tier]}칸 광맥 강조`};
+ const options=PICKAXE_AFFINITY_IDS.map(id=>{
+  const info=PICKAXE_AFFINITY_INFO[id],selected=attr===id,price=affinitySwitchCost(id);
+  const disabled=!unlocked||selected||(price!==null&&game.coins<price);
+  const action=selected?'사용 중':!unlocked?'잠금':price===0?'무료 부여':`${price}C 교체`;
+  return `<button type="button" data-affinity="${id}" aria-pressed="${selected}" ${disabled?'disabled':''} aria-label="${info.name} 속성 ${action}"><b>${info.name}</b><small>${action}</small></button>`;
+ }).join('');
+ return `<section class="affinity-panel" aria-label="곡괭이 속성 전문화"><h4>⛏️ 곡괭이 속성 · ${unlocked?'활성':'강화 +3에서 해금'}</h4>
+ <p class="affinity-status">현재: <strong>${current}</strong>${attr==='none'?'':` · ${effects[attr]}`}<br>${unlocked?'첫 부여 무료 · 교체 120C<br>+7 · +15 · +20에서 속성 성장':'강화 +3을 달성하면 원하는 속성을 직접 선택할 수 있어요.'}</p>
+ <div class="affinity-choices" role="group" aria-label="속성 선택">${options}</div>
+ <p class="affinity-note">암쇄: ${effects.earth}<br>정광: ${effects.ore}<br>탐맥: ${effects.scan}<br>곡괭이 장착 시에만 효과 적용. 채굴 사거리는 광부 능력치에 따라 증가하고 시설 기초는 보호돼요.</p></section>${secondaryForgePanel()}`;
+}
+function normalizePickaxeForge(raw){
+ const f=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const rank=Number.isSafeInteger(f.rank)?Math.max(0,Math.min(FORGE_MAX_RANK,f.rank)):0;
+ const attemptCounter=Number.isSafeInteger(f.attemptCounter)&&f.attemptCounter>=0?f.attemptCounter:0;
+ const streak=Number.isSafeInteger(f.failStreak)&&f.failStreak>=0?Math.min(4,f.failStreak):0;
+ const affinity = rank>=3 && PICKAXE_AFFINITY_IDS.includes(f.affinity) ? f.affinity : 'none';
+ const affinitySwitches=Number.isSafeInteger(f.affinitySwitches)&&f.affinitySwitches>=0?Math.min(f.affinitySwitches,99999999):0;
+ const bonusOreDrops=Number.isSafeInteger(f.bonusOreDrops)&&f.bonusOreDrops>=0?Math.min(f.bonusOreDrops,99999999):0;
+ const secondary=rank>=12&&PICKAXE_SECONDARY_IDS.includes(f.secondary)?f.secondary:'none';
+ const secondarySwitches=Number.isSafeInteger(f.secondarySwitches)&&f.secondarySwitches>=0?Math.min(f.secondarySwitches,99999999):0;
+ return {rank,failStreak:rank>=FORGE_MAX_RANK||rank<=2?0:streak,attemptCounter,affinity,affinitySwitches,bonusOreDrops,secondary,secondarySwitches};
+}
+function forgeRule(state=game){return FORGE_RULES[(state.pickaxeForge?.rank||0)+1]||null;}
+function forgeChance(state=game){const rule=forgeRule(state);return rule?Math.min(100,rule.rate+FORGE_PITY_STEP*(state.pickaxeForge?.failStreak||0)):100;}
+function forgeReserved(item,state=game){
+ if(!liftNeedsRepair(state)||!state.economy?.reserveLiftMaterials)return 0;
+ if(item==='stone')return Math.min(STATION_COST.stone,Math.max(0,Math.floor(Number(state.inv.stone)||0)));
+ if(item==='copper')return liftReservedOreCount('copper',state);
+ return 0;
+}
+function forgeAvailable(item,state=game){return Math.max(0,Math.floor(Number(state.inv[item])||0)-forgeReserved(item,state));}
+function forgeShortageReasons(state=game){
+ const rule=forgeRule(state);if(!rule)return [];
+ const reasons=[];
+ if((state.coins||0)<rule.cost)reasons.push(`크레딧 ${state.coins||0}/${rule.cost}C (부족 ${rule.cost-(state.coins||0)}C)`);
+ for(const [id,qty] of rule.items){
+  const available=forgeAvailable(id,state);if(available>=qty)continue;
+  const reserved=forgeReserved(id,state),held=Math.max(0,Math.floor(Number(state.inv?.[id])||0));
+  reasons.push(`${MATERIAL_NAMES[id]} ${available}/${qty}개 (부족 ${qty-available}개${reserved?`, 보유 ${held}개 중 수리용 ${reserved}개 예약`:''})`);
+ }
+ return reasons;
+}
+function forgeCanAttempt(state=game){
+ const rule=forgeRule(state), forge=state.pickaxeForge;
+ if(!rule||!forge||!Number.isSafeInteger(forge.attemptCounter)||forge.attemptCounter===Number.MAX_SAFE_INTEGER)return false;
+ return Number.isSafeInteger(state.coins)&&state.coins>=rule.cost&&rule.items.every(([id,qty])=>forgeAvailable(id,state)>=qty);
+}
+function forgeRoll(state=game){
+ const f=state.pickaxeForge;
+ return hash(Math.imul(state.seed|0,1597334677)^Math.imul((f.attemptCounter+1)|0,1664525)^Math.imul((f.rank+1)|0,1103515245)^0x6a09e667);
+}
+function attemptPickaxeForge(){
+ if(performance.now()<forgeTapLockUntil)return false;
+ if(!forgeRule())return false;
+ if(!forgeCanAttempt()){flash('강화 조건 미충족 · '+forgeShortageReasons().join(' / '));return false;}
+ let outcome=null;
+ const ok=safeMarketTransaction(draft=>{
+  if(!forgeCanAttempt(draft))return false;
+  const f=draft.pickaxeForge, rule=forgeRule(draft), catalyst=ssP14EffectiveCatalyst(draft);
+  const chance=Math.min(100,forgeChance(draft)+SS_P14_CATALYSTS[catalyst].bonus);
+  const success=forgeRoll(draft)*100<chance;
+  if(catalyst!=='none'){if(draft.treasureP13.materials[catalyst]<1)return false;draft.treasureP13.materials[catalyst]-=1;}
+  const nextRank=f.rank+1;
+  if(success){
+   draft.coins-=rule.cost;
+   for(const [id,qty] of rule.items)draft.inv[id]-=qty;
+   f.rank=nextRank;
+   f.failStreak=0;
+  }else{
+   draft.coins-=Math.ceil(rule.cost/2);
+   f.failStreak=Math.min(4,f.failStreak+1);
+  }
+  f.attemptCounter++;
+  draft.economy.balanceMetrics.forgeAttempts++;
+  draft.economy.balanceMetrics.forgeCreditsSpent+=success?rule.cost:Math.ceil(rule.cost/2);
+  if(!success)draft.economy.balanceMetrics.forgeFailures++;
+  outcome={success,stage:nextRank,charged:success?rule.cost:Math.ceil(rule.cost/2),catalyst};
+  return true;
+ });
+ if(!ok)return false;
+ forgeTapLockUntil=performance.now()+450;
+ ssP14Catalyst='none';
+ ssForgeLastOutcome={...outcome,rank:game.pickaxeForge.rank,coins:game.coins,nextChance:forgeChance()};
+ forgeMenu();
+ if(outcome.success){
+  flash(`곡괭이 +${outcome.stage} 강화 성공! 채굴력 +${Math.round(forgeRankBonus(game.pickaxeForge.rank)*100)}%`);
+  playSound('pickup_ore');
+ }else{
+  flash(`강화 실패 · 단계 유지 · ${outcome.charged} 크레딧 소모\n다음 성공률 ${forgeChance()}%`);
+  playSound('stone_hit');
+ }
+ return true;
+}
+function forgeMarketPanel(){
+ const f=game.pickaxeForge,rule=forgeRule(),chance=forgeChance();
+ const outcome=ssForgeLastOutcome;
+ const result=outcome?`<div class="ss-forge-result" role="status" aria-live="polite"><strong>${outcome.success?`강화 성공! 곡괭이 +${outcome.rank}`:`강화 실패 · +${outcome.rank} 유지`}</strong><span>사용 ${outcome.charged}C · 남은 ${outcome.coins}C · ${outcome.success?'새 등급 반영 완료':`다음 성공률 ${outcome.nextChance}%`}</span></div>`:'';
+ const shortages=forgeShortageReasons();
+ const progress=Array.from({length:FORGE_MAX_RANK},(_,i)=>`<span class="${i<f.rank?'filled':''}" aria-hidden="true"></span>`).join('');
+ if(!rule)return `<section class="forge-panel" aria-label="곡괭이 강화"><h3>곡괭이 전용 강화 +20</h3>${result}${forgeAppearancePanel(f.rank,null)}<div class="forge-progress">${progress}</div><p>최대 강화 달성! 현재 채굴력 보너스 +${Math.round(forgeRankBonus(f.rank)*100)}%</p><p class="forge-hint">곡괭이 속성을 선택·교체할 수 있어요. 곡괭이 외형은 강화 단계에 따라 자동으로 바뀝니다. 기존 숙련도 강화는 독립적으로 유지됩니다.</p><button id="forgeAttempt" type="button" disabled>최대 강화 달성</button></section>`;
+ const ingredients=rule.items.map(([id,qty])=>{
+  const have=forgeAvailable(id),reserved=forgeReserved(id),pass=have>=qty;
+  return `<span class="${pass?'held':'shortage'}">${MATERIAL_NAMES[id]} ${have}/${qty}${reserved?` (수리용 ${reserved} 보존)`:''}</span>`;
+ }).join(' · ');
+  const ready=forgeCanAttempt();
+  // Show real before/after mining power against stone. Existing damage and costs unchanged.
+  const pickaxeBase=62*(1+(Math.max(1,Math.min(6,game.pickaxeLevel||1))-1)*.28)*pickaxeAffinityPower('stone')*mobilityDerived().mineMultiplier;
+  const powerBefore=pickaxeBase*(1+forgeRankBonus(f.rank));
+  const powerAfter=pickaxeBase*(1+forgeRankBonus(f.rank+1));
+  return `<section class="forge-panel" aria-label="곡괭이 강화">
+  <h3>곡괭이 전용 강화 · +${f.rank} → +${f.rank+1}</h3>
+  ${result}
+  ${forgeAppearancePanel(f.rank,f.rank+1)}
+  
+  <div class="forge-progress" aria-label="강화 진행 ${f.rank}단계 / ${FORGE_MAX_RANK}단계">${progress}</div>
+  <div class="forge-metrics">
+   <div class="forge-metric"><small>이번 시도 성공률</small><b>${chance}%</b><small>기본 ${rule.rate}% · 연속 실패 ${f.failStreak}회 (+${chance-rule.rate}%p)</small></div>
+   <div class="forge-metric"><small>단계별 채굴력</small><b>+${Math.round(forgeRankBonus(f.rank)*100)}% → +${Math.round(forgeRankBonus(f.rank+1)*100)}%</b><small>곡괭이만 적용 · 드릴/망치 영향 없음</small></div>
+  </div>
+  <p class="venue-caption">현재 캐릭터 기준 돌 채굴력 <strong>${powerBefore.toFixed(1)}</strong> → <strong>${powerAfter.toFixed(1)}</strong> (강화 시). +10까지 기존 규칙 유지, +11부터 단계당 추가 채굴력 +1%p.</p>
+   <div class="forge-recipe">보유 <strong>${game.coins}C</strong> · 성공 시 <strong>${rule.cost}C</strong> · 실패 시 <strong>${Math.ceil(rule.cost/2)}C</strong><br>재료: ${ingredients}</div>
+  ${shortages.length?`<div class="ss-forge-shortage" role="status">부족한 항목: ${shortages.join(' · ')}<br><small>수리용 재료가 예약됐다면 바람장터의 ‘보존’ 메뉴에서 확인할 수 있어요.</small></div>`:'<div class="ss-forge-ready">강화 재료와 크레딧 준비 완료</div>'}
+  <button id="forgeAttempt" class="cta" type="button" ${ready?'':'disabled'} aria-label="곡괭이 +${f.rank+1} 강화 시도">${ready?`곡괭이 +${f.rank+1} 강화 도전`:'강화 재료·크레딧 부족'}</button>
+  <div class="forge-hint">실패해도 강화 단계는 내려가지 않고 장비·재료는 사라지지 않아요. 실패마다 성공률 +20%p, 성공 시 보정 초기화. 저장 성공 후 거래 확정.</div>
+ </section>`;
+}
+function sellOre(id,quantity){
+ const entry=ORE_SALE_ITEMS.find(item=>item[0]===id);
+ if(!entry)return false;
+ const ok=safeMarketTransaction(draft=>{
+  const available=sellableOreCount(id,draft);
+  const amount=quantity==='all'?available:Math.min(available,quantity);
+  if(!Number.isSafeInteger(amount)||amount<=0)return false;
+  const value=amount*entry[2];
+  if(!Number.isSafeInteger(value)||!Number.isSafeInteger(draft.coins+value))return false;
+  draft.inv[id]-=amount;draft.coins+=value;
+  draft.economy.totalOreSold+=amount;draft.economy.totalCreditsEarned+=value;draft.economy.balanceMetrics.oreSold+=amount;draft.economy.balanceMetrics.creditsSold+=value;
+  return true;
+ });
+ if(ok){market();flash(`${entry[1]} ${quantity==='all'?'전량':quantity+'개'} 판매 완료`);}else if(sellableOreCount(id)===0){flash('판매 가능한 광물이 없어요. 보존 재료를 확인하세요.');}
+ return ok;
+}
+function sellAllOres(){
+ let totalCount=0,totalCredit=0;
+ const ok=safeMarketTransaction(draft=>{
+  for(const [id,label,price] of ORE_SALE_ITEMS){
+   const n=sellableOreCount(id,draft);if(n===0)continue;
+   draft.inv[id]-=n;draft.coins+=n*price;
+   totalCount+=n;totalCredit+=n*price;
+  }
+  if(totalCount<=0||!Number.isSafeInteger(draft.coins))return false;
+  draft.economy.totalOreSold+=totalCount;draft.economy.totalCreditsEarned+=totalCredit;draft.economy.balanceMetrics.oreSold+=totalCount;draft.economy.balanceMetrics.creditsSold+=totalCredit;
+  return Number.isSafeInteger(draft.economy.totalCreditsEarned);
+ });
+ if(ok){market();flash(`광물 ${totalCount}개 판매: +${totalCredit} 크레딧`);}else if(totalCount===0){flash('판매 가능한 광물이 없어요.');}
+ return ok;
+}
+ function market(){
+  if(!canOpenBuilding('market')){flash('바람장터 입구에서 이용할 수 있어요');return false;}
+  const section=marketSection,remember=menuType==='바람장터'&&$('overlay').classList.contains('open')?$('dialog').scrollTop:0;
+  const reserve=!!game.economy.reserveLiftMaterials,forgeReserve=!!game.economy.reserveForgeMaterials,pending=liftNeedsRepair();
+  const forgeRuleNext=forgeRule();
+  const available=ORE_SALE_ITEMS.reduce((acc,[id,,price])=>{const n=sellableOreCount(id);return {count:acc.count+n,value:acc.value+n*price};},{count:0,value:0});
+  let content='';
+  if(section==='sell'){
+    const sales=ORE_SALE_ITEMS.map(([id,label,price])=>{
+      const held=Math.floor(game.inv[id]||0),reserved=reservedOreCount(id),sellable=sellableOreCount(id);
+      return `<div class="line market-item"><div class="market-meta"><strong>${label} <small>보유 ${held} · 판매 가능 ${sellable}${reserved?` · 예약 ${reserved}`:''}</small></strong><small>개당 ${price} C</small></div><div class="market-actions" role="group" aria-label="${label} 판매"><button type="button" data-sell="${id}" data-qty="1" ${sellable?'':'disabled'}>1개</button><button type="button" data-sell="${id}" data-qty="10" ${sellable?'':'disabled'}>${sellable>=10?'10개':`최대 ${sellable}`}</button><button type="button" data-sell="${id}" data-qty="all" ${sellable?'':'disabled'}>전량</button></div></div>`;
+    }).join('');
+    content=`<p class="venue-caption">예약된 재료는 자동으로 제외돼요. 거래는 저장 성공 후 확정돼요.</p><section class="line market-summary" aria-label="광물 일괄 판매"><strong>전체 광물 판매</strong><div class="market-hint">${available.count}개 판매 가능 · 예상 수익 <b>${available.value} C</b></div><div class="market-actions"><button id="sellAllBtn" ${available.count?'':'disabled'}>전체 광물 판매하기</button></div></section>${sales}`;
+  }else if(section==='gear'){
+    const tools=Object.entries(TOOL_INFO).map(([id,t])=>{const owned=game.unlockedTools.includes(id),equipped=game.tool===id;return `<div class="line"><div><strong>${asset(t.icon,'sm')} ${toolLabel(id)}</strong><br><small>${t.tag}${owned?' · 보유 중':` · ${t.price} C`}</small></div><button data-tool="${id}" ${equipped||(!owned&&game.coins<t.price)?'disabled':''}>${equipped?'사용 중':owned?'장착':'구매'}</button></div>`}).join('');
+    content=`<p class="venue-caption">새 장비를 구매하거나 보유 장비를 장착할 수 있어요. 강화는 대장간에서 진행해요.</p>${tools}`;
+  }else if(section==='reserve'){
+    const c=liftReservedOreCount('copper');const text=forgeRuleNext?forgeRuleNext.items.map(([id,qty])=>`${MATERIAL_NAMES[id]} ${Math.min(qty,forgeAvailable(id))}/${qty}`).join(' · '):'곡괭이 최대 강화 완료';
+    content=`<p class="venue-caption">필요한 광물은 보존하고, 남은 수량만 판매할 수 있어요.</p><div class="line reserve-row"><div><strong>승강장 수리 재료</strong><br><small>${pending?`돌 ${Math.min(game.inv.stone||0,8)}/8 · 구리 ${c}/3 예약`:'승강장 복구 완료'}</small></div><button id="reserveLiftBtn" ${pending?'':'disabled'} aria-pressed="${reserve}">${pending?(reserve?'보존 켜짐':'보존 꺼짐'):'수리 완료'}</button></div><div class="line balance-reserve"><div><strong>다음 곡괭이 강화 재료</strong><br><small>${text}</small></div><button id="reserveForgeBtn" ${forgeRuleNext?'':'disabled'} aria-pressed="${forgeReserve}">${forgeRuleNext?(forgeReserve?'보존 켜짐':'보존 꺼짐'):'강화 완료'}</button></div>`;
+  }else{
+    content='<p class="venue-caption">이 기기 월드 저장에만 보관되는 플레이 통계예요.</p>'+balanceMetricsMarkup();
+  }
+  const tabs=[['sell','판매','sell'],['gear','장비','gear'],['reserve','보존','reserve'],['stats','기록','stats']];
+  venuePresent('바람장터',venueHeader('market','필요한 것만, 가볍게 거래하세요.')+venueTabs(tabs,section)+'<div class="venue-content">'+content+'</div>');
+  $('dialog').scrollTop=remember;
+  document.querySelectorAll('[data-section]').forEach(btn=>btn.onclick=()=>{marketSection=btn.dataset.section;market();});
+  document.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellOre(btn.dataset.sell,btn.dataset.qty==='all'?'all':Number(btn.dataset.qty)));
+  if($('sellAllBtn'))$('sellAllBtn').onclick=sellAllOres;
+  if($('reserveLiftBtn'))$('reserveLiftBtn').onclick=()=>{const ok=safeMarketTransaction(d=>{d.economy.reserveLiftMaterials=!d.economy.reserveLiftMaterials;return true;});if(ok){market();flash(game.economy.reserveLiftMaterials?'수리 재료 보존 켜짐':'수리 재료 보존 꺼짐');}};
+  if($('reserveForgeBtn'))$('reserveForgeBtn').onclick=()=>{const ok=safeMarketTransaction(d=>{if(!forgeRule(d))return false;d.economy.reserveForgeMaterials=!d.economy.reserveForgeMaterials;return true;});if(ok){market();flash(game.economy.reserveForgeMaterials?'강화 재료 보존 켜짐':'강화 재료 보존 꺼짐');}};

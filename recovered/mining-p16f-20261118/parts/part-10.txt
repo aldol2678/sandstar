@@ -1,0 +1,650 @@
+function ssM1Transition(target,fromPortal=false,sourceGateId='',deferSave=false){
+ if(!game||!p||paused||!['mine','life_forest_01',TOWN_WORLD_ID].includes(target)||target===ssRegion)return false;
+ const previousRegion=ssRegion,prevWorld={x:game.playerX,y:game.playerY},prevPos={x:p.x,y:p.y,vx:p.vx,vy:p.vy},prevStory=JSON.parse(JSON.stringify(game.storyM1));
+ if(!deferSave&&!saveGame(true)){flash('이동 전 저장이 차단됐어요. 기존 위치를 유지합니다.');return false;}
+ if(previousRegion==='mine')game.storyM1.minePos={x:p.x,y:p.y};else if(previousRegion===TOWN_WORLD_ID)game.storyM1.townPos={x:p.x,y:p.y};else game.storyM1.forestPos={x:p.x,y:p.y};
+ game.storyM1.region=target;ssRegion=target;
+ const dest=target==='mine'?game.storyM1.minePos:target===TOWN_WORLD_ID?game.storyM1.townPos:game.storyM1.forestPos;
+ const safe=fromPortal?ssM16ResolveSafeSpawn(target,sourceGateId):null;
+ const targetX=fromPortal?(safe?.x??NaN):(dest?.x||(target==='mine'?TOWN_MINE_PORTAL_X+.5:target===TOWN_WORLD_ID?SPAWN_X+.5:M1_FOREST_GATE_X+2));
+ const targetY=fromPortal?(safe?.y??NaN):(dest?.y||terrain(targetX)-1);
+ releaseRope();hudReleaseMine();stopMineStick();holdTarget=null;holdLast=null;holdProgress=0;
+ input.left=input.right=input.jump=input.reelIn=input.reelOut=false;
+ p.x=targetX;p.y=targetY;p.vx=0;p.vy=0;p.grounded=false;
+ if(!fromPortal&&collides(p.x,p.y)){p.x=(target==='mine'?TOWN_MINE_PORTAL_X+2:target===TOWN_WORLD_ID?SPAWN_X+1:M1_FOREST_GATE_X+2)+.5;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!Number.isFinite(p.x)||!Number.isFinite(p.y)){
+  game.storyM1=prevStory;ssRegion=previousRegion;p.x=prevPos.x;p.y=prevPos.y;p.vx=prevPos.vx;p.vy=prevPos.vy;flash('안전한 진입 위치를 찾지 못했어요.');return false;
+ }
+ if(target==='life_forest_01'){game.storyM1.forestVisited=true;ssM1LogEvent('entered-forest');}
+ game.playerX=p.x;game.playerY=p.y;
+ if(!deferSave&&!saveGame(true)){
+  game.storyM1=prevStory;ssRegion=previousRegion;game.playerX=prevWorld.x;game.playerY=prevWorld.y;
+  p.x=prevPos.x;p.y=prevPos.y;p.vx=prevPos.vx;p.vy=prevPos.vy;
+  flash('저장 실패로 지역 이동을 취소했어요.');return false;
+ }
+ camera.x=Math.max(0,p.x*T-viewW*.45);camera.y=Math.max(0,p.y*T-viewH*.5);
+ ssM15ManualMining=false;ssM15Scene='';ssM15ResetHeldInputs();
+ visionCache.cx=-999;updateVisionCache(true);updHud();flash(target==='mine'?'광산에 도착했어요':target===TOWN_WORLD_ID?'도래마을에 도착했어요':'새 지역 발견 · 잔빛숲');return true;
+}
+function ssM1InspectCrystal(){
+ if(ssRegion!=='mine'||Math.abs(p.x-M1_MINE_CRYSTAL_X)>3.1)return false;
+ if(game.storyM1.crystalSeen){flash('이미 기록한 별맥의 흔적이에요');return true;}
+ if(game.mined<1){flash('주변 흙이나 돌을 먼저 한 번 채굴해 보세요.');return false;}
+ game.storyM1.crystalSeen=true;ssM1LogEvent('crystal-discovered');
+ if(!saveGame(true)){game.storyM1.crystalSeen=false;game.storyM1.storyEvents=game.storyM1.storyEvents.filter(x=>x!=='crystal-discovered');flash('저장할 수 없어 발견을 기록하지 못했어요');return false;}
+ updHud();flash('✦ 별맥의 흔적 발견! 동쪽 X64 숲길로 향하세요.');return true;
+}
+function ssM1SpringMenu(){
+ if(ssRegion!=='life_forest_01'||Math.abs(p.x-M1_FOREST_SPRING_X)>3.8)return false;
+ const st=game.storyM1;
+ if(st.springRepaired){showModal('💧 다시 흐르는 별샘','<p>작은 물줄기가 돌아왔습니다. 그러나 오래된 장치에는 경고가 새겨져 있어요.</p><p><em>“흐름을 되찾는 자여, 무엇이 잠들어 있는지도 기억하라.”</em></p><p class="note">제1장 완료 · 이후의 이야기는 후속 개발에서 이어집니다. 생활·채굴은 계속할 수 있습니다.</p>');return true;}
+ showModal('✦ 꺼진 샘의 비밀',`<p>메마른 강의 상류에 봉인된 별맥 장치가 있습니다. 낡은 수리판에는 <strong>원목 2개와 돌 2개</strong>가 필요하다고 적혀 있어요.</p><div class="line"><div>✦ 광맥 조사 기록</div><strong>${st.crystalSeen?'발견함':'미발견 · 마을 X55'}</strong></div><div class="line"><div>원목</div><strong>${game.inv.wood||0} / 2</strong></div><div class="line"><div>돌</div><strong>${game.inv.stone||0} / 2</strong></div><div class="stack"><button type="button" class="cta" id="m1RepairBtn" ${st.crystalSeen&&game.inv.wood>=2&&game.inv.stone>=2?'':'disabled'}>별샘 수리하기</button></div><p class="note">숲 나무 X82·94·106에서 벌목하고, 마을 광산에서 돌을 채굴하세요. 지역을 오가도 소지품은 보존됩니다.</p>`);
+ $('m1RepairBtn').onclick=ssM1RepairSpring;return true;
+}
+function ssM1RepairSpring(){
+ const st=game.storyM1;
+ if(ssRegion!=='life_forest_01'||Math.abs(p.x-M1_FOREST_SPRING_X)>3.8||st.springRepaired||!st.crystalSeen||game.inv.wood<2||game.inv.stone<2){flash('별맥 조사와 수리 재료가 더 필요해요.');return false;}
+ const prev={wood:game.inv.wood,stone:game.inv.stone,story:JSON.parse(JSON.stringify(st))};
+ game.inv.wood-=2;game.inv.stone-=2;st.springRepaired=true;st.storyRewarded=true;ssM1LogEvent('spring-repaired');
+ if(!saveGame(true)){game.inv.wood=prev.wood;game.inv.stone=prev.stone;game.storyM1=prev.story;flash('저장할 수 없어 수리를 취소했어요. 재료는 보존됐습니다.');return false;}
+ closeModal();updHud();flash('💧 첫 번째 별맥이 깨어났어요!');return true;
+}
+function ssM1Talk(role){
+ if(role==='harin'){
+  showModal('🪚 하린 · 도래마을의 목수',`<p>“여긴 고칠 게 많아. 그래도 돌아올 길은 남겨 두었어.”</p><p>${game.storyM1.crystalSeen?'별빛 결정이라… 그럼 숲의 오래된 수로 장치도 다시 움직일지 몰라.':'저쪽 X55에서 묘한 빛이 보여. 근처 땅을 조금 캐보고 살펴줄래?'}</p><p class="note">마을 동쪽 X64의 나무문을 지나면 잔빛숲으로 이어집니다. 생활권은 별도의 맵이지만 자원과 장비는 공유합니다.</p>`);return true;
+ }
+ if(role==='seon'){
+  showModal('📖 서온 · 지질 조사원',`<p>“빛이 난다는 사실과 안전하다는 결론은 다르죠. 지금은 둘을 구분해야 해요.”</p><p>${game.storyM1.springRepaired?'물길은 돌아왔지만, 봉인된 장치가 왜 있었는지는 더 조사해야 합니다.':'이 길 끝 X120의 샘에 고대 결정 회로가 있어요. 광산의 별광 흔적을 기록하고 원목 2개와 돌 2개로 장치를 수리해 볼 수 있을 거예요.'}</p><p class="note">서온은 이 세계의 별맥이 자연의 순환인지, 누군가가 설계한 장치인지 아직 판단하지 않았습니다.</p>`);return true;
+ }
+ return false;
+}
+function ssM1Act(){
+ const choice=ssM1NearbyAction();if(!choice)return false;
+ if(choice.act==='arch-enter')return archWorldTryEnter();
+  if(choice.act==='crystal')return ssM1InspectCrystal();
+ if(choice.act==='enter')return ssM16RequestTravel('life_forest_01');
+ if(choice.act==='exit'||choice.act==='mine-exit')return ssM16RequestTravel(TOWN_WORLD_ID);
+ if(choice.act==='mine-enter')return ssM16RequestTravel('mine');
+ if(choice.act==='spring')return ssM1SpringMenu();
+ if(choice.act==='harin'||choice.act==='seon')return ssM1Talk(choice.act);
+ if(choice.act==='m17-object')return ssM17DoAction(choice.targetId);
+ const name=choice.act==='market'?'town':choice.act;
+ livingActiveTab=name==='town'?'town':name;livingMenu();return true;
+}
+$('m1ActionBtn').addEventListener('click',e=>{e.stopPropagation();ssM1Act();});
+window.__sandstarHUDM15={get:()=>({scene:ssM15Scene,manualMining:ssM15ManualMining,base:ssM15BaseScene(),region:ssRegion,questExpanded:ssM15QuestExpanded,saveKey:SAVE_KEY}),toggleTool:ssM15ToggleToolMode,sync:ssM15SyncScene,setTestPosition:(x,y)=>{p.x=x;p.y=y;p.vx=p.vy=0;ssM15ManualMining=false;ssM15Scene='';updHud();}};
+
+// ============================================================
+// SANDSTAR FARM WORLD M2.0: true independently simulated top-down map.
+// Not a popup: its viewport, player, collision, camera, input and worldId
+// replace the legacy side-view scene until the physical gate is used.
+// Legacy ssRegion remains life_forest_01 in the suspended side-view adapter.
+// ============================================================
+const FARM_WORLD_ID='farm_01', FARM_FOREST_GATE_X=28, FARM_W=46, FARM_H=32, FARM_TILE=32;
+const FARM_PLOTS=Object.freeze([{id:'plot:34',x:18,y:15},{id:'plot:37',x:24,y:15},{id:'plot:40',x:30,y:15}]);
+const farmRoot=$('farmWorldRoot'),farmCanvas=$('farmWorldCanvas'),farmCtx=farmCanvas.getContext('2d',{alpha:false});
+let farmWorldActive=false,farmFrame=0,farmPlayer={x:6.5,y:16.5,face:'down'},farmCamera={x:0,y:0},farmSelectedSeed='wheat',farmMoveKeys=new Set(),farmPointer=null,farmJoystick={x:0,y:0},farmActionCount=0,farmChangeTimer=0,farmToastUntil=0,farmLastEnter=0;
+let farmCanvasW=0,farmCanvasH=0,farmCanvasDpr=1,farmCommandSeq=0;
+function farmWorldNormalize(raw){
+ const d={schema:1,activeWorldId:ssRegion,position:{x:6.5,y:16.5},entryCount:0};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return d;
+ if(raw.activeWorldId===FARM_WORLD_ID)d.activeWorldId=FARM_WORLD_ID;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.y)){
+  const x=Math.max(2.5,Math.min(FARM_W-2.5,raw.position.x)),y=Math.max(2.5,Math.min(FARM_H-2.5,raw.position.y));
+  if(!farmWorldBlocked(x,y))d.position={x,y};
+ }
+ d.entryCount=Number.isSafeInteger(raw.entryCount)?Math.min(100000,Math.max(0,raw.entryCount)):0;
+ return d;
+}
+function farmWorldBlocked(x,y){
+ if(!Number.isFinite(x)||!Number.isFinite(y)||x<1.4||y<1.4||x>FARM_W-2.4||y>FARM_H-2.4)return true;
+ const rect=(x1,y1,x2,y2)=>x>x1&&x<x2&&y>y1&&y<y2;
+ if(rect(8,4,15,10)||rect(33,4,41,11)||rect(34,22,43,30)||rect(4,22,8,27))return true;
+ for(const [tx,ty] of [[12,24],[16,25],[40,16],[7,30],[43,12],[17,4]])if(Math.hypot(x-tx,y-ty)<.83)return true;
+ return false;
+}
+function farmWorldInitState(){game.farmWorldV1=farmWorldNormalize(game?.farmWorldV1);return game.farmWorldV1;}
+function farmWorldNearbyGate(){return Math.hypot(farmPlayer.x-3.9,farmPlayer.y-16.5)<3.1;}
+function farmWorldNearPlot(){
+ let best=null,dist=Infinity;
+ for(const o of FARM_PLOTS){let d=Math.hypot(farmPlayer.x-o.x,farmPlayer.y-o.y);if(d<dist){best=o;dist=d;}}
+ return dist<=3.15?best:null;
+}
+function farmWorldNearForestGate(){return !!p&&!!game&&!paused&&!ssM16TransitionLocked&&ssRegion==='life_forest_01'&&ssM15Scene!=='mining'&&Math.abs(p.x-FARM_FOREST_GATE_X)<=2.8&&Math.abs(p.y-(terrain(FARM_FOREST_GATE_X)-1))<=2.8;}
+function farmWorldSyncForestGate(){
+ const b=$('farmForestGateAction');if(!b)return;
+ b.hidden=!farmWorldNearForestGate();
+}
+$('farmForestGateAction').addEventListener('click',e=>{e.stopPropagation();farmWorldTryEnter();});
+function farmWorldDrawForestPortal(){
+ if(!game||ssRegion!=='life_forest_01')return;
+ const sx=Math.round(FARM_FOREST_GATE_X*T-camera.x),sy=Math.round((terrain(FARM_FOREST_GATE_X)-1)*T-camera.y);
+ if(sx<-75||sx>viewW+75)return;
+ const near=farmWorldNearForestGate();ctx.save();
+ ctx.fillStyle='#60452e';ctx.fillRect(sx-16,sy-48,8,51);ctx.fillRect(sx+22,sy-48,8,51);
+ ctx.fillStyle='#bfa474';ctx.fillRect(sx-18,sy-49,50,9);
+ ctx.fillStyle=near?'#fff3ab':'#edffdb';ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillText(near?'E · 도래 농장 입장':'🌾 농장 길 →',sx+5,sy-62);
+ if(near){ctx.globalAlpha=.24;ctx.fillStyle='#f5e9b1';ctx.fillRect(sx-23,sy-52,58,55);}
+ ctx.restore();
+}
+function farmWorldTryForestTap(q){
+ if(ssRegion!=='life_forest_01'||!q)return false;
+ const y=terrain(FARM_FOREST_GATE_X)-1;
+ if(Math.abs(q.x+.5-FARM_FOREST_GATE_X)>1.7||q.y<y-3.1||q.y>y+1)return false;
+ if(!farmWorldNearForestGate()){flash('농장 출입구 가까이 가서 이용해 주세요');return true;}
+ farmWorldTryEnter();return true;
+}
+function farmWorldClearInput(){farmMoveKeys.clear();farmJoystick={x:0,y:0};farmPointer=null;}
+function farmWorldActivate(){
+ farmWorldActive=true;farmRoot.hidden=false;$('app').classList.add('farm-world-active');
+ farmWorldClearInput();ssM15ResetHeldInputs();releaseRope();
+ const state=farmWorldInitState();farmPlayer.x=state.position.x;farmPlayer.y=state.position.y;
+ farmWorldResize();farmWorldRefreshHud();
+}
+function farmWorldDeactivate(){
+ farmWorldClearInput();farmWorldActive=false;farmRoot.hidden=true;$('app').classList.remove('farm-world-active');
+ ssM15ResetHeldInputs();last=performance.now();
+}
+function farmWorldEnterCore(){
+ if(farmWorldActive)return false;
+ if(!saveGame(true)){flash('진입 전 저장에 실패했어요. 월드는 유지됩니다.');return false;}
+ const prev=game.farmWorldV1?JSON.parse(JSON.stringify(game.farmWorldV1)):null;
+ const state=farmWorldInitState();state.activeWorldId=FARM_WORLD_ID;state.entryCount++;
+ if(!saveGame(true)){
+  if(prev)game.farmWorldV1=prev;else delete game.farmWorldV1;
+  flash('농장 저장에 실패했어요. 진입하지 않았습니다.');return false;
+ }
+ farmWorldActivate();farmLastEnter=performance.now();farmWorldToast('도래 농장에 도착했어요. 밭까지 걸어가 보세요!');return true;
+}
+function farmWorldExitCore(){
+ if(!farmWorldActive||!farmWorldNearbyGate()){farmWorldToast('서쪽 출입구로 가까이 가야 돌아갈 수 있어요');return false;}
+ const state=farmWorldInitState(),old=JSON.parse(JSON.stringify(state));
+ const oldPlayer={x:p.x,y:p.y,vx:p.vx,vy:p.vy};
+ state.position={x:farmPlayer.x,y:farmPlayer.y};state.activeWorldId='life_forest_01';
+ p.x=FARM_FOREST_GATE_X+.5;p.y=terrain(p.x)-1;p.vx=p.vy=0;
+ if(collides(p.x,p.y)){p.x=FARM_FOREST_GATE_X+1.5;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!saveGame(true)){
+  game.farmWorldV1=old;Object.assign(p,oldPlayer);farmWorldToast('저장 또는 안전 위치 확인에 실패해 농장에 머무릅니다');return false;
+ }
+ farmWorldDeactivate();updHud();flash('잔빛숲으로 돌아왔어요');return true;
+}
+function farmWorldTryEnter(){
+ if(!farmWorldNearForestGate()||farmWorldActive||performance.now()-farmLastEnter<420||m25bBusy)return false;
+ return m25bTransition(FARM_WORLD_ID,'farm-enter',farmWorldEnterCore,'life_forest_01');
+}
+function farmWorldTryExit(){
+ if(!farmWorldActive||!farmWorldNearbyGate()||m25bBusy){
+  if(farmWorldActive&&!m25bBusy)farmWorldToast('서쪽 출입구로 가까이 가야 돌아갈 수 있어요');
+  return false;
+ }
+ return m25bTransition('life_forest_01','farm-exit',farmWorldExitCore,FARM_WORLD_ID);
+}
+function farmWorldRestoreAfterContinue(){
+ if(!game||ssIsTitle())return;
+ const state=farmWorldInitState();
+ if(state.activeWorldId===FARM_WORLD_ID){farmWorldActivate();farmWorldToast('농장에서 이어서 시작합니다');}
+}
+function farmWorldToast(message){const t=$('farmWorldToast');t.textContent=message;t.classList.add('show');farmToastUntil=performance.now()+2400;}
+function farmWorldActionLabel(){
+ if(farmWorldNearbyGate())return '🚪 잔빛숲으로 나가기';
+ const near=farmWorldNearPlot();if(!near)return '🌾 밭으로 이동하세요';
+ const plot=game?.livingP0?.plots?.[near.id];if(!plot)return '🌾 경작 준비 중';
+ if(plot.plantedAt===null)return '🌱 '+LIVING_CROPS[farmSelectedSeed].name+' 심기';
+ if(!plot.watered)return '💧 물 주기';
+ const t=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90);
+ const remaining=t-(game.livingP0.clock-plot.plantedAt);
+ return remaining>0?'🌿 성장 중 '+Math.ceil(remaining)+'초':'🌾 수확하기';
+}
+function farmWorldRefreshHud(){
+ if(!game||!farmWorldActive)return;
+ const bag=game.livingP0.bag;
+ $('farmWorldBag').textContent=`🌱 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;
+ $('farmWorldCoords').textContent=`X ${Math.floor(farmPlayer.x)} · Y ${Math.floor(farmPlayer.y)} · ${FARM_WORLD_ID}`;
+ const btn=$('farmWorldAction');btn.textContent=farmWorldActionLabel();btn.disabled=!farmWorldNearPlot()&&!farmWorldNearbyGate();
+ $('farmWorldExit').hidden=!farmWorldNearbyGate();
+ const near=farmWorldNearPlot();$('farmWorldSub').textContent=near?`농장 ${near.id.replace('plot:','')}번 밭 · ${farmWorldActionLabel().replace(/^[^ ]+ /,'')}`:'자유롭게 이동하며 밭과 출입구를 찾으세요';
+}
+function farmWorldCommand(type,target,item){
+ const cmd={id:'farm-'+Date.now()+'-'+(++farmCommandSeq),type,target,item};
+ const tx=livingTargetX(target);if(tx===null)return false;
+ // The existing P1.1 command engine operates on canonical legacy plot IDs.
+ // Farm player proximity is validated in independent world coordinates FIRST.
+ const r=applyLivingCommandPure(game.livingP0,cmd,{x:tx,y:76,groundY:76,inv:game.inv,coins:game.coins,seed:game.seed});
+ if(!r.ok){farmWorldToast(r.reason);return false;}
+ const prevState=game.livingP0,prevInv=game.inv,prevCoins=game.coins;
+ game.livingP0=r.state;game.inv=r.inv;game.coins=r.coins;
+ if(!saveGame(true)){game.livingP0=prevState;game.inv=prevInv;game.coins=prevCoins;farmWorldToast('저장 실패: 작업이 취소되고 자원이 복구됐어요');return false;}
+ farmActionCount++;farmWorldRefreshHud();farmWorldToast(r.message);return true;
+}
+function farmWorldAction(){
+ if(!farmWorldActive||m25bBusy)return false;
+ if(farmWorldNearbyGate())return farmWorldTryExit();
+ const near=farmWorldNearPlot();if(!near){farmWorldToast('밭 옆으로 이동하면 작업할 수 있어요');return false;}
+ const plot=game.livingP0.plots[near.id];
+ if(plot.plantedAt===null)return farmWorldCommand('plot.plant',near.id,farmSelectedSeed);
+ if(!plot.watered)return farmWorldCommand('plot.water',near.id);
+ return farmWorldCommand('plot.harvest',near.id);
+}
+$('farmWorldAction').addEventListener('click',farmWorldAction);
+$('farmWorldExit').addEventListener('click',farmWorldTryExit);
+$('farmSeedSelector').addEventListener('click',e=>{const b=e.target.closest('[data-farm-seed]');if(!b)return;
+ farmSelectedSeed=b.dataset.farmSeed;
+ for(const x of $('farmSeedSelector').querySelectorAll('button'))x.classList.toggle('selected',x===b);
+ farmWorldRefreshHud();});
+function farmWorldResize(){
+ const r=farmCanvas.getBoundingClientRect();farmCanvasW=r.width;farmCanvasH=r.height;
+ farmCanvasDpr=Math.min(devicePixelRatio||1,2);farmCanvas.width=Math.max(1,Math.round(r.width*farmCanvasDpr));farmCanvas.height=Math.max(1,Math.round(r.height*farmCanvasDpr));
+ farmCtx.imageSmoothingEnabled=false;
+}
+function farmWorldMoveDelta(){
+ if(m25bBusy)return {x:0,y:0};
+ let dx=(farmMoveKeys.has('d')||farmMoveKeys.has('arrowright')?1:0)-(farmMoveKeys.has('a')||farmMoveKeys.has('arrowleft')?1:0);
+ let dy=(farmMoveKeys.has('s')||farmMoveKeys.has('arrowdown')?1:0)-(farmMoveKeys.has('w')||farmMoveKeys.has('arrowup')?1:0);
+ dx+=farmJoystick.x;dy+=farmJoystick.y;let n=Math.hypot(dx,dy);return n>1?{x:dx/n,y:dy/n}:{x:dx,y:dy};
+}
+function farmWorldTick(dt){
+ if(!game||ssIsTitle())return;
+ if(m25bBusy){farmWorldDraw();return;}
+ if(farmToastUntil&&performance.now()>farmToastUntil){$('farmWorldToast').classList.remove('show');farmToastUntil=0;}
+ farmFrame++;
+ const vec=farmWorldMoveDelta();const delta=Math.min(.05,dt)*4.7;
+ for(const axis of ['x','y']){
+  const v=vec[axis]*delta;if(!v)continue;
+  const next={...farmPlayer,[axis]:farmPlayer[axis]+v};
+  const rad=.31;
+  if(![[-rad,-rad],[rad,-rad],[-rad,rad],[rad,rad]].some(([ox,oy])=>farmWorldBlocked(next.x+ox,next.y+oy)))farmPlayer[axis]+=v;
+ }
+ if(Math.abs(vec.x)+Math.abs(vec.y)>.1)farmPlayer.face=Math.abs(vec.x)>Math.abs(vec.y)?vec.x>0?'right':'left':vec.y>0?'down':'up';
+ livingWorldTick(Math.max(0,dt)); // crops mature while playing in the new world
+ farmChangeTimer+=dt;
+ if(farmChangeTimer>.25){farmChangeTimer=0;farmWorldRefreshHud();}
+ if(farmFrame%270===0){game.farmWorldV1.position={x:farmPlayer.x,y:farmPlayer.y};saveGame(true);}
+ farmWorldDraw();
+}
+const farmRand=(x,y,k=1)=>{let a=Math.sin((x*113+y*241+k*37)*12.9898)*43758.5453;return a-Math.floor(a);};
+function farmWorldDraw(){
+ if(!farmCanvasW||!farmCanvasH)farmWorldResize();
+ const c=farmCtx,t=FARM_TILE,W=farmCanvasW,H=farmCanvasH;
+ c.setTransform(farmCanvasDpr,0,0,farmCanvasDpr,0,0);c.imageSmoothingEnabled=false;
+ c.fillStyle='#85b990';c.fillRect(0,0,W,H);
+ farmCamera.x=Math.max(0,Math.min(Math.max(0,FARM_W*t-W),farmPlayer.x*t-W*.5));
+ farmCamera.y=Math.max(0,Math.min(Math.max(0,FARM_H*t-H),farmPlayer.y*t-H*.51));
+ c.save();c.translate(-Math.round(farmCamera.x),-Math.round(farmCamera.y));
+ const x0=Math.max(0,Math.floor(farmCamera.x/t)-1),x1=Math.min(FARM_W-1,Math.ceil((farmCamera.x+W)/t)+1);
+ const y0=Math.max(0,Math.floor(farmCamera.y/t)-1),y1=Math.min(FARM_H-1,Math.ceil((farmCamera.y+H)/t)+1);
+ const path=(x,y)=>(y>=15&&y<=17&&x>=3&&x<=37)||(x>=19&&x<=21&&y>=6&&y<=26)||(x>=11&&x<=13&&y>=10&&y<=17);
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+  const px=x*t,py=y*t,road=path(x,y);c.fillStyle=road?((x+y)%2?'#baae80':'#c6b78e'):(farmRand(x,y)>.55?'#82b98a':'#8cc497');c.fillRect(px,py,t,t);
+  if(road){c.fillStyle='#e0cf9c';if(farmRand(x,y,9)>.66)c.fillRect(px+8,py+11,4,2);}else{
+   const r=farmRand(x,y);if(r>.79){c.fillStyle='#568b5b';c.fillRect(px+7,py+8,3,9);c.fillRect(px+21,py+22,4,5);}if(r<.12){c.fillStyle='#fff3bb';c.fillRect(px+13,py+13,3,3);} }
+ }
+ // Outer fence with visible western farm gate; fence has physical collision along map bounds.
+ for(let x=1;x<FARM_W-1;x++){farmDrawFence(c,x,1,'horizontal');farmDrawFence(c,x,FARM_H-2,'horizontal');}
+ for(let y=1;y<FARM_H-1;y++){if(y<14||y>18)farmDrawFence(c,1,y,'vertical');farmDrawFence(c,FARM_W-2,y,'vertical');}
+ // Barn, farmhouse, woodland, pond, orchard and crop plots are actual spatial entities.
+ farmDrawHouse(c,8,4,7,6,'🏡 농장 주택','#a96e59');
+ farmDrawHouse(c,33,4,8,7,'🏚️ 창고','#805c56');
+ // Pond with bordered reeds; solid collision handled by farmWorldBlocked.
+ for(let y=22;y<30;y++)for(let x=34;x<43;x++){
+  c.fillStyle=farmRand(x,y,7)>.5?'#488f9a':'#559da2';c.fillRect(x*t,y*t,t,t);
+  if(farmRand(x,y,21)>.83){c.fillStyle='#bddcd1';c.fillRect(x*t+9,y*t+14,9,2);}
+ }
+ for(const [x,y] of [[6,25],[12,24],[16,25],[40,16],[7,30],[43,12],[17,4]])farmDrawTree(c,x,y);
+ for(const o of FARM_PLOTS)farmDrawPlot(c,o);
+ // signposts and a separate in-world west portal
+ farmDrawPortal(c,3.9,16.5);
+ farmDrawSign(c,14,13,'농작물 🌱');farmDrawSign(c,23,21,'✦ 별맥 토양');
+ // player sprite: autonomous top-down four-direction avatar; independent position
+ farmDrawPlayer(c,farmPlayer.x*t,farmPlayer.y*t);
+ c.restore();
+}
+function farmDrawFence(c,x,y,dir){const px=x*FARM_TILE,py=y*FARM_TILE;c.fillStyle='#654b39';if(dir==='horizontal'){c.fillRect(px,py+11,32,5);c.fillRect(px+4,py+6,6,17);}else{c.fillRect(px+12,py,5,32);c.fillRect(px+7,py+4,16,5);}}
+function farmDrawHouse(c,x,y,w,h,label,color){let t=FARM_TILE,px=x*t,py=y*t;c.fillStyle='#283b35aa';c.fillRect(px+11,py+h*t-2,w*t+8,20);c.fillStyle='#d1ae82';c.fillRect(px,py+40,w*t,h*t-40);c.fillStyle='#704b3c';c.fillRect(px-7,py+20,w*t+14,25);c.fillStyle=color;c.beginPath();c.moveTo(px-20,py+35);c.lineTo(px+w*t/2,py-12);c.lineTo(px+w*t+20,py+35);c.closePath();c.fill();c.fillStyle='#fff1b2';c.fillRect(px+24,py+76,25,27);c.fillStyle='#406270';c.fillRect(px+28,py+79,17,19);c.fillStyle='#5c4030';c.fillRect(px+w*t/2-11,py+h*t-48,25,48);c.fillStyle='#fff2d3';c.font='bold 13px system-ui';c.textAlign='center';c.fillText(label,px+w*t/2,py-20);}
+function farmDrawTree(c,x,y){const t=FARM_TILE,px=x*t,py=y*t;c.fillStyle='#543c2d';c.fillRect(px+10,py-6,13,37);c.fillStyle='#325d49';c.fillRect(px-22,py-35,77,22);c.fillStyle='#3e7855';c.fillRect(px-16,py-55,63,36);c.fillStyle='#519264';c.fillRect(px-5,py-63,44,20);c.fillStyle='#78aa74';c.fillRect(px+5,py-46,16,8);}
+function farmDrawPlot(c,o){
+ const t=FARM_TILE,px=(o.x-1.6)*t,py=(o.y-1.4)*t,w=3.2*t,h=2.8*t;
+ c.fillStyle='#4f6944';c.fillRect(px-5,py-5,w+10,h+10);c.fillStyle='#80604a';c.fillRect(px,py,w,h);
+ for(let r=0;r<3;r++)for(let col=0;col<3;col++){
+  c.fillStyle=(r+col)%2===0?'#9b7554':'#926d4b';c.fillRect(px+4+col*(w-8)/3,py+4+r*(h-8)/3,(w-13)/3,(h-13)/3);
+  c.fillStyle='#b18c69';c.fillRect(px+9+col*(w-8)/3,py+4+r*(h-8)/3,2,(h-15)/3);
+ }
+ const plot=game?.livingP0?.plots?.[o.id];
+ if(plot?.plantedAt!==null&&plot){
+  const duration=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90),ratio=Math.min(1,(game.livingP0.clock-plot.plantedAt)/duration);
+  const colors=plot.crop==='wheat'?['#6a9c54','#8ebc65','#d8b95d']:plot.crop==='carrot'?['#6ab45b','#6aa94a','#f4a456']:['#55a35e','#80b267','#b8d48b'];
+  for(let r=0;r<3;r++)for(let col=0;col<3;col++){
+   let xx=px+19+col*29,yy=py+22+r*25;const hgt=10+Math.round(15*ratio);
+   c.fillStyle=colors[ratio>.92?2:ratio>.48?1:0];c.fillRect(xx-4,yy-hgt,9,hgt);c.fillStyle='#e7d88c';if(ratio>.8)c.fillRect(xx-2,yy-hgt-5,6,5);
+  }
+  if(plot.watered){c.fillStyle='#a5e2ed';for(let i=0;i<5;i++)c.fillRect(px+9+i*17,py+h-8,4,3);}
+ }
+ if(farmWorldNearPlot()?.id===o.id){c.strokeStyle='#fff3c4';c.lineWidth=4;c.strokeRect(px-5,py-5,w+10,h+10);}
+ c.fillStyle='#193e31de';c.fillRect(px+10,py-27,w-20,21);c.fillStyle='#fff4ce';c.font='bold 12px system-ui';c.textAlign='center';c.fillText('밭 '+o.id.split(':')[1],px+w/2,py-12);
+}
+function farmDrawPortal(c,x,y){let px=x*FARM_TILE,py=y*FARM_TILE;
+ c.fillStyle='#544738';c.fillRect(px-10,py-32,9,44);c.fillRect(px+19,py-32,9,44);c.fillStyle='#cbb27e';c.fillRect(px-12,py-37,43,10);c.fillStyle='#fff3bd';c.font='bold 12px system-ui';c.textAlign='center';c.fillText('← 잔빛숲',px+8,py-47);
+ if(farmWorldNearbyGate()){c.strokeStyle='#f5efb3';c.lineWidth=3;c.strokeRect(px-22,py-43,62,63);}
+}
+function farmDrawSign(c,x,y,title){let px=x*FARM_TILE,py=y*FARM_TILE;c.fillStyle='#6c543f';c.fillRect(px,py-22,6,34);c.fillStyle='#a9855e';c.fillRect(px-33,py-35,76,20);c.fillStyle='#fff2ca';c.textAlign='center';c.font='bold 11px system-ui';c.fillText(title,px+5,py-22);}
+function farmDrawPlayer(c,x,y){c.fillStyle='#183a3477';c.beginPath();c.ellipse(x,y+8,13,6,0,0,Math.PI*2);c.fill();
+ c.fillStyle='#263d49';c.fillRect(x-8,y-4,7,14);c.fillRect(x+1,y-4,7,14);
+ c.fillStyle='#477d70';c.fillRect(x-11,y-17,22,17);c.fillStyle='#d0a175';c.fillRect(x-8,y-29,17,15);
+ c.fillStyle='#77543c';c.fillRect(x-12,y-35,25,7);c.fillStyle='#d6be79';c.fillRect(x-15,y-35,31,4);c.fillRect(x-4,y-39,11,7);
+ c.fillStyle='#312e2e';if(farmPlayer.face==='down'){c.fillRect(x-5,y-21,3,3);c.fillRect(x+5,y-21,3,3);}if(farmPlayer.face==='right')c.fillRect(x+6,y-21,3,3);if(farmPlayer.face==='left')c.fillRect(x-7,y-21,3,3);
+ c.fillStyle='#e4c39f';c.fillRect(x-14,y-14,5,9);c.fillRect(x+9,y-14,5,9);}
+// Touch/mouse canvas selects only nearby plots or west gate, never remote interaction.
+farmCanvas.addEventListener('pointerdown',e=>{
+ if(!farmWorldActive||m25bBusy)return;e.preventDefault();const r=farmCanvas.getBoundingClientRect(),wx=(e.clientX-r.left+farmCamera.x)/FARM_TILE,wy=(e.clientY-r.top+farmCamera.y)/FARM_TILE;
+ if(Math.hypot(wx-3.9,wy-16.5)<2.6){farmWorldTryExit();return;}
+ let o=FARM_PLOTS.find(v=>Math.hypot(v.x-wx,v.y-wy)<2.2);
+ if(o){if(Math.hypot(farmPlayer.x-o.x,farmPlayer.y-o.y)>3.15){farmWorldToast('밭 가까이 가서 손질해 주세요');return;}farmWorldAction();}
+});
+// Joystick uses pointer ownership and clears it on cancel/blur/world exit.
+function farmSetJoystick(e){const r=$('farmDpad').getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width*.34),dy=(e.clientY-r.top-r.height/2)/(r.height*.34),n=Math.max(1,Math.hypot(dx,dy));farmJoystick={x:dx/n,y:dy/n};}
+$('farmDpad').addEventListener('pointerdown',e=>{if(!farmWorldActive||m25bBusy||farmPointer!==null)return;e.preventDefault();farmPointer=e.pointerId;try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}farmSetJoystick(e)});
+$('farmDpad').addEventListener('pointermove',e=>{if(farmPointer===e.pointerId){e.preventDefault();farmSetJoystick(e)}});
+for(const type of ['pointerup','pointercancel','lostpointercapture'])$('farmDpad').addEventListener(type,e=>{if(farmPointer===e.pointerId){farmPointer=null;farmJoystick={x:0,y:0}}});
+window.addEventListener('keydown',e=>{
+ if(!farmWorldActive||m25bBusy)return;
+ const k=e.key.toLowerCase();if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape'].includes(k)){
+  e.preventDefault();e.stopImmediatePropagation();
+  if(['e',' '].includes(k)&&!e.repeat)farmWorldAction();
+  else if(k==='escape'&&!e.repeat)farmWorldTryExit();
+  else if(!['e',' ','escape'].includes(k))farmMoveKeys.add(k);
+ }
+},true);
+window.addEventListener('keyup',e=>{if(!farmWorldActive)return;const k=e.key.toLowerCase();farmMoveKeys.delete(k);if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',farmWorldClearInput);
+window.addEventListener('resize',()=>{if(farmWorldActive){farmWorldResize();farmWorldDraw()}});
+window.__sandstarFarmWorld={
+ state:()=>({worldId:farmWorldActive?FARM_WORLD_ID:ssRegion,active:farmWorldActive,player:{x:farmPlayer.x,y:farmPlayer.y},entryCount:game?.farmWorldV1?.entryCount||0,legacyRegion:ssRegion,saveKey:SAVE_KEY,actionCount:farmActionCount,selectedSeed:farmSelectedSeed,nearPlot:farmWorldNearPlot()?.id||null,nearGate:farmWorldNearbyGate()}),
+ tryEnter:farmWorldTryEnter,exit:farmWorldTryExit,action:farmWorldAction,chooseSeed:id=>{if(!LIVING_CROPS[id])return false;farmSelectedSeed=id;farmWorldRefreshHud();return true},
+ testMove:(x,y)=>{if(!farmWorldActive||farmWorldBlocked(x,y))return false;farmPlayer.x=x;farmPlayer.y=y;game.farmWorldV1.position={x,y};farmWorldRefreshHud();farmWorldDraw();return true},
+ viewport:()=>({w:farmCanvasW,h:farmCanvasH,camera:{...farmCamera}}),blocked:farmWorldBlocked,portalX:FARM_FOREST_GATE_X
+};
+
+// ============================================================
+// M2.1: RUINS_3D_01 independent 3D WORLD adapter.
+// Reuse Sandstar player/inventory/save/portal mechanisms; no relic rewards.
+// GPU WebGL1 projected-triangle renderer with full perspective and z-buffer;
+// CPU 3D perspective fallback for browsers that cannot create WebGL context.
+// ============================================================
+const ARCH_WORLD_ID='ruins_3d_01', ARCH_FOREST_GATE_X=134;
+const archRoot=$('archWorldRoot'),archGpuCanvas=$('archWorldGpu'),archFallbackCanvas=$('archWorldFallback');
+let archWorldActive=false,archPlayer={x:0,z:12},archYaw=0.18,archPitch=.49,archFrame=0,archElapsed=0,archLastEnter=0;
+let archKeys=new Set(),archJoy={x:0,y:0},archJoyPointer=null,archDrag=null,archRenderer='uninitialized',archToastEnd=0,archSaveTick=0;
+let archW=0,archH=0,archDpr=1,archGl=null,archProgram=null,archBuffer=null,archGlPosition=-1,archGlColor=-1,archCpuCtx=null;
+const archStatic=[];
+const archColors={earth:[38,57,65],tile:[68,90,93],tileAlt:[53,78,82],wall:[86,107,112],wallDark:[56,77,83],pillar:[122,139,140],pillarLight:[149,161,154],metal:[126,110,89],bronze:[177,142,93],teal:[43,170,177],light:[107,231,222],gold:[227,188,111],stone:[94,114,121],shard:[73,208,214],red:[171,89,89],void:[24,40,53]};
+function archWorldBlocked(x,z){
+ if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>12.65||Math.abs(z)>18.25)return true;
+ const rect=(a,b,c,d)=>x>a&&x<c&&z>b&&z<d;
+ for(const cx of [-7.8,7.8])for(const cz of [9.3,1.3,-6.7,-13.3])if(Math.hypot(x-cx,z-cz)<.9)return true;
+ if(rect(-3.35,-14.85,3.35,-10.05)||rect(-9.6,-2.35,-7.1,.2)||rect(7.3,-10.1,9.7,-8.0))return true;
+ return false;
+}
+function archWorldNormalize(raw){
+ const d={schema:1,activeWorldId:'life_forest_01',position:{x:0,z:12},entryCount:0,cameraYaw:.18};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return d;
+ if(raw.activeWorldId===ARCH_WORLD_ID)d.activeWorldId=ARCH_WORLD_ID;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.z)){
+  const x=Math.max(-12.2,Math.min(12.2,raw.position.x));const z=Math.max(-17.8,Math.min(17.8,raw.position.z));
+  if(!archWorldBlocked(x,z))d.position={x,z};
+ }
+ if(Number.isFinite(raw.cameraYaw))d.cameraYaw=Math.max(-100,Math.min(100,raw.cameraYaw));
+ if(Number.isSafeInteger(raw.entryCount))d.entryCount=Math.max(0,Math.min(100000,raw.entryCount));
+ return d;
+}
+function archWorldInitState(){game.archWorldV1=archWorldNormalize(game?.archWorldV1);return game.archWorldV1;}
+function archWorldNearForestGate(){
+ return !!p&&!!game&&!paused&&!farmWorldActive&&!archWorldActive&&!ssM16TransitionLocked&&ssRegion==='life_forest_01'&&ssM15Scene!=='mining'&&Math.abs(p.x-ARCH_FOREST_GATE_X)<=2.85&&Math.abs(p.y-(terrain(ARCH_FOREST_GATE_X)-1))<=2.8;
+}
+function archWorldDrawForestPortal(){
+ if(!game||ssRegion!=='life_forest_01')return;
+ const x=Math.round(ARCH_FOREST_GATE_X*T-camera.x),foot=Math.round((terrain(ARCH_FOREST_GATE_X)-1)*T-camera.y);
+ if(x<-100||x>viewW+100)return;
+ const near=archWorldNearForestGate();ctx.save();
+ ctx.fillStyle='#607984';ctx.fillRect(x-27,foot-65,11,67);ctx.fillRect(x+16,foot-65,11,67);ctx.fillStyle='#9eabb0';ctx.fillRect(x-27,foot-67,54,11);
+ ctx.fillStyle='#18353d';ctx.fillRect(x-15,foot-52,30,50);ctx.fillStyle='#56acb4';ctx.fillRect(x-10,foot-47,20,43);ctx.globalAlpha=.48+.15*Math.sin(frame*.06);ctx.fillStyle='#a8f5e9';ctx.fillRect(x-8,foot-45,16,40);ctx.globalAlpha=1;
+ ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillStyle=near?'#fff0b9':'#e1fcf3';ctx.fillText(near?'E · 3D 유적으로':'✦ 유적 입구',x,foot-77);
+ ctx.restore();
+}
+function archWorldTryForestTap(q){
+ if(!q||ssRegion!=='life_forest_01'||archWorldActive||farmWorldActive)return false;
+ let y=terrain(ARCH_FOREST_GATE_X)-1;
+ if(Math.abs(q.x+.5-ARCH_FOREST_GATE_X)>1.65||q.y<y-3.7||q.y>y+1)return false;
+ if(!archWorldNearForestGate()){flash('유적 입구로 가까이 이동하세요');return true;}
+ archWorldTryEnter();return true;
+}
+function archWorldClearInput(){archKeys.clear();archJoy={x:0,y:0};archJoyPointer=null;archDrag=null;}
+function archWorldNotify(msg){let t=$('archWorldToast');t.textContent=msg;t.classList.add('show');archToastEnd=performance.now()+2400;}
+function archWorldActivate(){
+ if(archWorldActive)return;
+ archWorldActive=true;archRoot.hidden=false;$('app').classList.add('arch-world-active');
+ archWorldClearInput();ssM15ResetHeldInputs();releaseRope();
+ const s=archWorldInitState();archPlayer.x=s.position.x;archPlayer.z=s.position.z;archYaw=s.cameraYaw;
+ archWorldInitRenderer();archWorldResize();archWorldRefreshHud();archWorldDraw();
+}
+function archWorldDeactivate(){
+ archWorldClearInput();archWorldActive=false;archRoot.hidden=true;$('app').classList.remove('arch-world-active');
+ ssM15ResetHeldInputs();last=performance.now();
+}
+function archWorldEnterCore(){
+ if(archWorldActive||farmWorldActive)return false;
+ if(!saveGame(true)){flash('저장 실패: 현재 지역을 유지합니다');return false;}
+ const prev=game.archWorldV1?JSON.parse(JSON.stringify(game.archWorldV1)):null;
+ const s=archWorldInitState();s.activeWorldId=ARCH_WORLD_ID;s.entryCount++;
+ if(!saveGame(true)){
+  if(prev)game.archWorldV1=prev;else delete game.archWorldV1;
+  flash('저장 실패: 유적 진입을 취소했어요');return false;
+ }
+ archWorldActivate();archLastEnter=performance.now();archWorldNotify('별맥 유적에 진입했습니다. 3D 공간을 걸어보세요.');return true;
+}
+function archWorldNearExit(){return Math.hypot(archPlayer.x,archPlayer.z-15.5)<2.75;}
+function archWorldNearExhibit(){return Math.hypot(archPlayer.x+6.2,archPlayer.z+6.6)<2.65||Math.hypot(archPlayer.x,archPlayer.z+8.25)<2.8;}
+function archWorldExitCore(){
+ if(!archWorldActive||!archWorldNearExit()){archWorldNotify('남쪽의 빛나는 출입구로 돌아가세요');return false;}
+ const s=archWorldInitState(),old=JSON.parse(JSON.stringify(s)),oldP={x:p.x,y:p.y,vx:p.vx,vy:p.vy};
+ s.position={x:archPlayer.x,z:archPlayer.z};s.cameraYaw=archYaw;s.activeWorldId='life_forest_01';
+ p.x=ARCH_FOREST_GATE_X+.4;p.y=terrain(p.x)-1;p.vx=p.vy=0;
+ if(collides(p.x,p.y)){p.x=ARCH_FOREST_GATE_X-1.3;p.y=terrain(p.x)-1;}
+ if(collides(p.x,p.y)||!saveGame(true)){
+  game.archWorldV1=old;Object.assign(p,oldP);archWorldNotify('출입구 또는 저장 검증에 실패했어요');return false;
+ }
+ archWorldDeactivate();updHud();flash('잔빛숲으로 돌아왔어요');return true;
+}
+function archWorldTryEnter(){
+ if(!archWorldNearForestGate()||archWorldActive||farmWorldActive||performance.now()-archLastEnter<400||m25bBusy)return false;
+ return m25bTransition(ARCH_WORLD_ID,'ruins-enter',archWorldEnterCore,'life_forest_01');
+}
+function archWorldTryExit(){
+ if(!archWorldActive||!archWorldNearExit()||m25bBusy){
+  if(archWorldActive&&!m25bBusy)archWorldNotify('남쪽의 빛나는 출입구로 돌아가세요');
+  return false;
+ }
+ return m25bTransition('life_forest_01','ruins-exit',archWorldExitCore,ARCH_WORLD_ID);
+}
+function archWorldRestoreAfterContinue(){
+ if(!game||ssIsTitle())return;
+ let s=archWorldInitState();
+ if(s.activeWorldId===ARCH_WORLD_ID){archWorldActivate();archWorldNotify('별맥 유적에서 이어서 시작합니다.');}
+}
+function archWorldAction(){
+ if(!archWorldActive||m25bBusy)return false;
+ if(archWorldNearExit())return archWorldTryExit();
+ if(archWorldNearExhibit()){archWorldNotify('유적 조사는 화면 전환 실험용입니다. 보상·퀘스트는 변경되지 않아요.');return true;}
+ archWorldNotify('이동하며 유적의 길·기둥·카메라를 살펴보세요');return false;
+}
+function archWorldRefreshHud(){
+ if(!game||!archWorldActive)return;
+ let label=archWorldNearExit()?'🚪 잔빛숲으로 돌아가기':archWorldNearExhibit()?'⌕ 유적 흔적 조사':'✦ 유적 둘러보기';
+ $('archWorldAction').textContent=label;$('archWorldAction').disabled=!archWorldNearExit()&&!archWorldNearExhibit();
+ $('archWorldHint').textContent=archWorldNearExit()?'출입구 가까이 있습니다 · E로 귀환':archWorldNearExhibit()?'빛나는 흔적을 조사할 수 있습니다':'길을 따라 유적 안쪽으로 이동해 보세요';
+ $('archWorldPosition').textContent=`X ${archPlayer.x.toFixed(1)} · Z ${archPlayer.z.toFixed(1)}`;
+ $('archWorldMode').textContent=archRenderer==='webgl'?'WebGL · 3D 공간':'소프트웨어 · 3D 공간';
+}
+$('archWorldAction').addEventListener('click',archWorldAction);
+$('archCameraReset').addEventListener('click',()=>{archYaw=.18;archPitch=.49;archWorldDraw();});
+function archWorldMovement(){
+ if(m25bBusy)return {x:0,z:0};
+ let x=(archKeys.has('d')||archKeys.has('arrowright')?1:0)-(archKeys.has('a')||archKeys.has('arrowleft')?1:0);
+ let f=(archKeys.has('w')||archKeys.has('arrowup')?1:0)-(archKeys.has('s')||archKeys.has('arrowdown')?1:0);
+ x+=archJoy.x;f-=archJoy.y;
+ let length=Math.max(1,Math.hypot(x,f));x/=length;f/=length;
+ // Screen-relative motion must use the exact same ground-plane basis as archCameraSetup:
+ // camera.right=(cos(yaw), 0, -sin(yaw)), camera.forward=(-sin(yaw), 0, -cos(yaw)).
+ // In M2.4, +f*sin(yaw) reversed forward X whenever the camera rotated.
+ const cy=Math.cos(archYaw),sy=Math.sin(archYaw);
+ return {x:x*cy-f*sy,z:-x*sy-f*cy};
+}
+function archWorldTick(dt){
+ if(!archWorldActive||!game||ssIsTitle())return;
+ if(m25bBusy){archWorldDraw();return;}
+ const move=archWorldMovement(),delta=Math.min(.05,dt)*5;
+ for(const axis of ['x','z']){const next={...archPlayer,[axis]:archPlayer[axis]+move[axis]*delta};
+  if(![[-.31,-.31],[.31,-.31],[-.31,.31],[.31,.31]].some(([a,b])=>archWorldBlocked(next.x+a,next.z+b)))archPlayer[axis]+=move[axis]*delta;
+ }
+ archElapsed+=dt;archFrame++;
+ if(archToastEnd&&performance.now()>archToastEnd){$('archWorldToast').classList.remove('show');archToastEnd=0;}
+ if(archFrame%12===0)archWorldRefreshHud();
+ archSaveTick+=dt;
+ if(archSaveTick>5){archSaveTick=0;saveGame(true);}
+ archWorldDraw();
+}
+// Geometry generation: intentional simple untextured proxy ruins, no external assets.
+function archColor(c){return archColors[c]||c;}
+function archAddTriangle(out,a,b,c,color){out.push({v:[a,b,c],color:archColor(color)});}
+function archBox(out,x,y,z,w,h,d,color){
+ const x0=x-w/2,x1=x+w/2,y0=y,y1=y+h,z0=z-d/2,z1=z+d/2;
+ const V=[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]];
+ for(const [a,b,c,d] of [[3,2,1,0],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]]){
+  archAddTriangle(out,V[a],V[b],V[c],color);archAddTriangle(out,V[a],V[c],V[d],color);
+ }
+}
+function archPyramid(out,x,y,z,r,h,color){
+ let verts=[];for(let i=0;i<4;i++){let a=i*Math.PI/2+Math.PI/4;verts.push([x+Math.sin(a)*r,y,z+Math.cos(a)*r]);}
+ for(let i=0;i<4;i++)archAddTriangle(out,verts[i],verts[(i+1)%4],[x,y+h,z],color);
+}
+function archCylinder(out,x,y,z,r,h,color,sides=9){
+ const c=archColor(color);for(let i=0;i<sides;i++){let a=i*2*Math.PI/sides,b=(i+1)*2*Math.PI/sides;
+  let lo=[x+Math.cos(a)*r,y,z+Math.sin(a)*r],ro=[x+Math.cos(b)*r,y,z+Math.sin(b)*r];
+  let hi=[lo[0],y+h,lo[2]],hr=[ro[0],y+h,ro[2]];
+  archAddTriangle(out,lo,ro,hr,c);archAddTriangle(out,lo,hr,hi,c);
+  archAddTriangle(out,[x,y+h,z],hi,hr,c);
+ }
+}
+function archMakeGeometry(){
+ if(archStatic.length)return;
+ for(let x=-12;x<13;x+=2)for(let z=-18;z<19;z+=2){
+  archBox(archStatic,x, -.16,z,2.05,.16,2.05,((x*7+z*3)&4)?'tile':'tileAlt');
+  if((x+z)%6===0)archBox(archStatic,x,-.01,z,1.35,.025,.025,'wallDark');
+ }
+ // Stone boundary: broken enough that the hall opens onto the void, still physically bounded.
+ for(let z=-18;z<=18;z+=3){archBox(archStatic,-13.1,0,z,1.0,1.8,2.95,'wall');archBox(archStatic,13.1,0,z,1.0,1.8,2.95,'wall');}
+ for(let x=-12;x<=12;x+=3){archBox(archStatic,x,0,-19,2.9,1.75,1,'wallDark');if(Math.abs(x)>2.3)archBox(archStatic,x,0,19,2.9,1.25,1,'wallDark');}
+ for(const x of [-7.8,7.8])for(const z of [9.3,1.3,-6.7,-13.3]){
+  archBox(archStatic,x,.0,z,2.6,.5,2.6,'stone');
+  archCylinder(archStatic,x,.5,z,.75,3.85,'pillar');
+  archBox(archStatic,x,4.35,z,2.35,.6,2.35,'pillarLight');
+  archBox(archStatic,x,4.94,z,2.0,.25,2.0,'gold');
+ }
+ // Fragmented stone walkways, threshold, old machinery and real-world-size doorway.
+ for(let z=16;z>-13;z-=4){archBox(archStatic,0,.025,z,5,.07,1.1,'metal');}
+ archBox(archStatic,-4.25,0,16,1.0,2.35,1.0,'pillarLight');
+ archBox(archStatic,4.25,0,16,1.0,2.35,1.0,'pillarLight');
+ archPyramid(archStatic,-4.25,2.35,16,.7,.6,'shard');archPyramid(archStatic,4.25,2.35,16,.7,.6,'shard');
+ archBox(archStatic,0,0,16,3,.06,2.2,'teal');
+ archPyramid(archStatic,0,.05,16,1.2,.4,'light');
+ // Vault north, pedestal and visual-only sigil, no gameplay reward.
+ archBox(archStatic,0,0,-12.5,6.1,1.35,5.7,'wallDark');
+ archBox(archStatic,0,1.35,-12.5,3.0,.5,3.2,'metal');
+ archBox(archStatic,0,1.85,-12.5,1.6,.35,1.6,'bronze');
+ archPyramid(archStatic,0,2.2,-12.5,1.2,2.5,'shard');
+ archPyramid(archStatic,0,4.7,-12.5,.54,.7,'light');
+ for(const [x,z] of [[-10,-3],[10,-10],[-8,13],[9,8]]){
+  archBox(archStatic,x,0,z,2.1,.8,1.4,'wallDark');
+  archBox(archStatic,x,.8,z,1.7,.4,1.2,'pillar');
+ }
+ archBox(archStatic,-4.2,0,4,2.0,1.0,2.0,'stone');
+ archPyramid(archStatic,-4.2,1.0,4,.8,1.3,'teal');
+ archBox(archStatic,4.2,0,3.5,2.0,1.0,2.0,'wallDark');
+ archPyramid(archStatic,4.2,1.0,3.5,.7,1.1,'gold');
+ // Excavation grid marks. This is scenery only; no new collection or reward.
+ archBox(archStatic,-6.15,.02,-6.6,3.0,.035,3.0,'earth');
+ for(let x=-7.4;x<=-4.8;x+=.85)archBox(archStatic,x,.07,-6.6,.05,.025,2.85,'bronze');
+ for(let z=-7.85;z<=-5.25;z+=.85)archBox(archStatic,-6.15,.08,z,2.85,.025,.05,'bronze');
+ archPyramid(archStatic,-6.15,.1,-6.6,.65,.55,'shard');
+ for(let i=0;i<8;i++){let a=i*Math.PI/4,x=5.5+Math.cos(a)*1.6,z=-4.3+Math.sin(a)*1.6;
+  archPyramid(archStatic,x,0,z,.6,.6,i%2?'bronze':'teal');
+ }
+}
+function archCameraSetup(){
+ const target=[archPlayer.x,1.2,archPlayer.z],radius=14.7;
+ const eye=[target[0]+Math.sin(archYaw)*Math.cos(archPitch)*radius,target[1]+Math.sin(archPitch)*radius+2,target[2]+Math.cos(archYaw)*Math.cos(archPitch)*radius];
+ const norm=a=>{const d=Math.hypot(...a)||1;return a.map(v=>v/d)};
+ const forward=norm(target.map((v,i)=>v-eye[i]));
+ const right=norm([-forward[2],0,forward[0]]); // right = cross(forward, world-up)
+ const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
+ return {eye,forward,right,up};
+}
+function archProject(p,cam){
+ const d=p.map((x,i)=>x-cam.eye[i]);
+ const dot=v=>d[0]*v[0]+d[1]*v[1]+d[2]*v[2];
+ const depth=dot(cam.forward);if(depth<=.55)return null;
+ const focal=Math.min(archW*1.35,archH*1.85),sx=archW*.5+dot(cam.right)*focal/depth,sy=archH*.56-dot(cam.up)*focal/depth;
+ return {x:sx,y:sy,depth};
+}
+function archLitColor(t,depth){
+ const [a,b,c]=t.v,ax=b[0]-a[0],ay=b[1]-a[1],az=b[2]-a[2],bx=c[0]-a[0],by=c[1]-a[1],bz=c[2]-a[2];
+ let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx,len=Math.hypot(nx,ny,nz)||1;
+ const light=Math.max(.48,Math.min(1.1, .84+(.18*nx+.65*ny+.5*nz)/len*.28));
+ const fog=Math.max(0,Math.min(.56,(depth-15)/40));
+ return t.color.map((v,i)=>Math.max(0,Math.min(255,Math.round(v*light*(1-fog)+[14,29,39][i]*fog))));
+}
+function archWorldGeometry(){
+ archMakeGeometry();const dynamic=[];
+ const p=archPlayer,walk=Math.sin(archElapsed*8)*.045;
+ archBox(dynamic,p.x,0,p.z,.65,.28,.55,'metal');
+ archBox(dynamic,p.x,.28+walk,p.z,.82,1.05,.48,'teal');
+ archBox(dynamic,p.x,1.33+walk,p.z,.69,.67,.67,'pillarLight');
+ archBox(dynamic,p.x,1.96+walk,p.z,.9,.18,.9,'bronze');
+ archBox(dynamic,p.x,2.12+walk,p.z,.52,.35,.55,'metal');
+ archBox(dynamic,p.x-.25,.12,p.z,.27,.38,.33,'wallDark');
+ archBox(dynamic,p.x+.25,.12,p.z,.27,.38,.33,'wallDark');
+ // Small orbiting spark at the restored ruins shrine.
+ const t=archElapsed*.9;
+ archPyramid(dynamic,.75*Math.sin(t),3.95+.12*Math.sin(t*2),-12.5+.75*Math.cos(t),.34,.65,'light');
+ return archStatic.concat(dynamic);
+}
+function archShader(gl,type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error('shader:'+gl.getShaderInfoLog(s));return s;}
+function archTryWebGL(){
+ let gl;try{gl=archGpuCanvas.getContext('webgl',{antialias:true,alpha:false,depth:true,powerPreference:'low-power'});}catch(e){return false;}
+ if(!gl)return false;
+ try{
+  let program=gl.createProgram();
+  gl.attachShader(program,archShader(gl,gl.VERTEX_SHADER,'attribute vec3 a_position; attribute vec3 a_color; varying vec3 v_color; void main(){ gl_Position=vec4(a_position,1.0); v_color=a_color;}'));
+  gl.attachShader(program,archShader(gl,gl.FRAGMENT_SHADER,'precision mediump float; varying vec3 v_color; void main(){gl_FragColor=vec4(v_color,1.0);}'));
+  gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('link:'+gl.getProgramInfoLog(program));
+  archGl=gl;archProgram=program;archBuffer=gl.createBuffer();archGlPosition=gl.getAttribLocation(program,'a_position');archGlColor=gl.getAttribLocation(program,'a_color');
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);return true;
+ }catch(err){console.warn('arch WebGL unavailable:',err);return false;}
+}
+function archWorldInitRenderer(){
+ if(archRenderer!=='uninitialized')return;
+ archRenderer=archTryWebGL()?'webgl':'cpu';
+ if(archRenderer==='cpu'){archGpuCanvas.hidden=true;archFallbackCanvas.hidden=false;archCpuCtx=archFallbackCanvas.getContext('2d',{alpha:false});}
+ archGpuCanvas.addEventListener('webglcontextlost',e=>{e.preventDefault();archRenderer='cpu';archGpuCanvas.hidden=true;archFallbackCanvas.hidden=false;archCpuCtx=archFallbackCanvas.getContext('2d',{alpha:false});archWorldResize();archWorldNotify('3D 그래픽이 중단되어 소프트웨어 3D로 전환했어요');},{once:true});
+ archMakeGeometry();
+}
+function archWorldResize(){
+ let r=archRoot.getBoundingClientRect();archW=r.width||window.innerWidth;archH=r.height||window.innerHeight;
+ archDpr=Math.min(window.devicePixelRatio||1,2);
+ for(const canvas of [archGpuCanvas,archFallbackCanvas]){canvas.width=Math.max(1,Math.round(archW*archDpr));canvas.height=Math.max(1,Math.round(archH*archDpr));}
+}
+function archWorldDraw(){
+ if(!archWorldActive)return;
+ const rect=archRoot.getBoundingClientRect();
+ if(!archW||!archH||Math.abs(rect.width-archW)>1||Math.abs(rect.height-archH)>1)archWorldResize();
+ const cam=archCameraSetup(),faces=[];
+ for(const tri of archWorldGeometry()){
+  const vv=tri.v.map(v=>archProject(v,cam));if(vv.some(v=>!v))continue;

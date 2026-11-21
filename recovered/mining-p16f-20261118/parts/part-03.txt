@@ -1,0 +1,650 @@
+
+let viewW=0,viewH=0,dpr=1,paused=true,menuType='',last=performance.now(),accum=0,saveTimer=0,hudTimer=0,particles=[],floatTexts=[],toastUntil=0,frame=0,shake=0,mineFXTimer=0,oreCombo=0,lastOreAt=0;
+// 2.10 PNG icon integration; 2.9 station rules retained. // 2.9: station protection shell and custom UI assets added on top of the 2.8 feedback patch.
+let rangeHintTime=0, invalidReach=null, miningHitFX=null, miningBreakFX=null;
+const MINING_RANGE_HINT_TTL=.34;
+function miningFeedbackState(){return {rangeHintTime,invalidReach:invalidReach?{...invalidReach}:null,hit:miningHitFX?{...miningHitFX}:null,break:miningBreakFX?{...miningBreakFX}:null};}
+// P1.6-B1 fractures are transient, bounded, and never written into save data.
+const p16HammerFractures=new Map();
+const p16HammerStats={waves:0,cracked:0,chainBroken:0,last:null};
+applyStaticUiAssets();
+let camera={x:0,y:0},input={left:false,right:false,jump:false,act:false,reelIn:false,reelOut:false};let hover=null,holdTarget=null,holdProgress=0,holdLast=null,saveOkay=true;
+let stickActive=false,stickDir=null,stickPointerId=null;
+let rope={active:false,anchor:null,targetY:0,attached:false,mode:'vertical'},ropeCandidate=null,ropeScanTimer=0;
+let ropeLeapLedgePlan=null,ropeAutoChain=false,ropeHangPaused=false,ropeAutoMoveEnabled=false; // transient only; rope pause is never written into world saves
+// 2.18-F: pointer aim is transient input state; no save schema changes.
+let ropePointerAim=null,ropePreviewAnchor=null;
+// 2.18-H1: input-only refinements; no world save schema or rope physics changes.
+const ROPE_TOUCH_SLOP=15,ROPE_AIM_AXIS_HYST=7,ROPE_HAPTIC_KEY='sandstar-rope-haptic-v1';
+let ropeHapticsEnabled=true;
+try{ropeHapticsEnabled=localStorage.getItem(ROPE_HAPTIC_KEY)!=='0'}catch(_){}
+function ropeHaptic(pattern){if(!ropeHapticsEnabled)return;try{if(typeof navigator.vibrate==='function')navigator.vibrate(pattern)}catch(_){}}
+const ROPE_AIM_SYMBOLS={up:'↑',left:'←',upleft:'↖',upright:'↗',right:'→'};
+function ropeGestureTarget(direction){
+ if(direction==='up')return rope.active?findRopeAnchor(true):(ropeCandidate||findRopeAnchor());
+ return findDirectionalRopeAnchor(direction);
+}
+function ropeGestureTargetValid(direction,a){
+ if(!a||paused)return false;
+ if(!rope.active)return !(ropeGrabCooldown>0&&!(ropeChainWindow>0&&ropeChainRemaining>0));
+ if(!rope.attached||ropeChainRemaining<=0||ropePointerAim?.gesture!=='transfer')return false;
+ const prev=rope.anchor,dist=Math.hypot(p.x-a.faceX,p.y-PLAYER_CENTER_FROM_FEET-a.faceY);
+ return !!prev&&Math.hypot(a.faceX-prev.faceX,a.faceY-prev.faceY)>=.9&&dist<=ROPE_MAX_LENGTH&&dist>=1.6&&ropeSightOK(a.faceX,a.faceY);
+}
+function ropeGestureFeedback(){
+ const b=$('ropeBtn'),h=$('ropeHint'),g=ropePointerAim;
+ b.classList.toggle('aiming',!!g);
+ b.classList.remove('aim-good','aim-bad');h.className='';
+ if(!g){h.textContent='';return;}
+ let label='',quality='';
+ if(g.wasActive){
+  if(g.gesture==='reel')label=g.lastY<g.y?'↑ 줄 감기':'↓ 줄 풀기';
+  else if(g.gesture==='transfer'){
+   const good=ropeGestureTargetValid(g.direction,ropePreviewAnchor);
+   label=(ROPE_AIM_SYMBOLS[g.direction]||'↗')+(good?' 갈아타기':' 연결 불가');quality=good?'good':'bad';
+  }else label='탭: 해제 · 드래그: 연결점 변경';
+ }else{
+  const good=ropeGestureTargetValid(g.direction,ropePreviewAnchor);
+  label=(ROPE_AIM_SYMBOLS[g.direction]||'↑')+(good?' 연결 가능':' 연결 불가');quality=good?'good':'bad';
+ }
+ h.textContent=label;h.className='visible'+(quality?' '+quality:'');
+ if(quality)b.classList.add('aim-'+quality);
+}
+function ropeDirectionFromGesture(dx,dy,previous='up'){
+ if(Math.abs(dx)<ROPE_TOUCH_SLOP){
+  if(previous!=='up'&&Math.abs(dx)>=ROPE_TOUCH_SLOP-ROPE_AIM_AXIS_HYST)return previous;
+  return 'up';
+ }
+ const side=dx<0?'left':'right';
+ if(previous!=='up'&&previous.endsWith('left')!==side.endsWith('left')&&Math.abs(dx)<ROPE_TOUCH_SLOP+ROPE_AIM_AXIS_HYST)return previous;
+ const prevHigh=previous.startsWith('up')&&previous!=='up';
+ const bias=previous==='up'?0:(prevHigh?ROPE_AIM_AXIS_HYST:-ROPE_AIM_AXIS_HYST);
+ const wantUp=dy<-Math.max(11,Math.abs(dx)*.38)+bias;
+ return (wantUp?'up':'')+side;
+}
+// 2.18-G: swing runtime is transient. World/save format remains unchanged.
+const SWING_GRAVITY=23, SWING_DRIVE=19, SWING_MAX_SPEED=13.0;
+// 2.18-H: transient reel/chain state, intentionally excluded from persistent saves.
+const ROPE_REEL_SPEED=3.8,ROPE_MIN_LENGTH=1.8,ROPE_MAX_LENGTH=11.4;
+const ROPE_CHAIN_MAX=2,ROPE_CHAIN_WINDOW_DURATION=1.25;
+let ropeReelPending=0,ropeChainRemaining=ROPE_CHAIN_MAX,ropeChainWindow=0;
+
+const ROPE_FIRE_DIRECTIONS=Object.freeze({left:[-1,0],upleft:[-Math.SQRT1_2,-Math.SQRT1_2],up:[0,-1],upright:[Math.SQRT1_2,-Math.SQRT1_2],right:[1,0]});
+// SANDSTAR M1 sandbox: inherit production v10.2 elastic default B, fixed fallback A.
+const ROPE_PHYSICS_PREF_KEY='sandstar-rope-physics-v1';
+let ropeABMode='B';
+try{if(localStorage.getItem(ROPE_PHYSICS_PREF_KEY)==='A')ropeABMode='A';}catch(_){}
+let ropeABRightClicks=0,ropeABFireAttempts=0;
+function setRopeABMode(mode){
+ if(mode!=='A'&&mode!=='B')return false;
+ ropeABMode=mode;
+ try{localStorage.setItem(ROPE_PHYSICS_PREF_KEY,mode)}catch(_){}
+ const indicator=document.getElementById('ropeABIndicator');
+ if(indicator)indicator.textContent=`로프 ${mode} · ${mode==='A'?'고정':'탄성'} · T 전환`;
+ return true;
+}
+// Mouse world coordinates are derived from the same camera transform as mining.
+// The shipped anchor system currently supports five directions, not downward or arbitrary-angle ropes.
+function desktopRopeDirection(clientX,clientY){
+ const r=cv.getBoundingClientRect();
+ const wx=(clientX-r.left+camera.x)/T,wy=(clientY-r.top+camera.y)/T;
+ const dx=wx-p.x,dy=wy-(p.y-PLAYER_CENTER_FROM_FEET);
+ if(Math.hypot(dx,dy)<.28)return 'up';
+ if(dy>Math.abs(dx)*.5)return null; // no downward grappling in the current engine
+ if(dy<-Math.abs(dx)*1.5)return 'up';
+ if(dy<-Math.abs(dx)*.45)return dx<0?'upleft':'upright';
+ return dx<0?'left':'right';
+}
+function desktopRightClickRope(e){
+ if(e.button!==2||paused||ssIsTitle())return false;
+ ropeABRightClicks++;
+ const direction=desktopRopeDirection(e.clientX,e.clientY);
+ if(!direction){flash('아래쪽 로프는 아직 지원하지 않아요. 위쪽·좌우 암벽을 조준해 주세요.');return false;}
+ if(rope.active){
+  if(e.shiftKey&&rope.attached)return transferRope(direction);
+  toggleRope();return !rope.active;
+ }
+ ropeABFireAttempts++;
+ return fireDirectionalRope(direction);
+}
+
+
+// SANDSTAR 2.18-D: Character traits and collectible/equippable artifacts.
+// Legacy game.relics remains the integer counting mined relic tiles.
+const TRAIT_INFO=Object.freeze({
+ pioneer:{name:'개척자',icon:'⛏',tag:'채굴 +3% · 신규 깊이 경험치 +10%'},
+ wanderer:{name:'유랑자',icon:'➠',tag:'이동속도 +0.15칸/초'},
+ rope_master:{name:'로프술사',icon:'⌁',tag:'로프 상승속도 +8%'},
+ searcher:{name:'수색가',icon:'◉',tag:'지하 시야 반경 +1칸'}
+});
+const ARTIFACT_INFO=Object.freeze({
+ luminous_fossil:{name:'야광 화석',icon:'✦',tag:'지하 시야 +2칸',how:'18m 깊이에 처음 도달'},
+ wind_compass:{name:'바람 나침반',icon:'➳',tag:'이동속도 +0.35칸/초',how:'누적 이동거리 100칸'},
+ spring_horseshoe:{name:'용수철 편자',icon:'⇧',tag:'일반 점프 상승력 +0.6',how:'자연 블록 50개 채굴'},
+ old_pulley:{name:'낡은 도르래',icon:'⌘',tag:'로프 상승속도 +20%',how:'로프 상승 첫 성공'},
+ knot_ring:{name:'매듭의 고리',icon:'◎',tag:'로프 도약 사용권 +1',how:'광부 Lv.10 달성'},
+ crystal_lens:{name:'수정 렌즈',icon:'◇',tag:'시야 안 광석 윤곽 강조',how:'수정 블록 첫 채굴'}
+});
+const TRAIT_IDS=Object.keys(TRAIT_INFO),ARTIFACT_IDS=Object.keys(ARTIFACT_INFO);
+const ARTIFACT_REWARDS=[
+ ['depth_18_first','luminous_fossil', a=>a.character.claimedMilestones.includes('depth_18')],
+ ['first_travel_100_tiles','wind_compass', a=>a.artifactSystem.progress.distanceTiles>=100],
+ ['first_50_natural_blocks','spring_horseshoe',a=>a.artifactSystem.progress.naturalBlocks>=50],
+ ['first_rope_ascent_success','old_pulley',a=>a.artifactSystem.progress.ropeAscents>=1],
+ ['reach_character_level_10','knot_ring',a=>deriveLevelFromTotalXp(a.character.totalXp).level>=10],
+ ['first_crystal_mine','crystal_lens',a=>a.artifactSystem.progress.crystalsMined>=1]
+];
+function freshArtifactSystem(){return {schemaVersion:1,ownedIds:[],equippedIds:[],claimedRewardIds:[],progress:{distanceTiles:0,naturalBlocks:0,ropeAscents:0,crystalsMined:0}};}
+function normalizeArtifactSystem(raw,level){
+ const v=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const out=freshArtifactSystem();
+ const valid=arr=>Array.isArray(arr)?[...new Set(arr.filter(id=>typeof id==='string'&&ARTIFACT_IDS.includes(id)))]:[];
+ out.ownedIds=valid(v.ownedIds);
+ out.claimedRewardIds=valid(v.claimedRewardIds); // canonical claims are unique artifact IDs
+ for(const id of out.claimedRewardIds)if(!out.ownedIds.includes(id))out.ownedIds.push(id);
+ for(const id of out.ownedIds)if(!out.claimedRewardIds.includes(id))out.claimedRewardIds.push(id);
+ const allowed=(level>=12?2:1);
+ out.equippedIds=valid(v.equippedIds).filter(id=>out.ownedIds.includes(id)).slice(0,allowed);
+ const pr=v.progress&&typeof v.progress==='object'&&!Array.isArray(v.progress)?v.progress:{};
+ for(const k of Object.keys(out.progress)){
+  const n=Number(pr[k]);out.progress[k]=Number.isFinite(n)&&n>=0?Math.min(1e9,n):0;
+ }
+ return out;
+}
+function artifactEquipped(id){return Array.isArray(game?.artifactSystem?.equippedIds)&&game.artifactSystem.equippedIds.includes(id);}
+function artifactSlotsFor(level=deriveLevelFromTotalXp(game.character.totalXp).level){return level>=12?2:1;}
+function tryAwardEarnedArtifacts(){
+ if(!game?.artifactSystem||!game?.character)return false;
+ const pending=ARTIFACT_REWARDS.filter(([rid,id,earned])=>!game.artifactSystem.claimedRewardIds.includes(id)&&earned(game));
+ if(!pending.length)return false;
+ const ok=safeCharacterTransaction(draft=>{
+  const sys=draft.artifactSystem;
+  for(const [rid,id] of pending){
+   if(!sys.ownedIds.includes(id))sys.ownedIds.push(id);
+   if(!sys.claimedRewardIds.includes(id))sys.claimedRewardIds.push(id);
+  }
+  return true;
+ });
+ if(ok){flash(`유물 획득! ${pending.map(x=>ARTIFACT_INFO[x[1]].name).join(' · ')}`);return true;}
+ return false;
+}
+function selectCharacterTrait(id){
+ if(!TRAIT_IDS.includes(id)||game.character.trait===id)return false;
+ const ok=safeCharacterTransaction(draft=>{
+  const c=draft.character;
+  if(c.trait!==null){
+   if(deriveLevelFromTotalXp(c.totalXp).level<10)return false;
+   if(c.traitFreeChangeUsed){if(draft.coins<200)return false;draft.coins-=200;}
+   else c.traitFreeChangeUsed=true;
+  }
+  c.trait=id;return true;
+ });
+ if(ok){visionCache.cx=-999;updateMobilityHud();}
+ return ok;
+}
+function equipArtifact(slot,id){
+ if(!Number.isInteger(slot)||slot<0||slot>=artifactSlotsFor())return false;
+ if(id!==null&&!ARTIFACT_IDS.includes(id))return false;
+ if(id!==null&&!game.artifactSystem.ownedIds.includes(id))return false;
+ if(id!==null&&game.artifactSystem.equippedIds.includes(id)&&game.artifactSystem.equippedIds[slot]!==id)return false;
+ const oldId=game.artifactSystem.equippedIds[slot]||null;
+ if(oldId===id)return false;
+ const ok=safeCharacterTransaction(draft=>{
+  if(slot>=artifactSlotsFor(deriveLevelFromTotalXp(draft.character.totalXp).level))return false;
+  const ids=draft.artifactSystem.equippedIds;
+  if(id!==null&&ids.some((v,i)=>i!==slot&&v===id))return false;
+  // Keep equip array densely populated. Slot 2 may be empty only if slot 1 occupied.
+  if(slot>0&&!ids[0]&&id!==null)return false;
+  if(id===null){ids.splice(slot,1);}
+  else ids[slot]=id;
+  return true;
+ });
+ if(ok){clampRopeLeaps();visionCache.cx=-999;updateMobilityHud();}
+ return ok;
+}
+// Central passive calculation: stat allocation, trait and equipped artifact -> hard caps.
+function getEffectiveStats(){
+ const agility=statLevel('agility'),jump=statLevel('jump'),climb=statLevel('climb'),focus=statLevel('focus'),endurance=statLevel('endurance');
+ const trait=game?.character?.trait;
+ return {
+  moveSpeed:Math.min(6.5,MOVE_SPEED+agility*.10+(trait==='wanderer'?.15:0)+(artifactEquipped('wind_compass')?.35:0)),
+  jumpImpulse:Math.min(11.0,NORMAL_JUMP+jump*.12+(artifactEquipped('spring_horseshoe')?.6:0)),
+  ropeLeapImpulse:Math.min(15.0,ROPE_LEAP+jump*.08),
+  ropeClimbSpeed:Math.min(9.5,6.2*(1+climb*.04+(trait==='rope_master'?.08:0)+(artifactEquipped('old_pulley')?.2:0))),
+  mineMultiplier:Math.min(1.2,1+focus*.015+(trait==='pioneer'?.03:0)),
+  ropeCooldown:Math.max(.24,.36-endurance*.015),
+  ropeLeapMax:Math.min(3,1+(endurance>=5?1:0)+(artifactEquipped('knot_ring')?1:0)),
+  sightRadius:Math.min(8,3+Math.floor(Math.min(8,statLevel('observation'))/3)+(trait==='searcher'?1:0)+(artifactEquipped('luminous_fossil')?2:0))
+ };
+}
+let artifactTravelCheckpoint=0,ropeAscentStartY=null;
+function noteArtifactDistance(delta){
+ if(!game?.artifactSystem||!Number.isFinite(delta)||delta<=0)return;
+ game.artifactSystem.progress.distanceTiles=Math.min(1e9,game.artifactSystem.progress.distanceTiles+delta);
+}
+function noteRopeAscent(){
+ if(ropeAscentStartY!==null&&p&&p.y<=ropeAscentStartY-1){
+  game.artifactSystem.progress.ropeAscents++;
+ }
+ ropeAscentStartY=null;
+}
+function drawArtifactLens(){if(ssRegion==='life_forest_01')return;
+ if(!artifactEquipped('crystal_lens'))return;
+ const r=effectiveSightRadius(),cx=Math.floor(p.x),cy=Math.floor(p.y-PLAYER_CENTER_FROM_FEET);
+ ctx.save();ctx.strokeStyle='#b1fbec';ctx.lineWidth=2;
+ for(let y=Math.max(0,cy-r);y<=Math.min(WH-1,cy+r);y++)for(let x=Math.max(0,cx-r);x<=Math.min(WW-1,cx+r);x++){
+  if(!visionVisible(x,y)||!ORES.has(tile(x,y)))continue;
+  const sx=Math.floor(x*T-camera.x),sy=Math.floor(y*T-camera.y);
+  if(sx+T<0||sy+T<0||sx>viewW||sy>viewH)continue;
+  ctx.strokeRect(sx+3,sy+3,T-6,T-6);
+ }
+ ctx.restore();
+}
+
+// 2.4: responsive airborne steering, generous jump timing, one rope leap per landing.
+// Transient motion is never saved, preserving the earlier world save contract.
+const NORMAL_JUMP=9.5, ROPE_LEAP=14.1;
+const MOVE_SPEED=5.2, COYOTE_WINDOW=.115, JUMP_BUFFER_WINDOW=.145;
+// 2.18-B: rope jump is a conserved charge pool, not a per-airtime boolean.
+// Persist remaining charges on save; rope reconnect NEVER refills them.
+let ropeLeapRemaining=1,ropeGroundStableSeconds=0,ropeGrabCooldown=0,ropeSnap=null;
+function statLevel(id){return Math.min(8,Math.max(0,Number(game?.character?.stats?.[id])||0));}
+// Mining distance is an SP-powered character stat. Legacy saves without 'reach' use level 0.
+function effectiveMineReach(){return Math.min(4.8,MAX_MINE_REACH+statLevel('reach')*.35);}
+function mobilityDerived(){const stats=getEffectiveStats();if(ssP14Crafted('reinforced_rope'))stats.ropeClimbSpeed=Math.min(9.5,stats.ropeClimbSpeed*1.12);if(equippedSecondary()==='line')stats.ropeClimbSpeed=Math.min(9.5,stats.ropeClimbSpeed*(secondaryBoosted()?1.10:1.06));return stats;}
+function remainingRopeLeaps(){return Math.min(mobilityDerived().ropeLeapMax,Math.max(0,ropeLeapRemaining));}
+function clampRopeLeaps(){ropeLeapRemaining=remainingRopeLeaps();}
+function refillRopeLeapsOnGround(dt){
+ if(rope.active||!p||!collides(p.x,p.y+.055)||p.vy<0){ropeGroundStableSeconds=0;return;}
+ ropeGroundStableSeconds=Math.min(.12,ropeGroundStableSeconds+dt);
+ if(ropeGroundStableSeconds>=.08){
+  ropeLeapRemaining=mobilityDerived().ropeLeapMax;
+  ropeChainRemaining=p16RopeChainCap();ropeChainWindow=0;
+ }
+}
+
+let jumpBuffer=0,coyoteTime=0,airLeapControl=false;
+// 2.5: movement on a rope is an intentional launch direction, never an accidental disconnect.
+let ropeAim=0,ropeHold=false,ropeHoldTime=0,ropeHoldChainDelay=0,ropeHoldUsed=false,ropeHoldFromActive=false,lastRopePointerAt=-1e5;
+let ropeStatusNotice=0;
+const approach=(value,target,step)=>value<target?Math.min(target,value+step):Math.max(target,value-step);
+function requestJump(){if(paused)return;jumpBuffer=JUMP_BUFFER_WINDOW;input.jump=true;}
+const STATION_DATA=[{id:'surface',name:'지상 중앙 승강장',x:35.5,foot:78,defaultUnlocked:true,protect:{halfWidth:4,clearance:3}},{id:'quarry',name:'바위굴 정거장',x:51.5,foot:101,defaultUnlocked:false,protect:{halfWidth:4,clearance:5}}];
+let nearbyStation=null;
+const STATION_COST={stone:8,copper:3,coins:40};
+// SANDSTAR 2.11: proprietary lift artwork derived from the approved design image.
+// Both states are embedded; no external fetch, no changes to player saves.
+const liftDoorSprites={open:new Image(),locked:new Image(),ready:false,failed:false};
+let liftLoadCount=0;
+function liftOnLoaded(){if(++liftLoadCount===2)liftDoorSprites.ready=true;}
+liftDoorSprites.open.onload=liftOnLoaded;
+liftDoorSprites.locked.onload=liftOnLoaded;
+liftDoorSprites.open.onerror=liftDoorSprites.locked.onerror=()=>{liftDoorSprites.failed=true;};
+liftDoorSprites.open.src='data:image/png;base64,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';
+liftDoorSprites.locked.src='data:image/png;base64,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';
+const LIFT_SPRITE_WIDTH=80,LIFT_SPRITE_HEIGHT=107;
+function drawLiftDoor(station,centerX,baseY,unlocked,near){
+ const x=Math.round(centerX-LIFT_SPRITE_WIDTH/2),y=Math.round(baseY-LIFT_SPRITE_HEIGHT);
+ const img=unlocked?liftDoorSprites.open:liftDoorSprites.locked;
+ if(img.complete&&img.naturalWidth===LIFT_SPRITE_WIDTH){
+  ctx.drawImage(img,x,y,LIFT_SPRITE_WIDTH,LIFT_SPRITE_HEIGHT);
+ }else{
+  // Last-resort placeholder only while waiting for PNG decode; no legacy LIFT text.
+  ctx.fillStyle='#233d4b';ctx.fillRect(x+13,y+16,54,91);
+  ctx.strokeStyle='#dbb97e';ctx.lineWidth=4;ctx.strokeRect(x+13,y+16,54,91);
+  ctx.fillStyle=unlocked?'#a6f0ba':'#f4c87e';ctx.fillRect(x+33,y+56,15,10);
+ }
+ if(near){
+  ctx.save();ctx.strokeStyle='#ffef9b';ctx.lineWidth=2;
+  ctx.strokeRect(x-2,y-2,LIFT_SPRITE_WIDTH+4,LIFT_SPRITE_HEIGHT+4);
+  ctx.restore();
+ }
+}
+
+const MARKET_X=23,SPAWN_X=28;
+
+// SANDSTAR 2.17: original local sprite assets, embedded (offline first).
+// Both buildings are owned by the independent town world, never rendered or opened from the mine.
+const BUILDING_DATA=[{id:'forge',name:'작업 대장간',x:45},{id:'market',name:'바람장터',x:MARKET_X}];
+const BUILDING_IMAGES={market:new Image(),forge:new Image()};
+const BUILDING_SOURCES={market:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABQCAYAAADm4nCVAAADoklEQVR4nO2cT0gUURzHf5ZQQpEXC/GQrtISeYn+SVhBECSZQpCH7tolJEGIMkFQg0AI6pRCdOpQEBTGCkGg7kGxoxWKmkFim4eIAiMwO9SM8//NzL7Z37zZ7+eyb2bevP3t7/e+v/fmzc4QAQAAAICFknwbaO3q25RhiKq8uNeXlw8Dn3ygsbmoHS5iPjsayKfbojIE+KNUVkMve+tlNaUELf2zUtqBAphBACQTdFISKADFPuPxSxA/+Q4AnB8NvqZMRud/mHkbnTUJ4OCxo3rZzzWCsAJ6fn6IguCZguD8/BH50DU6h9ra4XzJvHs6YvM3pqHMOCqgtatvc2FlhYiIXrXvcT35wsh32z7Ud69fV1VlGxNsCkDejxarf21rQVqEMAbIx2lGJG0xLkq2L83p5ZabHvUc9x6XbY5UMAgzo4QCNM7VbZi2hwYvmba7e57r5dcLznqIG8oqwOp8t31xR9kAaEyPTdD02AS3GaFR4kpYG4S1FKT1dKvjT5w/TUT/UpGWgjZS6UKZKQRXwjHEdRA2Rqtmf72uhob0TurpOGWq+3VxVfhFe2srhXXc2rm+JDzVlQdHfki3x6mdweFJmpr7pe//+GnW11K/kgrQZjtayjGWjTMhFVBqGuqEMQgqoqQCiJx7umq9n0hxBajocCvKKiApxFYBV5/l9HLZ/88wywvGdjQeXt4X1izpQAHMxFYBRtZdFpqTgBIBqKxwv+3nl9U1++3EOIAUxIwSCtBoqt4QV7KQWY53+oo8AOmGlF7+trYe9dcph1IK4MbYmeam8lghNCA9APMnU6bt9J+tcnZfmelYYw6KgAI8KN8hPvb7s3jJ2gvMgphBAJhBAJhBAJiRNggPPFkkIqI2yyzIi87+LBER3e9tlGWGckABDnT2Z/XO4ZdcroRqysvEFS0gAMwgAMxIvxB7P/DGtH3x1lnXYwBXwp48ziybtm8cTrkeCwtSEDOJVEBH91bay1wbZ7RETOQBuHsHed+LRCogKqLoTBgDmEmkAoaHjD013veEoQBmpCtg9kvwfy4UM4lMQbIoRGeSFoDbV2o9j/t5JKgYkRIAWc41t2P/V7MsRPaGuT9hfUbMLxiEmUEAmEEAmAk1BgwOT8q2w4HdkbVcGPv9AQUwgwAwEzgFhZlqhaG0YisF6U+3VO8K3I7TkzGF+g1+gAKYUWop4tHMT24TpCN8o0dz05nYvDdIRUYz4+HfHQ2iBwFgBgEAADDyF2lW7ojyuQQLAAAAAElFTkSuQmCC',forge:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABQCAYAAADm4nCVAAADqUlEQVR4nO2cPWgUQRTHX8RICivjB4eJBj3zobHKSbjGDyxUkEMbC4vDziIRQxqRgIUgkiZEyBWChaSwsIkE7QTFRoSz8jSenBo9TfCziIXBC5zVJpfbnd35frN379dld+bNzPvnzc683ZsWIFY5kDpWFSn/Ov+kRbXNDaoGCDWUFWwURm7cEvrv95gcu6zkQ4oAZEgAZEgAZOgZUIO3Curs7Q4tV377DgD0rII2qhrwSGeyUg8xl1haKFtvU8sU1AjOx0JZgGZ2vo6xKwnQzM73UPWBtADk/DVUfCElADnfj6xPhAUg57OR8Y3QMtSm8+9f3KHd5rnb37TbrCedyVafz05z7w+07QMaCW+jJYuICNwCpDPZ6pW+inyvJDmT+6ps48HQTgAAiOr/2IKY3TB748AnApcA9VPPYCoRWv5FftF3TaaObgZTidC+PWb0UWY8MPeTKxIiBXDloXt3YlS4zoXRCQM9ESNKhNBVkCvOjzthfmQKQM7XC8ufgVOQ687//OMf896ubZss9kSMoOnINzeFOd/mKmjgcAcABK+Crl8dZta7dnPKd81bBb189kVT76IZn2tl3qsVwRcB9Qp19aTWBOnbp6d3TUA7/IVC8ePq3/PFfOCDmF5JIiO0E74ztwKJZJK7/Ks3JQAAOLifv47HAKwI14niUaVLqp7cOEpcpSgCkBHOBS2W+JRVrQPHuwBg7QG6jqUZZrXA8ir90Fg/CIoAZJzMhuYLRTh0qWi0jVR/j1H7vFAEIEMCIOPkFFTLlvbt2mz9/vVdmy1dUAQgYzQCtrqbFxPC5DgoApAhAZARnoKs5IIKZvcAAObHwbtrpghAxt1ckGFcGQdFADIkADLO74RruZftEK5zftree2AZKAKQIQGQIQGQoVwQB5QLAoDZs3JekK1nCy0RkB0eUrYxPZWLLLP5j3v5fFWM5oKk7UbkgvaePhpp7/3Dp/ztRUC5oAZGUy7ohHJHbOeLKBdEAAAJgA4JgAwJgIzRnfCn0gfftd3JPSabjB0UAchoiQDWLvbIyVPcZV2GckENDAmAjPVcEFd9+i6IsIXR74K6k/7fFbvyjRDlgggAIAHQIQGQidWHWR5Rb7vihFYBhkbYp5h49PeuL5Ob9J9u0kzQFIRMLKcg25jMBcVGgMwM+5SsOBN5ruW6A5sssVwx7+y2VrsfbNGBTY7CPQX1d7aZ7EcdNtsyT6G8zLwXGQHzxXwLK3wIPsL8R1MQMiQAQRCI/Adu8x4wEP5r5gAAAABJRU5ErkJggg=='};
+for(const k of ['market','forge'])BUILDING_IMAGES[k].src=BUILDING_SOURCES[k];
+let marketSection='sell',forgeSection='pickaxe';
+function closestBuilding(){if(ssRegion!==TOWN_WORLD_ID)return null;if(!p||!game)return null;let best=null,dist=Infinity;for(const b of BUILDING_DATA){
+ const foot=terrain(b.x)-1,dx=Math.abs(p.x-b.x),dy=Math.abs(p.y-foot);
+ if(dx>3.25||dy>3.6)continue;
+ const d=Math.hypot(dx,dy*.75);if(d<dist){best=b;dist=d;}
+}return best;}
+function enterNearbyBuilding(){const b=closestBuilding();if(!b){flash('건물 입구 근처에서 이용할 수 있어요');return false;}
+ if(b.id==='forge')return forgeMenu();return market();}
+function canOpenBuilding(id){if(town25dActive&&ssRegion===TOWN_WORLD_ID){const t=t25Closest();return !!t&&t.id===id&&t25Distance(t)<=2.65;}const b=closestBuilding();return !!b&&b.id===id;}
+function shopIcon(t){return '<span class="shop-ico" data-type="'+t+'" aria-hidden="true"></span>';}
+function venueHeader(id,sub){const b=BUILDING_DATA.find(x=>x.id===id);return '<header class="venue-hero"><img alt="" src="'+BUILDING_SOURCES[id]+'"><div><h3>'+b.name+'</h3><p>'+sub+'</p></div><span class="venue-wallet">'+game.coins+' C</span><button type="button" id="venueClose" class="venue-close" aria-label="시설 메뉴 닫기">×</button></header>';}
+function venueTabs(items,current){return '<nav class="venue-tabs" aria-label="시설 메뉴">'+items.map(([id,label,ico])=>'<button type="button" data-section="'+id+'" class="'+(current===id?'active':'')+'" aria-current="'+(current===id?'page':'false')+'">'+shopIcon(ico)+label+'</button>').join('')+'</nav>';}
+function venuePresent(title,html){showModal(title,html);$('dialog').classList.add('venue-dialog');$('backBtn').parentNode.classList.add('venue-footer');$('venueClose').onclick=closeModal;}
+
+const hash=(n)=>{n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);return ((n^(n>>>16))>>>0)/4294967296};
+function noise1(seed,x){let a=Math.floor(x),q=x-a; q=q*q*(3-2*q);return hash(a*1013+seed*71)*(1-q)+hash((a+1)*1013+seed*71)*q}
+const rand=(x,y,k=0)=>hash((x*73856093)^(y*19349663)^(k*83492791)^game.seed);
+let game;
+function biomeAt(x){if(x<72)return 'meadow';if(x<180)return 'forest';if(x<290)return 'desert';if(x<392)return 'snow';return 'highlands'}
+// Local-only game statistics added in 2.16-A. No analytics IDs, external URLs or network calls.
+function freshBalanceMetrics(){return {version:1,activeSeconds:0,miningSeconds:0,movingSeconds:0,marketSeconds:0,blocksBroken:0,oreMined:0,oreBonus:0,oreByType:{},oreSold:0,creditsSold:0,forgeAttempts:0,forgeFailures:0,forgeCreditsSpent:0,affinityCreditsSpent:0,toolCreditsSpent:0,skillCreditsSpent:0};}
+function normalizeBalanceMetrics(raw){
+ const m=freshBalanceMetrics();if(!raw||typeof raw!=='object'||Array.isArray(raw))return m;
+ const all=['activeSeconds','miningSeconds','movingSeconds','marketSeconds','blocksBroken','oreMined','oreBonus','oreSold','creditsSold','forgeAttempts','forgeFailures','forgeCreditsSpent','affinityCreditsSpent','toolCreditsSpent','skillCreditsSpent'];
+ for(const k of all){const n=Number(raw[k]);if(Number.isFinite(n)&&n>=0)m[k]=Math.min(n,1e12);}
+ if(raw.oreByType&&typeof raw.oreByType==='object'&&!Array.isArray(raw.oreByType)){
+  for(const id of ['orecoal','copper','iron','crystal','amber','opal']){const n=Number(raw.oreByType[id]);if(Number.isSafeInteger(n)&&n>=0)m.oreByType[id]=Math.min(n,1e12);}
+ }
+ return m;
+}
+function balanceStats(state=game){return state.economy.balanceMetrics;}
+function balanceMetricsMarkup(){
+ const m=balanceStats(),minutes=m.activeSeconds/60, perMinute=minutes>=.25?(m.oreMined/minutes).toFixed(2):'측정 중';
+ const creditRate=minutes>=.25?(m.creditsSold/minutes).toFixed(1):'측정 중';
+ return `<div class="balance-stats" aria-label="로컬 경제 플레이 기록"><strong>경제 활동 기록 (2.16-A 설치 이후)</strong><br>플레이 ${(m.activeSeconds/60).toFixed(1)}분 · 채굴 조작 ${(m.miningSeconds/60).toFixed(1)}분 · 이동 ${(m.movingSeconds/60).toFixed(1)}분<br>광물 ${m.oreMined}개 · 정광 추가 ${m.oreBonus}개 · 광물 분당 ${perMinute}개<br>판매 ${m.oreSold}개 / ${m.creditsSold}C · 판매 수익 분당 ${creditRate}C<br>곡괭이 강화 ${m.forgeAttempts}회 (실패 ${m.forgeFailures}회) · 강화 현금 지출 ${m.forgeCreditsSpent}C<br><small>기존 기록과 구분되는 2.16-A 이후 집계. 분당 수치는 실제 입력을 자동 재생한 값이 아닌 이 기기 플레이 시간 기준이며, 거래·이동 시간 포함. 저장 파일에만 기록되고 외부 전송하지 않아요.</small></div>`;
+}
+
+// 2.18-A XP/SP retained; 2.18-B enables physical effects on stat allocations.
+const CHARACTER_STAT_IDS=['agility','jump','climb','observation','focus','endurance','reach'];
+const CHARACTER_STAT_NAMES={agility:'기동',jump:'도약',climb:'등반',observation:'관찰',focus:'집중',endurance:'지구력',reach:'채굴 사거리'};
+const CHARACTER_MILESTONES=[{id:'depth_18',depth:18,xp:10},{id:'depth_45',depth:45,xp:15},{id:'depth_90',depth:90,xp:20}];
+const XP_BIT_BYTES=Math.ceil(WW*WH/8), MAX_CHARACTER_XP=1000000000000;
+let xpClaimBits=new Uint8Array(XP_BIT_BYTES);
+function xpRequiredForNext(level){if(!Number.isSafeInteger(level)||level<1||level>=30)return 0;const k=level-1;return 60+25*k+5*k*k;}
+function deriveLevelFromTotalXp(totalXp){const xp=Number.isSafeInteger(totalXp)&&totalXp>=0?totalXp:0;let level=1,spent=0;while(level<30){const required=xpRequiredForNext(level);if(xp<spent+required)break;spent+=required;level++;}return {level,earnedThisLevel:xp-spent,requiredNext:xpRequiredForNext(level),xpForLevel:spent};}
+
+// 2.18-C: Pixel visibility and persistent exploration, independent of XP and map edits.
+// The XP claim and vision bitsets each use WW*WH/8 bytes; existing world generation is unchanged.
+const VISION_START_DEPTH=7, VISION_FADE_DEPTH=5;
+// Future 2.18-D unlocks these bonuses only after validated trait/artifact ownership.
+// 2.18-D: trait and artifact sight bonuses are verified on inventory/equip before use.
+const VISION_BIT_BYTES=Math.ceil(WW*WH/8);
+let visionExploredBits=new Uint8Array(VISION_BIT_BYTES),visionSolidBits=new Uint8Array(VISION_BIT_BYTES);
+let visionCache={cx:-999,cy:-999,radius:-1,active:false,visible:new Set()};
+function freshVision(){return {schemaVersion:1,exploredB64:'',solidB64:''};}
+function normalizeVision(raw){
+ const r=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const explored=decodeXpClaims(r.exploredB64),solids=decodeXpClaims(r.solidB64);
+ for(let i=0;i<solids.length;i++)solids[i]&=explored[i]; // remembered solids must have been seen.
+ visionExploredBits=explored;visionSolidBits=solids;
+ visionCache={cx:-999,cy:-999,radius:-1,active:false,visible:new Set()};
+ return {schemaVersion:1,exploredB64:encodeXpClaims(explored),solidB64:encodeXpClaims(solids)};
+}
+function effectiveSightRadius(){return Math.min(8,getEffectiveStats().sightRadius+(ssP14Crafted('cave_lamp')?1:0)+(equippedSecondary()==='lantern'?(secondaryBoosted()?2:1):0));}
+
+function visionDepth(){return Math.max(0,p.y-terrain(p.x));}
+function visionFade(){return Math.max(0,Math.min(1,(visionDepth()-VISION_FADE_DEPTH)/(VISION_START_DEPTH-VISION_FADE_DEPTH)));}
+function visionCellIndex(x,y){return Number.isInteger(x)&&Number.isInteger(y)&&x>=0&&x<WW&&y>=0&&y<WH?y*WW+x:-1;}
+function bitRead(bits,x,y){const i=visionCellIndex(x,y);return i>=0&&(bits[i>>3]&(1<<(i&7)))!==0;}
+function bitWrite(bits,x,y,yes){const i=visionCellIndex(x,y);if(i<0)return;const mask=1<<(i&7);if(yes)bits[i>>3]|=mask;else bits[i>>3]&=~mask;}
+function visionVisible(x,y){
+ if(visionDepth()<VISION_FADE_DEPTH)return true;
+ updateVisionCache();return visionCache.visible.has(y*WW+x);
+}
+function isExplored(x,y){return bitRead(visionExploredBits,x,y);}
+function updateVisionCache(force=false){
+ if(ssRegion==='life_forest_01')return;
+ if(!p||!game)return;
+ const cx=Math.floor(p.x),cy=Math.floor(p.y-PLAYER_CENTER_FROM_FEET),radius=effectiveSightRadius(),active=visionDepth()>=VISION_FADE_DEPTH;
+ if(!force&&cx===visionCache.cx&&cy===visionCache.cy&&radius===visionCache.radius&&active===visionCache.active)return;
+ visionCache={cx,cy,radius,active,visible:new Set()};
+ const r2=radius*radius;
+ for(let y=cy-radius;y<=cy+radius;y++)for(let x=cx-radius;x<=cx+radius;x++){
+  if(visionCellIndex(x,y)<0)continue;
+  if((x-cx)**2+(y-cy)**2>r2)continue;
+  visionCache.visible.add(y*WW+x);
+ }
+ if(!active)return;
+ for(const index of visionCache.visible){
+   const x=index%WW,y=Math.floor(index/WW),t=tile(x,y);
+   bitWrite(visionExploredBits,x,y,true);
+   bitWrite(visionSolidBits,x,y,solid(t));
+ }
+}
+function onVisibleTileChanged(x,y,t){
+ if(p&&visionDepth()>=VISION_FADE_DEPTH&&visionVisible(x,y)){
+  bitWrite(visionExploredBits,x,y,true);bitWrite(visionSolidBits,x,y,solid(t));
+ }
+}
+function prepareVisionForSave(){
+ if(ssRegion==='life_forest_01')return;
+ if(!game)return;
+ updateVisionCache();
+ game.vision={schemaVersion:1,exploredB64:encodeXpClaims(visionExploredBits),solidB64:encodeXpClaims(visionSolidBits)};
+}
+function drawVisibilityMask(){
+ if(ssRegion==='life_forest_01')return;
+ const fade=visionFade();if(fade<=0)return;
+ updateVisionCache();
+ const fromX=Math.floor(camera.x/T),toX=Math.ceil((camera.x+viewW)/T),fromY=Math.floor(camera.y/T),toY=Math.ceil((camera.y+viewH)/T);
+ ctx.save();ctx.globalAlpha=fade;
+ // Each hidden cell is replaced by an OPAQUE neutral tile; no resource color can bleed through.
+ for(let y=fromY;y<=toY;y++)for(let x=fromX;x<=toX;x++){
+  if(visionCache.visible.has(y*WW+x))continue;
+  const sx=Math.floor(x*T-camera.x),sy=Math.floor(y*T-camera.y);
+  ctx.fillStyle='#050d18';ctx.fillRect(sx,sy,T+1,T+1);
+  if(isExplored(x,y)&&bitRead(visionSolidBits,x,y)){
+   ctx.fillStyle='#243241';ctx.fillRect(sx+2,sy+2,T-3,T-3);
+   ctx.fillStyle='#314454';ctx.fillRect(sx+3,sy+3,T-7,2);
+  }else if(isExplored(x,y)){
+   ctx.fillStyle='#101d2b';ctx.fillRect(sx+1,sy+1,T,T);
+  }
+ }
+ ctx.restore();
+}
+
+function freshCharacter(){return {schemaVersion:1,totalXp:0,stats:Object.fromEntries(CHARACTER_STAT_IDS.map(id=>[id,0])),trait:null,traitFreeChangeUsed:false,statFreeResetUsed:false,claimedMilestones:[],xpClaimedCellsB64:'',mobility:{ropeLeapRemaining:1,wasAirborne:false}};}
+function getUnspentSp(character=game.character){const level=deriveLevelFromTotalXp(character.totalXp).level;const used=CHARACTER_STAT_IDS.reduce((n,k)=>n+(character.stats[k]||0),0);return Math.max(0,level-1-used);}
+function encodeXpClaims(bits=xpClaimBits){let text='';for(let i=0;i<bits.length;i+=2048)text+=String.fromCharCode(...bits.subarray(i,i+2048));return btoa(text);}
+function decodeXpClaims(value){if(typeof value!=='string'||!value)return new Uint8Array(XP_BIT_BYTES);if(value.length!==Math.ceil(XP_BIT_BYTES/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))return new Uint8Array(XP_BIT_BYTES);try{const raw=atob(value);if(raw.length!==XP_BIT_BYTES)return new Uint8Array(XP_BIT_BYTES);const out=new Uint8Array(XP_BIT_BYTES);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}catch(_){return new Uint8Array(XP_BIT_BYTES);}}
+function xpCellIndex(x,y){return Number.isInteger(x)&&Number.isInteger(y)&&x>=0&&x<WW&&y>=0&&y<WH?y*WW+x:-1;}
+function xpCellClaimed(x,y){const pos=xpCellIndex(x,y);return pos<0?true:!!(xpClaimBits[pos>>3]&(1<<(pos&7)));}
+function claimXpCell(x,y){const pos=xpCellIndex(x,y);if(pos<0)return false;const bit=1<<(pos&7);if(xpClaimBits[pos>>3]&bit)return false;xpClaimBits[pos>>3]|=bit;return true;}
+function markOldRemovedCells(bits,edits){for(const [loc,tileValue] of Object.entries(edits||{})){if(tileValue!==null)continue;const match=/^(\d+),(\d+)$/.exec(loc);if(!match)continue;const x=+match[1],y=+match[2],pos=xpCellIndex(x,y);if(pos>=0)bits[pos>>3]|=1<<(pos&7);}}
+function normalizeCharacter(raw,edits){
+ const legacy=!raw||typeof raw!=='object'||Array.isArray(raw);
+ const current=legacy?{}:raw;
+ const c=freshCharacter();
+ if(Number.isSafeInteger(current.totalXp)&&current.totalXp>=0)c.totalXp=Math.min(MAX_CHARACTER_XP,current.totalXp);
+ if(current.stats&&typeof current.stats==='object'&&!Array.isArray(current.stats))for(const name of CHARACTER_STAT_IDS){const n=current.stats[name];c.stats[name]=Number.isSafeInteger(n)?Math.min(8,Math.max(0,n)):0;}
+ // Never mint extra SP by accepting a saved stat total above level allowance.
+ let over=CHARACTER_STAT_IDS.reduce((a,k)=>a+c.stats[k],0)-(deriveLevelFromTotalXp(c.totalXp).level-1);
+ for(const name of [...CHARACTER_STAT_IDS].reverse()){if(over<=0)break;const trim=Math.min(over,c.stats[name]);c.stats[name]-=trim;over-=trim;}
+ // Validate persisted remaining rope charges, including exhausted at an airborne save.
+ const incomingMobility=current.mobility&&typeof current.mobility==='object'&&!Array.isArray(current.mobility)?current.mobility:{};
+ // 2.18-E: Keep raw saved charge count up to the absolute 3-charge limit.
+  // Knot ring ownership/equipment is validated later by normalizeArtifactSystem().
+  // The final, trusted per-player cap is applied in normalizeSave() and spawnPlayer().
+  const maxCharges=3;
+ c.mobility={ropeLeapRemaining:Number.isSafeInteger(incomingMobility.ropeLeapRemaining)?Math.max(0,Math.min(maxCharges,incomingMobility.ropeLeapRemaining)):maxCharges,wasAirborne:incomingMobility.wasAirborne===true};
+ c.trait=TRAIT_IDS.includes(current.trait)?current.trait:null;
+
+ c.traitFreeChangeUsed=current.traitFreeChangeUsed===true;
+ c.statFreeResetUsed=current.statFreeResetUsed===true;
+ c.claimedMilestones=Array.isArray(current.claimedMilestones)?[...new Set(current.claimedMilestones.filter(id=>CHARACTER_MILESTONES.some(m=>m.id===id)))]:[];
+ let bits=decodeXpClaims(current.xpClaimedCellsB64);
+ markOldRemovedCells(bits,edits); // prevents migration from granting historic removed cells.
+ xpClaimBits=bits;
+ c.xpClaimedCellsB64=encodeXpClaims(bits);
+ if(legacy)c.legacyDepthNeedsBaseline=true; // avoid retroactive depth awards to existing players.
+ return c;
+}
+function prepareCharacterForSave(){if(game?.character){
+ game.character.xpClaimedCellsB64=encodeXpClaims();
+ // A queued save can occur while midair or while clinging to the rope.
+ game.character.mobility={ropeLeapRemaining:remainingRopeLeaps(),wasAirborne:!!(p&&(rope.active||(!collides(p.x,p.y+.055))))};
+ }}
+function awardCharacterXp(amount,label=''){if(!Number.isSafeInteger(amount)||amount<=0)return 0;const before=deriveLevelFromTotalXp(game.character.totalXp).level;game.character.totalXp=Math.min(MAX_CHARACTER_XP,game.character.totalXp+amount);const after=deriveLevelFromTotalXp(game.character.totalXp).level;if(after>before){flash(`광부 Lv.${after}! 능력치 ${after-before}SP 획득`);}return after-before;}
+function blockExperience(t){if(t==='relic')return 8;if(t==='orecoal'||t==='copper')return 3;if(t==='iron')return 5;if(t==='titanium')return 7;if(t==='starshard')return 11;if(['crystal','amber','opal'].includes(t))return 8;if(['grass','dirt','sand','snow','stone','wood','wall','glass'].includes(t))return 1;return 0;}
+function blockXpEligible(x,y,t){const xp=blockExperience(t);if(!xp||xpCellClaimed(x,y))return false;const loc=key(x,y);if(Object.prototype.hasOwnProperty.call(game.edits,loc))return false;return terrainType(x,y)===t;}
+function grantBlockXpIfEligible(x,y,t,eligible){if(!eligible||!claimXpCell(x,y))return false;awardCharacterXp(blockExperience(t),t);return true;}
+function baselineLegacyDepth(){if(!game.character.legacyDepthNeedsBaseline)return;const depth=Math.max(0,Math.floor(p.y-terrain(p.x)));for(const m of CHARACTER_MILESTONES)if(depth>=m.depth&&!game.character.claimedMilestones.includes(m.id))game.character.claimedMilestones.push(m.id);delete game.character.legacyDepthNeedsBaseline;}
+function claimMilestoneXp(){if(!p||!game?.character)return;baselineLegacyDepth();const depth=Math.max(0,Math.floor(p.y-terrain(p.x)));for(const m of CHARACTER_MILESTONES){if(depth>=m.depth&&!game.character.claimedMilestones.includes(m.id)){game.character.claimedMilestones.push(m.id);const earned=m.xp+(game.character.trait==='pioneer'?Math.floor(m.xp*.10):0);awardCharacterXp(earned,m.id);flash(`${m.depth}m 깊이 도달 · +${earned} EXP`);}}}
+function safeCharacterTransaction(change){const old=game,oldBits=xpClaimBits;try{const draft=JSON.parse(JSON.stringify(old));if(change(draft)!==true)return false;game=draft;if(!saveGame(true)){game=old;xpClaimBits=oldBits;updHud();flash('저장 실패: 능력치 변경이 취소됐어요.');return false;}updHud();return true;}catch(_){game=old;xpClaimBits=oldBits;updHud();flash('능력치 처리 오류로 변경을 취소했어요.');return false;}}
+function allocateStatPoint(id){if(!CHARACTER_STAT_IDS.includes(id))return false;
+ const ok=safeCharacterTransaction(draft=>{const stats=draft.character.stats;if(getUnspentSp(draft.character)<1||stats[id]>=8)return false;stats[id]++;return true;});
+ if(ok){clampRopeLeaps();updateMobilityHud();}return ok;}
+
+function resetStatPoints(){const spent=CHARACTER_STAT_IDS.reduce((n,k)=>n+game.character.stats[k],0);if(spent===0)return false;
+ const ok=safeCharacterTransaction(draft=>{const c=draft.character;if(c.statFreeResetUsed){if(draft.coins<250)return false;draft.coins-=250;}else c.statFreeResetUsed=true;for(const id of CHARACTER_STAT_IDS)c.stats[id]=0;return true;});
+ if(ok){clampRopeLeaps();updateMobilityHud();}return ok;}
+
+let characterTab='stats';
+function refreshCharacterMenu(tab=characterTab){const scroll=$('dialog').scrollTop;characterTab=tab;characterMenu();$('dialog').scrollTop=scroll;}
+function characterMenu(){
+ const character=game.character,progress=deriveLevelFromTotalXp(character.totalXp),points=getUnspentSp(character);
+ const ratio=progress.requiredNext?Math.min(100,Math.round(100*progress.earnedThisLevel/progress.requiredNext)):100;
+ const ability=mobilityDerived();
+ const labels={agility:`이동 ${ability.moveSpeed.toFixed(2)}칸/초`,jump:`일반 점프 ${ability.jumpImpulse.toFixed(2)} · 로프 도약 ${ability.ropeLeapImpulse.toFixed(2)}`,climb:`로프 ${ability.ropeClimbSpeed.toFixed(2)}칸/초`,observation:`지하 시야 ${effectiveSightRadius()}칸`,focus:`채굴속도 +${Math.round((ability.mineMultiplier-1)*1000)/10}%`,endurance:`로프 도약 ${ability.ropeLeapMax}회 · 재연결 ${ability.ropeCooldown.toFixed(2)}초`,reach:`채굴 반경 ${effectiveMineReach().toFixed(2)}칸`};
+ let content='';
+ if(characterTab==='stats'){
+  const rows=CHARACTER_STAT_IDS.map(id=>`<div class="line char-stat"><div><strong>${CHARACTER_STAT_NAMES[id]}</strong><br><small>${labels[id]}</small></div><div class="char-stat-action"><b>${character.stats[id]}/8</b><button data-char-stat="${id}" aria-label="${CHARACTER_STAT_NAMES[id]} 능력치 1 증가" ${points===0||character.stats[id]>=8?'disabled':''}>+1</button></div></div>`).join('');
+  content=`<h3 class="char-subtitle">능력치 · ${points} SP 남음</h3>${rows}<div class="line"><div><strong>포인트 초기화</strong><br><small>${character.statFreeResetUsed?'250 크레딧':'첫 1회 무료'}</small></div><button id="resetCharacterStats" ${CHARACTER_STAT_IDS.every(k=>!character.stats[k])?'disabled':''}>초기화</button></div>`;
+ }else if(characterTab==='traits'){
+  content=`<p class="char-intro">한 가지 개성을 선택하세요. 장비를 바꿔도 효과가 유지돼요.</p><div class="char-choice-list">${TRAIT_IDS.map(id=>{const t=TRAIT_INFO[id],chosen=character.trait===id,change=!!character.trait;const locked=change&&progress.level<10,cost=change?(character.traitFreeChangeUsed?200:0):0;return `<div class="char-choice${chosen?' chosen':''}"><span class="char-emblem">${t.icon}</span><div class="char-choice-body"><strong>${t.name}</strong><small>${t.tag}</small></div><button data-trait="${id}" ${chosen||locked||game.coins<cost?'disabled':''}>${chosen?'선택됨':locked?'Lv.10':cost?cost+'C':'선택'}</button></div>`;}).join('')}</div><p class="char-note">첫 선택 무료 · Lv.10부터 교체 · 첫 교체 무료, 이후 200C</p>`;
+ }else{
+  const sys=game.artifactSystem,slots=artifactSlotsFor(progress.level);
+  const slotRows=Array.from({length:2},(_,i)=>{const id=sys.equippedIds[i],item=id?ARTIFACT_INFO[id]:null,locked=i>=slots;return `<div class="char-slot"><span class="char-emblem">${locked?'🔒':item?item.icon:'＋'}</span><div class="char-choice-body"><strong>유물 슬롯 ${i+1}</strong><small>${locked?'Lv.12에 해금':item?item.name+' · '+item.tag:'장착된 유물 없음'}</small></div>${item?`<button data-unequip="${i}">해제</button>`:''}</div>`;}).join('');
+  const cards=ARTIFACT_IDS.map(id=>{const item=ARTIFACT_INFO[id],owned=sys.ownedIds.includes(id),slot=sys.equippedIds.indexOf(id),freeSlot=Array.from({length:slots},(_,i)=>i).find(i=>!sys.equippedIds[i]);return `<div class="char-choice${slot>=0?' chosen':''}"><span class="char-emblem">${owned?item.icon:'?'}</span><div class="char-choice-body"><strong>${owned?item.name:'미발견 유물'}</strong><small>${owned?item.tag:'획득 조건 · '+item.how}</small></div>${owned?`<button data-artifact="${id}" ${slot>=0||freeSlot===undefined?'disabled':''}>${slot>=0?'장착 중':freeSlot===undefined?'슬롯 꽉 참':'장착'}</button>`:''}</div>`;}).join('');
+  content=`<h3 class="char-subtitle">유물 장착 <small>${sys.ownedIds.length}/6 발견</small></h3><div class="char-slot-grid">${slotRows}</div><h3 class="char-subtitle">수집한 유물</h3><div class="char-choice-list">${cards}</div><p class="char-note">상태 변경은 저장 성공 시 확정돼요. 기존 유물 채굴 기록 ${game.relics}회는 그대로 보존돼요.</p>`;
+ }
+ const tabs=[['stats','능력치'],['traits','개성'],['artifacts','유물']].map(([id,label])=>`<button class="${characterTab===id?'active':''}" role="tab" aria-selected="${characterTab===id}" data-char-tab="${id}">${label}</button>`).join('');
+ showModal('광부 성장',`<div class="char-head"><div><span>광부 레벨</span><strong>Lv.${progress.level}</strong></div><div><span>미사용</span><strong>${points} SP</strong></div></div><div class="char-progress" role="progressbar" aria-valuenow="${ratio}" aria-valuemin="0" aria-valuemax="100" aria-label="다음 광부 레벨 경험치"><div style="width:${ratio}%"></div></div><p class="char-note">${progress.requiredNext?`${progress.earnedThisLevel} / ${progress.requiredNext} EXP`:'Lv.30 최고 레벨'} · 총 ${character.totalXp} EXP · 발견한 지하 공동 ${game.cavernDiscoveries?.length||0}곳</p><nav class="char-tabs" role="tablist" aria-label="광부 성장 메뉴">${tabs}</nav>${content}`);
+ $('dialog').classList.add('ss-ui-modal','ss-growth-modal');$('backBtn').textContent='닫기';
+ for(const b of $('dialog').querySelectorAll('[data-char-tab]'))b.onclick=()=>{characterTab=b.dataset.charTab;refreshCharacterMenu();$('dialog').scrollTop=0;};
+ for(const b of $('dialog').querySelectorAll('[data-char-stat]'))b.onclick=()=>{if(allocateStatPoint(b.dataset.charStat))refreshCharacterMenu();else flash('SP가 부족하거나 상한에 도달했어요.');};
+ if($('resetCharacterStats'))$('resetCharacterStats').onclick=()=>{if(resetStatPoints())refreshCharacterMenu();else flash('초기화할 능력치가 없거나 크레딧이 부족해요.');};
+ for(const b of $('dialog').querySelectorAll('[data-trait]'))b.onclick=()=>{if(selectCharacterTrait(b.dataset.trait))refreshCharacterMenu();else flash('개성을 바꿀 수 없어요. 레벨과 크레딧을 확인하세요.');};
+ for(const b of $('dialog').querySelectorAll('[data-artifact]'))b.onclick=()=>{const empty=Array.from({length:artifactSlotsFor()},(_,i)=>i).find(i=>!game.artifactSystem.equippedIds[i]);if(empty!==undefined&&equipArtifact(empty,b.dataset.artifact))refreshCharacterMenu();else flash('장착 슬롯이나 유물 획득 상태를 확인하세요.');};
+ for(const b of $('dialog').querySelectorAll('[data-unequip]'))b.onclick=()=>{if(equipArtifact(Number(b.dataset.unequip),null))refreshCharacterMenu();else flash('유물 해제가 취소됐어요.');};
+}
+
+function normalizeShelterState(raw){
+  const t=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+  const validDate=typeof t.lastRestAt==='string'&&/^\d{4}-\d{2}-\d{2}T/.test(t.lastRestAt)&&!Number.isNaN(Date.parse(t.lastRestAt));
+  return {restCount:Number.isSafeInteger(t.restCount)&&t.restCount>=0?Math.min(1000000,t.restCount):0,
+    lastRestAt:validDate?new Date(t.lastRestAt).toISOString():null,
+    lastRestX:Number.isFinite(t.lastRestX)&&t.lastRestX>=0&&t.lastRestX<=WW?t.lastRestX:null,
+    lastRestY:Number.isFinite(t.lastRestY)&&t.lastRestY>=0&&t.lastRestY<=WH?t.lastRestY:null};
+}
+// M1 dedicated world region, deliberately separate from production key and mine edits.
+const TOWN_WORLD_ID='village_hub_01', TOWN_MINE_PORTAL_X=40;
+let ssRegion=TOWN_WORLD_ID;
+const M1_MINE_CRYSTAL_X=55,M1_MINE_GATE_X=64,M1_FOREST_GATE_X=22,M1_FOREST_SPRING_X=120;
+function ssM1Fresh(){return {schema:1,region:TOWN_WORLD_ID,minePos:null,forestPos:null,townPos:null,forestEdits:{},crystalSeen:false,forestVisited:false,springRepaired:false,storyRewarded:false,storyEvents:[]}}
+function ssM1Normalize(raw){
+ const d=ssM1Fresh();if(!raw||typeof raw!=='object'||Array.isArray(raw))return d;
+ d.region=[TOWN_WORLD_ID,'mine','life_forest_01'].includes(raw.region)?raw.region:'mine';
+ for(const k of ['minePos','forestPos','townPos'])if(raw[k]&&typeof raw[k]==='object'&&Number.isFinite(raw[k].x)&&Number.isFinite(raw[k].y)&&raw[k].x>12&&raw[k].x<145&&raw[k].y>0&&raw[k].y<WH-5)d[k]={x:raw[k].x,y:raw[k].y};
+ if(raw.forestEdits&&typeof raw.forestEdits==='object'&&!Array.isArray(raw.forestEdits)){for(const [key,v] of Object.entries(raw.forestEdits).slice(0,16000)){if(/^\d{1,3},\d{1,3}$/.test(key)&&(v===null||SOLIDS.has(v)))d.forestEdits[key]=v;}}
+ for(const k of ['crystalSeen','forestVisited','springRepaired','storyRewarded'])d[k]=raw[k]===true;
+ if(Array.isArray(raw.storyEvents))d.storyEvents=raw.storyEvents.filter(x=>typeof x==='string'&&x.length<100).slice(-25);
+ return d;
+}
+function newGame(seed=(Math.random()*1000000000)|0){return {storyM1:ssM1Fresh(),livingP0:freshLivingP0(),cargoTrial:ssCargoFresh(),shelter:{restCount:0,lastRestAt:null,lastRestX:null,lastRestY:null},seed:Math.abs(seed),edits:{},inv:{dirt:0,stone:0,wood:0,wall:0,glass:0,torch:0,bed:0,chest:0,copper:0,iron:0,crystal:0,titanium:0,starshard:0,orecoal:0,amber:0,opal:0},coins:50,mined:0,pickaxeLevel:1,drillMotor:{rank:1},drillBits:{owned:['tunnel'],equipped:'tunnel'},hammerCore:{rank:1},ropeDevice:{rank:1},pickaxeForge:{rank:0,failStreak:0,attemptCounter:0,affinity:'none',affinitySwitches:0,bonusOreDrops:0,secondary:'none',secondarySwitches:0},tool:'pickaxe',unlockedTools:['pickaxe'],oreFinds:0,relics:0,character:freshCharacter(),artifactSystem:freshArtifactSystem(),vision:freshVision(),worldGenVersion:5,cavernDiscoveries:[],treasureP13:ssTreasureFresh(),resourceLayerVersion:1,spawnX:SPAWN_X,spawnY:null,plotOwned:false,storage:{},economy:{reserveLiftMaterials:true,reserveForgeMaterials:true,totalOreSold:0,totalCreditsEarned:0,balanceMetrics:freshBalanceMetrics()},walked:0,transport:{discovered:['surface'],unlocked:['surface'],lastSafeId:'surface'},createdAt:new Date().toISOString(),playerX:null,playerY:null,version:1}}
+function normalizeSave(d){if(!d||!Number.isFinite(d.seed)||!d.inv||typeof d.inv!=='object'||!d.edits||typeof d.edits!=='object')throw Error('bad save');d.shelter=normalizeShelterState(d.shelter);if(!Number.isFinite(d.worldGenVersion))d.worldGenVersion=1; // 2.18-H3: deterministic new ores only on unedited rock/ore tiles; old edits remain authoritative.
+ d.cavernDiscoveries=Array.isArray(d.cavernDiscoveries)?[...new Set(d.cavernDiscoveries.filter(id=>typeof id==='string'&&/^cv:(?:[0-9]|[1-9][0-9]*):(?:[0-9]|[1-9][0-9]*)$/.test(id)&&id.length<=24))].slice(0,320):[];d.resourceLayerVersion=1;d.treasureP13=ssTreasureNormalize(d.treasureP13);d.drillMotor=p16NormalizeDrillMotor(d.drillMotor);d.drillBits=p16a2NormalizeBits(d.drillBits);d.hammerCore=p16HammerNormalizeCore(d.hammerCore);d.ropeDevice=p16RopeNormalize(d.ropeDevice); if(!Number.isFinite(d.pickaxeLevel))d.pickaxeLevel=1;if(!Number.isFinite(d.oreFinds))d.oreFinds=0;if(!Number.isFinite(d.relics))d.relics=0;if(!Array.isArray(d.unlockedTools))d.unlockedTools=['pickaxe'];d.unlockedTools=[...new Set(['pickaxe',...d.unlockedTools.filter(t=>Object.prototype.hasOwnProperty.call(TOOL_INFO,t))])];if(!TOOL_INFO[d.tool]||!d.unlockedTools.includes(d.tool))d.tool='pickaxe';if(!d.storage||typeof d.storage!=='object')d.storage={};const ec=d.economy&&typeof d.economy==='object'&&!Array.isArray(d.economy)?d.economy:{};d.economy={reserveLiftMaterials:ec.reserveLiftMaterials!==false,reserveForgeMaterials:ec.reserveForgeMaterials!==false,totalOreSold:Number.isSafeInteger(ec.totalOreSold)&&ec.totalOreSold>=0?ec.totalOreSold:0,totalCreditsEarned:Number.isSafeInteger(ec.totalCreditsEarned)&&ec.totalCreditsEarned>=0?ec.totalCreditsEarned:0,balanceMetrics:normalizeBalanceMetrics(ec.balanceMetrics)};
+ const tr=d.transport&&typeof d.transport==='object'?d.transport:{};const valid=xs=>Array.isArray(xs)?xs.filter(id=>STATION_DATA.some(st=>st.id===id)):[];
+ d.transport={discovered:[...new Set(['surface',...valid(tr.discovered)])],unlocked:[...new Set(['surface',...valid(tr.unlocked)])],lastSafeId:valid(tr.unlocked).includes(tr.lastSafeId)?tr.lastSafeId:'surface'};
+ for(const item of Object.keys(MATERIAL_NAMES)){if(!Number.isFinite(d.inv[item])||d.inv[item]<0)d.inv[item]=0}d.pickaxeForge=normalizePickaxeForge(d.pickaxeForge);d.character=normalizeCharacter(d.character,d.edits);d.artifactSystem=normalizeArtifactSystem(d.artifactSystem,deriveLevelFromTotalXp(d.character.totalXp).level);
+  // Validate restored charges only AFTER checking the equipped, owned knot ring.
+  // Otherwise airborne saves with three charges silently lose one on reload.
+  const allowedLeaps=Math.min(3,1+(d.character.stats.endurance>=5?1:0)+(d.artifactSystem.equippedIds.includes('knot_ring')?1:0));
+  d.character.mobility.ropeLeapRemaining=Math.min(allowedLeaps,d.character.mobility.ropeLeapRemaining);
+  d.cargoTrial=ssCargoNormalize(d.cargoTrial);d.vision=normalizeVision(d.vision);d.livingP0=normalizeLivingP0(d.livingP0);d.storyM1=ssM1Normalize(d.storyM1);return d}
+// SANDSTAR LIVING P1.1: deterministic local commands, save-schema 2, multiplayer-ready domain boundary.
+// Single-player only; never write production storage. Terrain, rope, mining and cargo remain owned by v10.1.
+const LIVING_SITES=Object.freeze({trees:[82,94,106],plots:[34,37,40],pond:64,market:23,home:53});
+const LIVING_CROPS=Object.freeze({wheat:{name:'밀',seconds:75,seed:'seed_wheat',price:8},potato:{name:'감자',seconds:105,seed:'seed_potato',price:11},carrot:{name:'당근',seconds:90,seed:'seed_carrot',price:10}});
+const LIVING_FISH=Object.freeze({river_fish:{name:'은빛 피라미',price:8,pull:16},perch:{name:'강농어',price:12,pull:21},carp:{name:'비단잉어',price:17,pull:27}});
+const LIVING_RECIPES=Object.freeze({bread:{name:'갓 구운 빵',price:16,needs:{wheat:3},wood:1,buff:'harvest'},soup:{name:'당근 수프',price:18,needs:{carrot:2,potato:1},wood:1,buff:'wood'},stew:{name:'생선 스튜',price:21,needs:{river_fish:1,potato:1},wood:1,buff:'fish'}});
+const LIVING_NPCS=Object.freeze({carpenter:{name:'목수',x:23,cooldown:180,payout:26},farmer:{name:'농부',x:34,cooldown:180,payout:24},fisher:{name:'어부',x:64,cooldown:180,payout:25}});
+const LIVING_CLOCK_TREE=120,LIVING_CLOCK_FISH=12;
+const livingOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+const livingInt=(n,max=1000000)=>Number.isSafeInteger(n)&&n>=0?Math.min(n,max):0;
+function freshLivingP0(){
+ const trees={},plots={},npcs={};
+ for(const x of LIVING_SITES.trees)trees[`tree:${x}`]=0;
+ for(const x of LIVING_SITES.plots)plots[`plot:${x}`]={plantedAt:null,watered:false,crop:null};
+ for(const id of Object.keys(LIVING_NPCS))npcs[id]={completed:0,readyAt:0};
+ return {schema:2,revision:0,clock:0,trees,plots,pondReadyAt:0,houseBuilt:false,rod:false,fishing:null,
+   bag:{seed:6,crop:0,seed_wheat:3,seed_potato:3,seed_carrot:3,sapling:0,wheat:0,potato:0,carrot:0,river_fish:0,perch:0,carp:0,bread:0,soup:0,stew:0},
+   stats:{cut:0,planted:0,harvested:0,fished:0,sold:0,cooked:0,quests:0},npcs,
+   fishDex:[],foodBuff:null,appliedIds:[],events:[]};
+}
+function normalizeLivingP0(raw){
+ const state=freshLivingP0(); if(!raw||typeof raw!=='object'||Array.isArray(raw))return state;
+ state.clock=Number.isFinite(raw.clock)&&raw.clock>=0?Math.min(raw.clock,1e9):0;
+ state.revision=livingInt(raw.revision);
+ if(raw.trees&&typeof raw.trees==='object')for(const id of Object.keys(state.trees))if(Number.isFinite(raw.trees[id])&&raw.trees[id]>=0)state.trees[id]=Math.min(raw.trees[id],1e9);
+ if(raw.plots&&typeof raw.plots==='object')for(const id of Object.keys(state.plots)){
+  const v=raw.plots[id];if(!v||typeof v!=='object')continue;
+  const plantedAt=Number.isFinite(v.plantedAt)&&v.plantedAt>=0?Math.min(v.plantedAt,state.clock):null;
+  const crop=plantedAt===null?null:(livingOwn(LIVING_CROPS,v.crop)?v.crop:'legacy');
+  state.plots[id]={plantedAt,watered:v.watered===true,crop};
+ }
+ state.pondReadyAt=Number.isFinite(raw.pondReadyAt)&&raw.pondReadyAt>=0?Math.min(raw.pondReadyAt,1e9):0;
+ state.houseBuilt=raw.houseBuilt===true;state.rod=raw.rod===true;
+ if(raw.bag&&typeof raw.bag==='object')for(const id of Object.keys(state.bag)){
+  if(livingOwn(raw.bag,id))state.bag[id]=livingInt(raw.bag[id]);
+  else if(raw.schema===2)state.bag[id]=0; // migration-only starter seeds, no free P1.1 inventory refill
+ }
+ if(raw.stats&&typeof raw.stats==='object')for(const id of Object.keys(state.stats))state.stats[id]=livingInt(raw.stats[id]);
+ if(raw.npcs&&typeof raw.npcs==='object')for(const id of Object.keys(state.npcs)){
+  const q=raw.npcs[id];if(!q||typeof q!=='object')continue;
+  state.npcs[id]={completed:livingInt(q.completed),readyAt:Number.isFinite(q.readyAt)&&q.readyAt>=0?Math.min(q.readyAt,1e9):0};
+ }
+ if(raw.fishing&&typeof raw.fishing==='object'&&livingOwn(LIVING_FISH,raw.fishing.id)){
+  const f=raw.fishing;state.fishing={id:f.id,progress:Math.min(100,livingInt(f.progress)),tension:Math.min(100,livingInt(f.tension)),round:Math.min(30,livingInt(f.round))};
+ }
+ if(Array.isArray(raw.fishDex))state.fishDex=[...new Set(raw.fishDex.filter(id=>livingOwn(LIVING_FISH,id)))];
+ if(raw.foodBuff&&typeof raw.foodBuff==='object'&&['harvest','wood','fish'].includes(raw.foodBuff.type)&&Number.isFinite(raw.foodBuff.until)&&raw.foodBuff.until>state.clock){state.foodBuff={type:raw.foodBuff.type,until:Math.min(raw.foodBuff.until,1e9)};}
+ if(Array.isArray(raw.appliedIds))state.appliedIds=raw.appliedIds.filter(id=>typeof id==='string'&&id.length>0&&id.length<100).slice(-64);
+ if(Array.isArray(raw.events))state.events=raw.events.filter(e=>e&&typeof e==='object'&&typeof e.kind==='string'&&typeof e.id==='string').slice(-14).map(e=>({id:e.id,kind:e.kind,at:livingInt(e.at),actor:'local'}));
+ return state;
+}
+function livingTargetX(target){
+ if(typeof target!=='string')return null;
+ if(target==='pond')return 64;if(target==='market'||target==='kitchen'||target==='npc:carpenter')return 23;
+ if(target==='home')return 53;if(target==='npc:farmer')return 34;if(target==='npc:fisher')return 64;
+ if(/^tree:(82|94|106)$/.test(target)||/^plot:(34|37|40)$/.test(target))return Number(target.split(':')[1]);
+ return null;
+}
+function applyLivingCommandPure(prev,cmd,context){
+ const bad=reason=>({ok:false,reason});
+ if(!cmd||typeof cmd!=='object'||typeof cmd.id!=='string'||cmd.id.length<1||cmd.id.length>96)return bad('잘못된 명령이에요');
+ if(!context||!Number.isFinite(context.coins)||context.coins<0||!Number.isFinite(context.x)||!Number.isFinite(context.y)||!Number.isFinite(context.groundY))return bad('플레이어 상태가 잘못되었어요');
+ const state=normalizeLivingP0(prev),inv={...(context.inv||{})};
+ if(state.appliedIds.includes(cmd.id))return bad('이미 처리한 행동이에요');
+ if(typeof cmd.type!=='string'||typeof cmd.target!=='string')return bad('행동 종류를 확인해 주세요');
+ const anywhereFood=cmd.type==='food.eat'&&cmd.target==='self';
+ if(!anywhereFood&&Math.abs(context.y-context.groundY)>5)return bad('지상에서 이용해 주세요');
+ const tx=anywhereFood?context.x:livingTargetX(cmd.target);if(tx===null||Math.abs(context.x-tx)>5.2)return bad('이용 장소에 더 가까이 가야 해요');
+ const stock=id=>livingInt(inv[id]),bag=id=>livingInt(state.bag[id]);
+ const hasBuff=type=>state.foodBuff?.type===type&&state.foodBuff.until>state.clock;
+ let award=0,message='',kind=cmd.type;
+ switch(kind){
+  case 'tree.cut':{
+   if(!livingOwn(state.trees,cmd.target))return bad('이 나무는 벌목할 수 없어요');
+   if(state.trees[cmd.target]>state.clock)return bad('나무가 다시 자라는 중이에요');
+   state.trees[cmd.target]=state.clock+LIVING_CLOCK_TREE;
+   const quantity=3+(hasBuff('wood')?1:0);inv.wood=stock('wood')+quantity;
+   state.stats.cut++;if(state.stats.cut%2===0)state.bag.sapling++;
+   message=`원목 ${quantity}개 획득 · 묘목 재생 시작`;break;}
+  case 'tree.plant':{
+   if(!livingOwn(state.trees,cmd.target))return bad('나무를 심을 장소가 아니에요');
+   if(state.trees[cmd.target]<=state.clock)return bad('이미 나무가 자라고 있어요');
+   if(bag('sapling')<1)return bad('묘목이 부족해요');
+   if(state.trees[cmd.target]<=state.clock+25)return bad('이미 거의 다 자랐어요');
+   state.bag.sapling--;state.trees[cmd.target]=state.clock+25;message='묘목을 심어 재성장을 앞당겼어요';break;}
+  case 'plot.plant':{
+   const plot=state.plots[cmd.target];if(!plot)return bad('등록된 농지가 아니에요');
+   if(plot.plantedAt!==null)return bad('이미 작물이 있어요');
+   const type=livingOwn(LIVING_CROPS,cmd.item)?cmd.item:(cmd.item===undefined||cmd.item==='legacy'?'legacy':null);
+   if(!type)return bad('등록되지 않은 씨앗이에요');
+   const seed=type==='legacy'?'seed':LIVING_CROPS[type].seed;
+   if(bag(seed)<1)return bad('씨앗이 부족해요');
+   state.bag[seed]--;plot.plantedAt=state.clock;plot.watered=false;plot.crop=type;
+   state.stats.planted++;message=(type==='legacy'?'채소':LIVING_CROPS[type].name)+' 씨앗을 심었어요';break;}

@@ -1,0 +1,650 @@
+  document.querySelectorAll('[data-tool]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.tool,t=TOOL_INFO[id];if(!t)return;const ok=safeMarketTransaction(d=>{if(!d.unlockedTools.includes(id)){if(d.coins<t.price)return false;d.coins-=t.price;d.economy.balanceMetrics.toolCreditsSpent+=t.price;d.unlockedTools.push(id);}if(d.tool===id)return false;d.tool=id;return true;});if(ok){holdLast=null;holdProgress=0;p16ResetDrillMotion(true);p16HammerFractures.clear();p16DReset();market();flash(t.name+' 장착 완료');}});
+  return true;
+ }
+ function forgeMenu(){
+  if(!canOpenBuilding('forge')){flash('대장간 입구에서 이용할 수 있어요');return false;}
+  if(menuType!=='작업 대장간')ssForgeLastOutcome=null;
+  const section=forgeSection,remember=menuType==='작업 대장간'&&$('overlay').classList.contains('open')?$('dialog').scrollTop:0;
+  const lv=Math.max(1,Math.min(6,game.pickaxeLevel||1)),cost=lv*60;
+  let content='';
+  if(section==='pickaxe')content=forgeMarketPanel()+p16DForgePanel()+ssP14ForgePanel();
+  else if(section==='drill')content=p16DrillPanel()+p16a2DrillBitsPanel();
+  else if(section==='hammer')content=p16HammerForgePanel();
+  else if(section==='rope')content=p16RopeForgePanel();
+  else if(section==='attribute')content=forgeAffinityPanel();
+  else if(section==='craft')content=ssP14CraftPanel();
+  else content=`<p class="venue-caption">모든 채굴 장비에 적용되는 공통 숙련도입니다. 곡괭이 +강화와 별개예요.</p><div class="line"><div><strong>채굴 숙련도 Lv.${lv}</strong><br><small>${lv>=6?'최대 강화':`다음 Lv.${lv+1} · ${cost} C`}</small></div><button id="upgradeBtn" ${lv>=6||game.coins<cost?'disabled':''}>${lv>=6?'최대':'강화'}</button></div>`;
+  const tabs=[['pickaxe','곡괭이','forge'],['drill','드릴 모터','gear'],['hammer','충격 망치','gear'],['rope','로프 장치','gear'],['attribute','속성','gear'],['mastery','숙련도','stats'],['craft','보물 제작','forge']];
+  venuePresent('작업 대장간',venueHeader('forge','곡괭이와 숙련도를 키우는 곳')+venueTabs(tabs,section)+'<div class="venue-content">'+content+'</div>');
+  $('dialog').scrollTop=remember;
+  document.querySelectorAll('[data-section]').forEach(btn=>btn.onclick=()=>{forgeSection=btn.dataset.section;forgeMenu();});
+  if($('forgeAttempt'))$('forgeAttempt').onclick=attemptPickaxeForge;
+  if($('p16MotorUpgrade'))$('p16MotorUpgrade').onclick=p16UpgradeDrillMotor;
+  if($('p16HammerUpgrade'))$('p16HammerUpgrade').onclick=p16HammerUpgrade;
+  if($('p16RopeUpgrade'))$('p16RopeUpgrade').onclick=p16RopeUpgrade;
+  document.querySelectorAll('[data-p16a2-bit]').forEach(btn=>btn.onclick=()=>p16a2ChooseBit(btn.dataset.p16a2Bit));
+  ssP14BindForge();
+  document.querySelectorAll('[data-affinity]').forEach(el=>el.onclick=()=>choosePickaxeAffinity(el.dataset.affinity));
+  document.querySelectorAll('[data-secondary]').forEach(el=>el.onclick=()=>choosePickaxeSecondary(el.dataset.secondary));
+  if($('upgradeBtn'))$('upgradeBtn').onclick=()=>{const ok=safeMarketTransaction(d=>{const lvl=Math.max(1,Math.min(6,d.pickaxeLevel||1)),price=lvl*60;if(lvl>=6||d.coins<price)return false;d.coins-=price;d.economy.balanceMetrics.skillCreditsSpent+=price;d.pickaxeLevel=lvl+1;return true;});if(ok){forgeMenu();flash('장비 숙련도 강화 완료');}};
+  return true;
+ }
+function chestMenu(x,y){
+ const entries=['dirt','stone','wood','wall','glass','torch','copper','iron','crystal','titanium','starshard','orecoal'];
+ const rows=entries.map(id=>{
+  const held=game.inv[id]||0,stored=(game.storage[key(x,y)]||{})[id]||0;
+  return `<div class="line"><div><strong>${MATERIAL_NAMES[id]||id}</strong><br><small>가방 ${held} · 상자 ${stored}</small></div><div style="display:flex;gap:4px"><button data-deposit="${id}" ${held?'':'disabled'}>넣기</button><button data-take="${id}" ${stored?'':'disabled'}>꺼내기</button></div></div>`;
+ }).join('');
+ showModal('내 보관함',`<p>상자에 자원을 보관할 수 있어요. 저장에 성공한 뒤 이동이 확정됩니다.</p>${rows}`);
+ document.querySelectorAll('[data-deposit]').forEach(btn=>btn.onclick=()=>{
+  const id=btn.dataset.deposit;
+  const ok=safeMarketTransaction(draft=>{
+   if(!Object.prototype.hasOwnProperty.call(MATERIAL_NAMES,id)||!(draft.inv[id]>=1))return false;
+   const storage=draft.storage[key(x,y)]||{};
+   storage[id]=(storage[id]||0)+1;
+   draft.storage[key(x,y)]=storage;draft.inv[id]-=1;
+   return true;
+  });
+  if(ok)chestMenu(x,y);
+ });
+ document.querySelectorAll('[data-take]').forEach(btn=>btn.onclick=()=>{
+  const id=btn.dataset.take;
+  const ok=safeMarketTransaction(draft=>{
+   const storage=draft.storage[key(x,y)];
+   if(!storage||!(storage[id]>=1))return false;
+   storage[id]-=1;draft.inv[id]=(draft.inv[id]||0)+1;
+   return true;
+  });
+  if(ok)chestMenu(x,y);
+ });
+}
+function canReach(x,y){
+ // Strict Euclidean radius in tile units, measured center-to-center.
+ // This also covers mining by taps and hammer splash damage.
+ return Math.hypot(x+.5-p.x,y+.5-(p.y-PLAYER_CENTER_FROM_FEET))<=effectiveMineReach()+1e-9;
+}
+function tileHP(t){return ({grass:9,dirt:9,sand:8,snow:8,wood:19,wall:7,stone:37,stationrock:9999,orecoal:36,copper:49,iron:68,crystal:92,titanium:125,starshard:165,amber:115,opal:142,relic:135,glass:11,torch:3,bed:24,chest:32})[t]||40}
+// P1.6-A2: interchangeable drill heads. Only owned/equipped IDs are saved.
+// Mining multipliers do not grant bonus ore and never alter pickaxe/mastery.
+const P16A2_DRILL_BITS=Object.freeze({
+ tunnel:Object.freeze({id:'tunnel',name:'굴진',desc:'흙·돌·모래·눈 지층 굴진 +14%',cost:0,items:[],heatGain:1,coolRate:1}),
+ hard:Object.freeze({id:'hard',name:'경암',desc:'경암 광물 +22%, 일반 돌 -6%',cost:440,items:[['iron',4],['crystal',3]],heatGain:1,coolRate:1}),
+ cooling:Object.freeze({id:'cooling',name:'냉각',desc:'발열 42% 감소, 냉각 속도 +50%; 채굴력 -2%',cost:350,items:[['copper',5],['iron',3]],heatGain:.58,coolRate:1.5})
+});
+const P16A2_BIT_IDS=Object.freeze(['tunnel','hard','cooling']);
+const P16A2_SOFT_TILES=new Set(['dirt','sand','snow','stone']);
+const P16A2_HARD_TILES=new Set(['iron','crystal','titanium','starshard','opal']);
+function p16a2NormalizeBits(raw){
+ const owned=['tunnel'];
+ if(raw&&typeof raw==='object'&&!Array.isArray(raw)&&Array.isArray(raw.owned)){
+  for(const id of P16A2_BIT_IDS)if(id!=='tunnel'&&raw.owned.includes(id))owned.push(id);
+ }
+ const candidate=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw.equipped:null;
+ return {owned,equipped:owned.includes(candidate)?candidate:'tunnel'};
+}
+function p16a2Bits(state=game){return p16a2NormalizeBits(state?.drillBits);}
+function p16a2BitId(state=game){return p16a2Bits(state).equipped;}
+function p16a2BitPower(t,state=game){
+ const id=p16a2BitId(state);
+ if(id==='tunnel')return P16A2_SOFT_TILES.has(t)?1.14:1;
+ if(id==='hard')return P16A2_HARD_TILES.has(t)?1.22:t==='stone'?.94:1;
+ return .98;
+}
+function p16a2BitHeatGain(state=game){return P16A2_DRILL_BITS[p16a2BitId(state)].heatGain;}
+function p16a2BitCoolRate(state=game){return P16A2_DRILL_BITS[p16a2BitId(state)].coolRate;}
+function p16a2DrillBitsPanel(){
+ const state=p16a2Bits(),ownedDrill=game.unlockedTools.includes('drill');
+ const lines=P16A2_BIT_IDS.map(id=>{
+  const bit=P16A2_DRILL_BITS[id],owned=state.owned.includes(id),equipped=state.equipped===id;
+  const available=bit.items.every(([item,n])=>forgeAvailable(item)>=n);
+  const ready=ownedDrill&&!equipped&&(owned||game.coins>=bit.cost&&available);
+  const requires=bit.items.map(([item,n])=>MATERIAL_NAMES[item]+' '+forgeAvailable(item)+'/'+n).join(' · ');
+  return `<div class="ss-p14-craft-row"><strong>${bit.name} 비트${equipped?' · 장착 중':owned?' · 보유':''}</strong>
+    <small>${bit.desc}</small>
+    <small>${id==='tunnel'?'기본 지급':owned?'보유 중 · 추가 제작 불필요':`제작비 ${bit.cost} C · 보유 ${game.coins} C · ${requires}`}</small>
+    <button type="button" data-p16a2-bit="${id}" ${ready?'':'disabled'}>${!ownedDrill?'드릴 필요':equipped?'장착 중':owned?'장착':'제작·장착'}</button></div>`;
+ }).join('');
+ return `<section class="ss-p14-panel" aria-label="전동 드릴 비트 제작·장착"><h3>교체식 드릴 비트 · 3종</h3>
+ <p>비트는 보유 후 자유롭게 교체할 수 있어요. 장착을 바꾸면 회전력과 발열이 초기화돼요. 광물 추가 지급은 없고 실제 채굴 속도와 온도만 달라져요.</p>${lines}</section>`;
+}
+function p16a2ChooseBit(id){
+ if(!Object.prototype.hasOwnProperty.call(P16A2_DRILL_BITS,id)||!canOpenBuilding('forge'))return false;
+ const bit=P16A2_DRILL_BITS[id];
+ const ok=safeMarketTransaction(d=>{
+  if(!d.unlockedTools.includes('drill'))return false;
+  const current=p16a2Bits(d);
+  if(current.equipped===id)return false;
+  if(!current.owned.includes(id)){
+   if(d.coins<bit.cost||!bit.items.every(([item,n])=>forgeAvailable(item,d)>=n))return false;
+   d.coins-=bit.cost;
+   for(const [item,n] of bit.items)d.inv[item]-=n;
+   d.economy.balanceMetrics.toolCreditsSpent+=bit.cost;
+   current.owned.push(id);
+  }
+  current.equipped=id;
+  d.drillBits=p16a2NormalizeBits(current);
+  return true;
+ });
+ if(ok){p16ResetDrillMotion(true);forgeMenu();flash('드릴 '+bit.name+' 비트 장착 완료');}
+ return ok;
+}
+// P1.6-A1: Drill motor. Existing drill mining power (79/47) stays unchanged.
+// Rank is saved; heat/spin are intentionally transient and cannot leak into older saves.
+const P16_DRILL_MOTORS=Object.freeze([null,
+ Object.freeze({name:'I',speed:1.10,ramp:1.9,heatGain:10.5}),
+ Object.freeze({name:'II',speed:1.18,ramp:1.45,heatGain:10.0,cost:260,items:[['stone',8],['iron',2]]}),
+ Object.freeze({name:'III',speed:1.24,ramp:1.15,heatGain:9.5,cost:760,items:[['iron',5],['crystal',2]]}),
+ Object.freeze({name:'IV',speed:1.30,ramp:1.05,heatGain:9.2,cost:1550,items:[['iron',8],['crystal',5],['titanium',2]]}),
+ Object.freeze({name:'V',speed:1.35,ramp:.95,heatGain:9.0,cost:3200,items:[['titanium',6],['starshard',3],['opal',1]]})]);
+function p16NormalizeDrillMotor(raw){
+ const n=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw.rank:undefined;
+ return {rank:Number.isSafeInteger(n)&&n>=1&&n<=5?n:1};
+}
+let p16DrillMotion={spin:0,heat:0,overheated:false,dir:null,working:false,effective:1};
+function p16ResetDrillMotion(full=false){
+ p16DrillMotion.spin=0;p16DrillMotion.dir=null;p16DrillMotion.working=false;p16DrillMotion.effective=1;
+ if(full){p16DrillMotion.heat=0;p16DrillMotion.overheated=false;}
+}
+function p16DrillRank(state=game){return p16NormalizeDrillMotor(state?.drillMotor).rank;}
+function p16DrillNextRule(state=game){return P16_DRILL_MOTORS[p16DrillRank(state)+1]||null;}
+function p16DrillDirection(target){
+ if(stickActive&&stickDir)return `${stickDir.dx},${stickDir.dy}`;
+ if(holdTarget&&target&&p){const dx=target.x+.5-p.x,dy=target.y+.5-(p.y-PLAYER_CENTER_FROM_FEET);
+  const k=Math.round(Math.atan2(dy,dx)/(Math.PI/4));return String((k+8)%8);}
+ return `${p?.facing||1},0`;
+}
+function p16DrillIdle(dt){
+ p16DrillMotion.spin=Math.max(0,p16DrillMotion.spin-dt*1.6);
+ p16DrillMotion.heat=Math.max(0,p16DrillMotion.heat-dt*22*p16a2BitCoolRate());
+ if(p16DrillMotion.overheated&&p16DrillMotion.heat<=58)p16DrillMotion.overheated=false;
+ p16DrillMotion.working=false;p16DrillMotion.effective=1;
+ if(p16DrillMotion.spin===0)p16DrillMotion.dir=null;
+}
+function p16DrillWork(dt,dir){
+ const rule=P16_DRILL_MOTORS[p16DrillRank()];
+ if(p16DrillMotion.dir!==null&&p16DrillMotion.dir!==dir)p16DrillMotion.spin*=.25;
+ p16DrillMotion.dir=dir;p16DrillMotion.working=true;
+ p16DrillMotion.spin=Math.min(1,p16DrillMotion.spin+dt/rule.ramp);
+ p16DrillMotion.heat=Math.min(100,p16DrillMotion.heat+dt*rule.heatGain*p16a2BitHeatGain());
+ if(p16DrillMotion.heat>=82)p16DrillMotion.overheated=true;
+ const heatPressure=Math.max(0,Math.min(1,(p16DrillMotion.heat-66)/16));
+ const boost=p16DrillMotion.overheated?.025:(rule.speed-1)*p16DrillMotion.spin*(1-.55*heatPressure);
+ p16DrillMotion.effective=1+Math.max(0,boost);
+ return p16DrillMotion.effective;
+}
+function p16DrillPanel(){
+ const rank=p16DrillRank(),next=p16DrillNextRule(),owned=game.unlockedTools.includes('drill');
+ const req=next?next.items.map(([id,n])=>`${MATERIAL_NAMES[id]} ${forgeAvailable(id)}/${n}`).join(' · '):'';
+ const ready=!!next&&owned&&game.coins>=next.cost&&next.items.every(([id,n])=>forgeAvailable(id)>=n);
+ const bore=rank>=4?` · 자연 암석 균열 전이 ${Math.round(p16a3BoreRatio()*100)}% (회전력 60% 이상, 비과열, 사거리 내)`:'';
+ return `<section class="ss-p14-panel" aria-label="전동 드릴 모터 강화"><h3>전동 드릴 · 모터 ${P16_DRILL_MOTORS[rank].name}</h3>
+ <p>같은 방향으로 연속 굴착하면 가속돼요. 모터 IV·V는 자연 생성 일반 암석을 부순 직후 다음 일반 암석에만 부분 균열을 전달해요. 원석·시설·배치 타일은 관통하지 않으며, 사거리와 과열 제한을 지켜요. 회전력·열·균열 진행은 저장하지 않아요.${bore}</p>
+ <div class="ss-p14-craft-row"><strong>${next?'다음 모터 '+next.name:'모터 V · 최대 단계'}</strong>
+ <small>${next?`최고 가속 ×${next.speed.toFixed(2)} · 가속 시간 ${next.ramp.toFixed(2)}초${rank>=3?' · 관통 균열 '+Math.round((next.name==='IV'?.24:.38)*100)+'%':''}`:'모터 V까지 강화 완료'}</small>
+ <small>${!owned?'드릴을 먼저 바람장터에서 구매하세요.':next?`비용 ${next.cost} C · 보유 ${game.coins} C · ${req}`:'최고 모터 · 직선 관통 활성화'}</small>
+ <button type="button" id="p16MotorUpgrade" ${ready?'':'disabled'}>${!owned?'드릴 필요':next?'모터 강화':'최대 강화'}</button></div></section>`;
+}
+function p16UpgradeDrillMotor(){
+ if(!canOpenBuilding('forge'))return false;
+ const ok=safeMarketTransaction(d=>{
+  if(!d.unlockedTools.includes('drill'))return false;
+  const rule=p16DrillNextRule(d);if(!rule||d.coins<rule.cost||!rule.items.every(([id,n])=>forgeAvailable(id,d)>=n))return false;
+  d.coins-=rule.cost;for(const [id,n] of rule.items)d.inv[id]-=n;
+  d.drillMotor={rank:p16DrillRank(d)+1};
+  d.economy.balanceMetrics.toolCreditsSpent+=rule.cost;return true;
+ });
+ if(ok){p16ResetDrillMotion(true);forgeMenu();flash('드릴 모터 '+P16_DRILL_MOTORS[p16DrillRank()].name+' 강화 완료');}
+ return ok;
+}
+
+// P1.6-C1: Rope device progression. Existing rope behavior at rank I is unchanged.
+// Growth rank is persistent; the active rope/hang/swing/chain state stays transient.
+const P16_ROPE_DEVICES=Object.freeze([null,
+ Object.freeze({name:'I',auto:1,manual:1,reel:1,extraChain:0,chainWindow:1.25,cost:0,items:[]}),
+ Object.freeze({name:'II',auto:1.06,manual:1.16,reel:1.15,extraChain:0,chainWindow:1.25,cost:420,items:[['stone',6],['copper',4],['iron',2]]}),
+ Object.freeze({name:'III',auto:1.10,manual:1.24,reel:1.30,extraChain:1,chainWindow:1.50,cost:1100,items:[['iron',6],['crystal',3],['titanium',1]]})]);
+function p16RopeNormalize(raw){
+ const n=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw.rank:undefined;
+ return {rank:Number.isSafeInteger(n)&&n>=1&&n<=3?n:1};
+}
+function p16RopeRank(state=game){return p16RopeNormalize(state?.ropeDevice).rank;}
+function p16RopeRule(state=game){return P16_ROPE_DEVICES[p16RopeRank(state)];}
+function p16RopeChainCap(state=game){return ROPE_CHAIN_MAX+p16RopeRule(state).extraChain;}
+function p16RopeClimbSpeed(manual=false){
+ return Math.min(9.5,mobilityDerived().ropeClimbSpeed*(manual?p16RopeRule().manual:p16RopeRule().auto));
+}
+function p16RopeReelSpeed(){return ROPE_REEL_SPEED*p16RopeRule().reel;}
+function p16RopeForgePanel(){
+ const rank=p16RopeRank(),now=p16RopeRule(),next=P16_ROPE_DEVICES[rank+1]||null;
+ const need=next?next.items.map(([id,n])=>`${MATERIAL_NAMES[id]} ${forgeAvailable(id)}/${n}`).join(' · '):'';
+ const ready=!!next&&game.coins>=next.cost&&next.items.every(([id,n])=>forgeAvailable(id)>=n);
+ return `<section class="ss-p14-panel" aria-label="로프 장치 전문 강화"><h3>로프 장치 · ${now.name}등급</h3>
+ <p>로프 중간 정지·채굴·점프·스윙 조작은 유지됩니다. 장치 강화는 윈치 상승, 매달린 채 수동 이동, 스윙 중 줄 감기 속도를 개선합니다. III등급은 공중 갈아타기 여유 1회와 추가 반응 시간을 제공합니다. 최대 로프 상승 속도 상한은 기존 9.5칸/초로 유지합니다.</p>
+ <div class="ss-p14-craft-row"><strong>현재 · 자동 ×${now.auto.toFixed(2)} · 수동 ×${now.manual.toFixed(2)} · 릴 ×${now.reel.toFixed(2)}</strong>
+ <small>공중 연결 최대 ${ROPE_CHAIN_MAX+now.extraChain}회 · 연결 허용 ${now.chainWindow.toFixed(2)}초</small>
+ <small>${next?`다음 ${next.name} · ${next.cost}C (보유 ${game.coins}C) · ${need}`:'최대 강화 · 장치 III'}</small>
+ <button type="button" id="p16RopeUpgrade" ${ready?'':'disabled'}>${next?'로프 장치 강화':'최대 강화'}</button></div></section>`;
+}
+function p16RopeUpgrade(){
+ if(!canOpenBuilding('forge'))return false;
+ const ok=safeMarketTransaction(d=>{
+  const next=P16_ROPE_DEVICES[p16RopeRank(d)+1];
+  if(!next||d.coins<next.cost||!next.items.every(([id,n])=>forgeAvailable(id,d)>=n))return false;
+  d.coins-=next.cost;for(const [id,n] of next.items)d.inv[id]-=n;
+  d.ropeDevice={rank:p16RopeRank(d)+1};d.economy.balanceMetrics.toolCreditsSpent+=next.cost;
+  return true;
+ });
+ if(ok){
+  ropeChainRemaining=Math.min(p16RopeChainCap(),ropeChainRemaining+(p16RopeRank()===3?1:0));
+  forgeMenu();flash('로프 장치 '+p16RopeRule().name+' 강화 완료');
+ }
+ return ok;
+}
+function p16UpdateRopeDeviceHud(){
+ const el=$('p16RopeDeviceHud');if(!el)return;
+ const show=ssRegion==='mine'&&!ssM16TransitionLocked&&!ssIsTitle();
+ el.hidden=!show;if(!show)return;
+ const rule=p16RopeRule();
+ $('p16RopeDeviceName').textContent='로프 장치 '+rule.name;
+ $('p16RopeDeviceState').textContent=rope.active&&rope.mode==='swing'?`스윙 · ↑↓ 줄 조절 ×${rule.reel.toFixed(2)}`:rope.active?'↑↓ 이동 · 손 떼면 정지':'연결 대기 · 탭으로 발사';
+}
+
+// P1.6-B1: Hammer specialist. Only naturally generated soft rock receives side damage.
+// The ore directly struck by the hammer is mined normally; adjacent ore/relic/facilities are never splash-broken.
+const P16_HAMMER_CORES=Object.freeze([null,
+ Object.freeze({name:'I',fracture:.34,chainMax:1,maxDepth:0,cost:0,items:[]}),
+ Object.freeze({name:'II',fracture:.42,chainMax:2,maxDepth:1,cost:480,items:[['stone',10],['iron',3]]}),
+ Object.freeze({name:'III',fracture:.50,chainMax:3,maxDepth:2,cost:1150,items:[['stone',16],['iron',4],['crystal',4]]})]);
+const P16_HAMMER_NATURAL=new Set(['dirt','stone','sand','snow']);
+const P16_HAMMER_DIRS=Object.freeze([[1,0],[-1,0],[0,1],[0,-1]]);
+function p16HammerNormalizeCore(raw){
+ const n=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw.rank:undefined;
+ return {rank:Number.isSafeInteger(n)&&n>=1&&n<=3?n:1};
+}
+function p16HammerRank(state=game){return p16HammerNormalizeCore(state?.hammerCore).rank;}
+function p16HammerNextRule(state=game){return P16_HAMMER_CORES[p16HammerRank(state)+1]||null;}
+function p16HammerForgePanel(){
+ const rank=p16HammerRank(),next=p16HammerNextRule(),owned=game.unlockedTools.includes('hammer');
+ const needs=next?next.items.map(([id,n])=>`${MATERIAL_NAMES[id]} ${forgeAvailable(id)}/${n}`).join(' · '):'';
+ const ready=!!next&&owned&&game.coins>=next.cost&&next.items.every(([id,n])=>forgeAvailable(id)>=n);
+ const c=P16_HAMMER_CORES[rank];
+ return `<section class="ss-p14-panel" aria-label="충격 망치 전문 강화"><h3>충격 망치 · 충격 코어 ${c.name}</h3>
+ <p>중심 암석을 깨면 인접 자연 지층에 ${Math.round(c.fracture*100)}% 균열을 전달해요. 균열이 누적되면 한 번의 파쇄에서 최대 ${c.chainMax}개의 주변 암석까지 연쇄 파괴할 수 있어요. 광석·유물·보물·배치 구조물·시설은 충격파로 파괴되지 않아요. 균열은 저장되지 않고 도구를 바꾸면 사라져요.</p>
+ <div class="ss-p14-craft-row"><strong>${next?'다음 충격 코어 '+next.name:'충격 코어 III · 최고 단계'}</strong>
+ <small>${next?`균열 ${Math.round(next.fracture*100)}% · 연쇄 파쇄 최대 ${next.chainMax}타일`:'망치 전문화 완성'}</small>
+ <small>${!owned?'바람장터에서 망치를 먼저 구매해야 해요.':next?`비용 ${next.cost} C · 보유 ${game.coins} C · ${needs}`:'추가 강화 단계 없음'}</small>
+ <button type="button" id="p16HammerUpgrade" ${ready?'':'disabled'}>${!owned?'망치 필요':next?'충격 코어 강화':'최대 강화'}</button></div></section>`;
+}
+function p16HammerUpgrade(){
+ if(!canOpenBuilding('forge'))return false;
+ const ok=safeMarketTransaction(d=>{
+  if(!d.unlockedTools.includes('hammer'))return false;
+  const rule=p16HammerNextRule(d);if(!rule||d.coins<rule.cost||!rule.items.every(([id,n])=>forgeAvailable(id,d)>=n))return false;
+  d.coins-=rule.cost;for(const [id,n] of rule.items)d.inv[id]-=n;
+  d.hammerCore={rank:p16HammerRank(d)+1};d.economy.balanceMetrics.toolCreditsSpent+=rule.cost;
+  return true;
+ });
+ if(ok){p16HammerFractures.clear();forgeMenu();flash('충격 망치 코어 '+P16_HAMMER_CORES[p16HammerRank()].name+' 강화 완료');}
+ return ok;
+}
+function p16HammerEligible(x,y){
+ if(!game||!p||ssRegion!=='mine'||paused||ssM16TransitionLocked||!canReach(x,y)||
+    x<0||x>=WW||y<0||y>=WH-5||y<terrain(x)+3||stationGeneratedTile(x,y)!==undefined)return false;
+ const k=key(x,y);
+ // An edited tile includes mined voids AND player-built stone. Neither can be fractured.
+ if(Object.prototype.hasOwnProperty.call(game.edits,k))return false;
+ return P16_HAMMER_NATURAL.has(tile(x,y));
+}
+function p16HammerWave(x,y){
+ if(game.tool!=='hammer'||ssRegion!=='mine'||paused)return false;
+ const rule=P16_HAMMER_CORES[p16HammerRank()];
+ let broken=0,affected=0;const seen=new Set([key(x,y)]),queue=[{x,y,depth:0}];
+ // Finite radius, 24 cells inspected per impact, no global flood fill.
+ while(queue.length&&affected<24){
+  const at=queue.shift();if(at.depth>rule.maxDepth)continue;
+  for(const [dx,dy] of P16_HAMMER_DIRS){
+   const nx=at.x+dx,ny=at.y+dy,k=key(nx,ny);
+   if(seen.has(k))continue;seen.add(k);
+   if(!p16HammerEligible(nx,ny))continue;
+   affected++;
+   const t=tile(nx,ny),hp=tileHP(t),last=p16HammerFractures.get(k);
+   // Depth attenuation prevents a single strike from clearing a large cavern.
+   const damage=hp*rule.fracture*(at.depth===0?1:.68);
+   const next=(last?.type===t?last.damage:0)+damage;
+   if(next+1e-6>=hp&&broken<rule.chainMax){
+    p16HammerFractures.delete(k);
+    if(breakBlock(nx,ny,t,true)){
+     broken++;p16HammerStats.chainBroken++;
+     if(at.depth<rule.maxDepth)queue.push({x:nx,y:ny,depth:at.depth+1});
+    }
+   }else{
+    p16HammerFractures.set(k,{x:nx,y:ny,type:t,damage:Math.min(hp-.001,next)});
+    p16HammerStats.cracked++;
+    mineSpark(nx,ny,t,false);
+   }
+   if(p16HammerFractures.size>128)p16HammerFractures.delete(p16HammerFractures.keys().next().value);
+   if(broken>=rule.chainMax||affected>=24)break;
+  }
+ }
+ p16HammerStats.waves++;p16HammerStats.last={x,y,rank:p16HammerRank(),affected,broken};
+ return true;
+}
+function p16DrawHammerFractures(){
+ if(game?.tool!=='hammer'||ssRegion!=='mine'||!p16HammerFractures.size)return;
+ ctx.save();ctx.lineWidth=1.5;
+ for(const [k,v] of p16HammerFractures){
+  if(tile(v.x,v.y)!==v.type){p16HammerFractures.delete(k);continue;}
+  const sx=Math.round(v.x*T-camera.x),sy=Math.round(v.y*T-camera.y);
+  if(sx<-T||sy<-T||sx>viewW+T||sy>viewH+T)continue;
+  const stage=Math.max(1,Math.min(4,Math.ceil(v.damage/tileHP(v.type)*4)));
+  ctx.strokeStyle=stage>=3?'#f2d08b':'#d7b37b';ctx.globalAlpha=.48+stage*.09;
+  ctx.beginPath();ctx.moveTo(sx+T*.25,sy+T*.28);ctx.lineTo(sx+T*.53,sy+T*.5);ctx.lineTo(sx+T*.34,sy+T*.78);
+  if(stage>=2){ctx.moveTo(sx+T*.53,sy+T*.5);ctx.lineTo(sx+T*.78,sy+T*.36);}
+  if(stage>=3){ctx.moveTo(sx+T*.53,sy+T*.5);ctx.lineTo(sx+T*.75,sy+T*.81);}
+  ctx.stroke();
+ }
+ ctx.restore();
+}
+function p16UpdateHammerHud(){
+ const el=$('p16HammerHud');if(!el)return;
+ const active=game?.tool==='hammer'&&ssRegion==='mine'&&ssM15Scene==='mining'&&!ssIsTitle();
+ el.hidden=!active;if(!active)return;
+ const rule=P16_HAMMER_CORES[p16HammerRank()];
+ $('p16HammerHudName').textContent='충격 망치 · 코어 '+rule.name;
+ $('p16HammerHudState').textContent=`충격 ${Math.round(rule.fracture*100)}% · 균열 ${p16HammerFractures.size}칸`;
+}
+function p16UpdateDrillHud(){
+ const el=$('p16DrillHud');if(!el)return;
+ const active=game?.tool==='drill'&&ssRegion==='mine'&&ssM15Scene==='mining'&&!ssIsTitle();
+ el.hidden=!active;if(!active)return;
+ $('p16MotorName').textContent='드릴 '+P16_DRILL_MOTORS[p16DrillRank()].name+' · '+P16A2_DRILL_BITS[p16a2BitId()].name+(p16DrillRank()>=4?' · 관통':'');
+ const spin=Math.round(p16DrillMotion.spin*100),heat=Math.round(p16DrillMotion.heat);
+ $('p16SpinText').textContent=spin+'%';$('p16HeatText').textContent=heat+'%';
+ $('p16SpinFill').style.width=spin+'%';$('p16HeatFill').style.width=heat+'%';
+ el.classList.toggle('overheat',p16DrillMotion.overheated);
+ el.title=p16DrillMotion.overheated?'과열: 출력을 낮추고 냉각 중':'회전력 '+spin+'%, 발열 '+heat+'%';
+}
+function miningRate(t){const lv=Math.max(1,Math.min(6,game.pickaxeLevel||1)),boost=1+(lv-1)*.28;
+ const tool=game.tool||'pickaxe',base=(tool==='drill'?(ORES.has(t)||t==='stone'||t==='relic'?79:47):tool==='hammer'?51:62);
+ return base*boost*(tool==='pickaxe'?(1+forgeRankBonus(game.pickaxeForge.rank))*pickaxeAffinityPower(t)*pickaxeSecondaryPower(t):tool==='drill'?p16a2BitPower(t):1)*mobilityDerived().mineMultiplier;}
+
+
+// Transient visual effects do not enter world saves and have bounded per-frame costs.
+const miningPixels=[];const orePulses=[];
+const MINE_COLORS={
+ dirt:['#b18b5f','#7b5b41','#e2b882'],grass:['#71bf69','#b18b5f','#e2b882'],
+ sand:['#e4c889','#be9f63','#f1deae'],snow:['#e9fcff','#b6d9e9','#a5c6d4'],
+ stone:['#a7b6c3','#677f91','#d7e2e5'],orecoal:['#72818d','#303b49','#b3c2c9'],
+ copper:['#f3af7a','#c67d56','#ffe1ab'],iron:['#d8edf0','#8db2b9','#f8ffff'],titanium:['#a5cfe2','#628fa3','#e6f6ff'],starshard:['#e2d4ff','#a78fca','#fbf7ff'],
+ crystal:['#93fff1','#5ec5d4','#f0ffff'],amber:['#f5c36f','#b97f43','#ffecad'],
+ opal:['#e0c6ff','#9e8cdb','#fcf2ff'],relic:['#f4d58e','#e8af63','#fff9ca']};
+function burstMiningPixels(x,y,t,broken=false){
+ const colors=MINE_COLORS[t]||MINE_COLORS.stone;
+ const count=broken?Math.min(18,(t==='crystal'||t==='opal'||t==='relic')?14:9):3;
+ for(let i=0;i<count;i++){
+  const a=(i/count)*Math.PI*2+(rand(x+i,y,671)-.5)*.5;
+  const speed=broken?48+rand(x,y+i,672)*95:20+rand(x+i,y,674)*42;
+  miningPixels.push({x:(x+.5)*T,y:(y+.5)*T,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed-(broken?55:10),
+   life:broken?.45+rand(x+i,y,676)*.26:.15+rand(x+i,y,677)*.15,
+   maxLife:broken?.7:.3, color:colors[i%3], size:broken?2+(i%3):2});
+ }
+ if(miningPixels.length>90)miningPixels.splice(0,miningPixels.length-90);
+ if(broken&&(ORES.has(t)||t==='relic')){
+  orePulses.push({x:(x+.5)*T,y:(y+.5)*T,color:colors[2],life:t==='relic'?.68:.47,maxLife:t==='relic'?.68:.47});
+  if(orePulses.length>8)orePulses.shift();
+ }
+}
+function tickMiningPixels(dt){
+ for(let i=miningPixels.length-1;i>=0;i--){const p=miningPixels[i];
+  p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=175*dt;p.vx*=Math.pow(.22,dt);
+  p.life-=dt;if(p.life<=0)miningPixels.splice(i,1);
+ }
+ for(let i=orePulses.length-1;i>=0;i--){orePulses[i].life-=dt;if(orePulses[i].life<=0)orePulses.splice(i,1)}
+}
+function drawMiningPixels(){
+ ctx.save();
+ for(const o of miningPixels){const a=Math.max(0,Math.min(1,o.life/o.maxLife));
+  ctx.globalAlpha=a;ctx.fillStyle=o.color;
+  ctx.fillRect(Math.round(o.x-camera.x),Math.round(o.y-camera.y),o.size,o.size);
+ }
+ for(const o of orePulses){const t=1-o.life/o.maxLife,r=Math.round(5+t*15);
+  const cx=Math.round(o.x-camera.x),cy=Math.round(o.y-camera.y);
+  ctx.globalAlpha=.65*(1-t);ctx.strokeStyle=o.color;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx-3,cy);
+  ctx.moveTo(cx+3,cy);ctx.lineTo(cx+r,cy);
+  ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy-3);
+  ctx.moveTo(cx,cy+3);ctx.lineTo(cx,cy+r);ctx.stroke();
+ }
+ ctx.restore();
+}
+function miningSfxType(t){return ['dirt','grass','sand','snow','wood'].includes(t)?'earth_hit':ORES.has(t)||t==='relic'?'ore_hit':'stone_hit';}
+
+
+// P1.6-D1: pickaxe-only precision prospecting. Only real, natural ore blocks count.
+// Runtime-only marker: no ore creation, inventory reward, XP, save-field or reach changes.
+const p16DTrace={chain:0,ore:null,hint:null,expires:0,followed:0};
+const P16D_TRACE_MS=8000;
+function p16DReset(){p16DTrace.chain=0;p16DTrace.ore=null;p16DTrace.hint=null;p16DTrace.expires=0;}
+function p16DCanTrace(){return !!game&&!!p&&ssRegion==='mine'&&game.tool==='pickaxe'&&
+ !paused&&!ssM16TransitionLocked&&game.worldGenVersion>=3;}
+function p16DRatePerStep(state=game){const rank=state?.pickaxeForge?.rank||0;
+ return .05+(rank>=7?.01:0)+(rank>=15?.01:0)+(rank>=20?.01:0);
+}
+function p16DHint(now=performance.now()){
+ if(!p16DCanTrace()||now>=p16DTrace.expires||!p16DTrace.hint||
+    tile(p16DTrace.hint.x,p16DTrace.hint.y)!==p16DTrace.ore){p16DReset();return null;}
+ return p16DTrace.hint;
+}
+function p16DFindNextOre(x,y,type){
+ const candidates=[];
+ for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+  if(dx===0&&dy===0||Math.hypot(dx,dy)>2.25)continue;
+  const tx=x+dx,ty=y+dy;
+  if(tx<0||tx>=WW||ty<0||ty>=WH-5||stationGeneratedTile(tx,ty)!==undefined)continue;
+  if(Object.prototype.hasOwnProperty.call(game.edits,key(tx,ty)))continue;
+  if(tile(tx,ty)!==type)continue;
+  candidates.push({x:tx,y:ty,d:Math.hypot(dx,dy),sort:(ty*WW+tx)});
+ }
+ candidates.sort((a,b)=>a.d-b.d||a.sort-b.sort);
+ return candidates.length?{x:candidates[0].x,y:candidates[0].y}:null;
+}
+function p16DOnMinedBlock(x,y,type,natural){
+ if(!p16DCanTrace()){p16DReset();return;}
+ if(!natural||!ORES.has(type))return; // ordinary rock doesn't erase a nearby seam hint
+ const now=performance.now(),old=p16DTrace.hint;
+ // The target was just removed from the world, so do not revalidate tile() here.
+ const followed=!!old&&now<p16DTrace.expires&&old.x===x&&old.y===y&&type===p16DTrace.ore;
+ const next=p16DFindNextOre(x,y,type);
+ if(!next){p16DReset();return;}
+ p16DTrace.chain=followed?Math.min(3,p16DTrace.chain+1):1;
+ p16DTrace.ore=type;p16DTrace.hint=next;p16DTrace.expires=now+P16D_TRACE_MS;
+ if(followed)p16DTrace.followed++;
+}
+function p16DPrecisionMultiplier(x,y,type){
+ if(!ORES.has(type))return 1;
+ const next=p16DHint();
+ return next&&next.x===x&&next.y===y&&type===p16DTrace.ore?
+ 1+p16DRatePerStep()*p16DTrace.chain:1;
+}
+function p16DTraceDirection(next){
+ if(!next)return '';
+ const dx=next.x+.5-p.x,dy=next.y+.5-(p.y-PLAYER_CENTER_FROM_FEET);
+ const sector=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;
+ return ['→','↘','↓','↙','←','↖','↑','↗'][sector];
+}
+function p16DUpdateHud(){
+ const el=$('p16PickaxeTrace');if(!el)return;
+ const hint=p16DHint();
+ el.hidden=!hint;
+ if(!hint)return;
+ $('p16PickaxeTraceHead').textContent=`결 읽기 ${p16DTrace.chain}/3`;
+ $('p16PickaxeTraceSub').textContent=`다음 광맥 ${p16DTraceDirection(hint)} · 정밀 +${Math.round((p16DPrecisionMultiplier(hint.x,hint.y,p16DTrace.ore)-1)*100)}%`;
+}
+function p16DDrawTrace(){
+ const hint=p16DHint();if(!hint||!visionVisible(hint.x,hint.y))return;
+ const sx=Math.round(hint.x*T-camera.x),sy=Math.round(hint.y*T-camera.y);
+ if(sx<-T||sy<-T||sx>viewW||sy>viewH)return;
+ ctx.save();ctx.globalAlpha=.67+.22*Math.sin(performance.now()/300);
+ ctx.strokeStyle='#9df8de';ctx.lineWidth=2;
+ ctx.strokeRect(sx+4,sy+4,T-8,T-8);
+ ctx.fillStyle='#e1fff2';ctx.fillRect(sx+T/2-2,sy+T/2-2,4,4);ctx.restore();
+}
+function p16DForgePanel(){
+ const rank=game.pickaxeForge.rank||0,bonus=p16DRatePerStep();
+ return `<section class="ss-p14-panel"><h3>결 읽기 · 곡괭이 고유 능력</h3>
+ <p>자연 광맥을 캐면 근처 <strong>같은 광석</strong> 1개가 8초 동안 강조돼요. 그 광석을 이어 캐면 정밀 효율이 최대 3단계까지 성장합니다.</p>
+ <p>현재 +${rank} · 연속 단계당 채굴 효율 +${Math.round(bonus*100)}% · 최대 +${Math.round(bonus*300)}%. +7·+15·+20에서 성장해요.</p>
+ <p><small>추가 광물이나 채굴 사거리 보너스는 없어요. 드릴·망치·로프에는 적용되지 않으며, 새 강화 비용도 없습니다.</small></p></section>`;
+}
+
+function mineSpark(x,y,t,burst=false){const count=burst?8:2;for(let i=0;i<count;i++)particles.push({x:(x+.3+rand(x+i,y,75)*.4)*T,y:(y+.2+rand(x,y+i,76)*.6)*T,vx:(rand(x+i,y,77)-.5)*(burst?150:78),vy:-15-rand(x,y+i,78)*(burst?135:65),life:.16+rand(x,y,i)*.23,color:tileColor(t)})}
+function popText(x,y,msg,color){floatTexts.push({x:(x+.5)*T,y:y*T,v:msg,color,life:1,vy:-19});if(floatTexts.length>24)floatTexts.shift()}
+function breakBlock(x,y,t,secondary=false){let orig=t==='grass'||t==='sand'||t==='snow'?'dirt':t;
+ const cargoBefore=SS_CARGO_WEIGHTS[orig]?Math.max(0,Number(game.inv[orig])||0):0;
+ const expectedBonus=ORES.has(t)&&pickaxeOreBonusRate()>0&&rand(x,y,943)<pickaxeOreBonusRate()?1:0;
+ if(!ssCargoCanCollect(orig,1+expectedBonus)){
+  if(performance.now()-ssCargoToastAt>1400){ssCargoToastAt=performance.now();ssMineNotice(ssCargoMissingMessage(orig,1+expectedBonus),true);flash(ssCargoMissingMessage(orig,1+expectedBonus));}
+  return false;
+ }
+
+ const xpEligible=blockXpEligible(x,y,t);
+ const p16DNatural=!!game&&ssRegion==='mine'&&game.worldGenVersion>=3&&ORES.has(t)&&
+  !Object.prototype.hasOwnProperty.call(game.edits,key(x,y))&&terrainType(x,y)===t;
+ if(!setTile(x,y,null))return false;game.mined++;grantBlockXpIfEligible(x,y,t,xpEligible);
+ if(xpEligible&&blockExperience(t)>0&&t!=='relic')game.artifactSystem.progress.naturalBlocks++;
+ if(xpEligible&&(t==='crystal'||t==='starshard'))game.artifactSystem.progress.crystalsMined++;
+ const bm=balanceStats();bm.blocksBroken++;
+ if(ORES.has(t)){bm.oreMined++;bm.oreByType[t]=(bm.oreByType[t]||0)+1;}
+ if(t==='relic'){game.relics=(game.relics||0)+1;let award=45+Math.floor(rand(x,y,430)*110);game.coins+=award;popText(x,y,`+${award} 크레딧`,'#ffe9a5');flash(`고대 유물 발견! ${award} 크레딧`)}
+ else {
+  game.inv[orig]=(game.inv[orig]||0)+1;
+  popText(x,y,'+1 '+(MATERIAL_NAMES[orig]||orig),ORES.has(t)?'#f3de94':'#d7f7dd');
+  const bonusChance=ORES.has(t)?pickaxeOreBonusRate():0;
+  // One deterministic roll per mined ore tile. The ore is removed first, so it cannot pay twice.
+  if(bonusChance>0 && rand(x,y,943)<bonusChance){
+   game.inv[orig]++;game.pickaxeForge.bonusOreDrops=(game.pickaxeForge.bonusOreDrops||0)+1;bm.oreBonus++;
+   popText(x,y,`정광 +1 ${MATERIAL_NAMES[orig]}`,'#7affdf');
+   orePulses.push({x:(x+.5)*T,y:(y+.5)*T,color:'#8cffe4',life:.7,maxLife:.7});
+   if(orePulses.length>8)orePulses.shift();
+  }
+ }
+ if(SS_CARGO_WEIGHTS[orig])ssCargoCollect(orig,Math.max(0,(game.inv[orig]||0)-cargoBefore));
+ if(t==='chest'){const saved=game.storage[key(x,y)];if(saved){for(const [id,n] of Object.entries(saved)){if(Object.prototype.hasOwnProperty.call(MATERIAL_NAMES,id)&&Number.isFinite(n)&&n>0)game.inv[id]=(game.inv[id]||0)+n}delete game.storage[key(x,y)]}}
+ if(t==='bed'&&Math.floor(game.spawnX)===x){game.spawnX=SPAWN_X;game.spawnY=null}
+ burstMiningPixels(x,y,t,true);playSound(t==='relic'||t==='crystal'||t==='titanium'||t==='starshard'||t==='amber'||t==='opal'?'rare_find':ORES.has(t)?'pickup_ore':'break_block');
+ mineSpark(x,y,t,true);miningBreakFX={x,y,t,life:.28,maxLife:.28};miningHitFX=null;rangeHintTime=MINING_RANGE_HINT_TTL;shake=Math.min(6,shake+(t==='relic'?3:1.15));
+ if(ORES.has(t)){game.oreFinds=(game.oreFinds||0)+1;const now=performance.now();oreCombo=now-lastOreAt<3200?oreCombo+1:1;lastOreAt=now;
+  if(t==='amber'||t==='opal'||t==='crystal'||t==='titanium'||t==='starshard')flash(`${MATERIAL_NAMES[t]} 발견!`);
+  else if(oreCombo===3||oreCombo===6)flash(`광맥 연속 발견 ${oreCombo}회!`);
+ }
+ if(!secondary) p16DOnMinedBlock(x,y,t,p16DNatural);
+ if(!secondary&&game.tool==='hammer')p16HammerWave(x,y);
+ if(game.mined===1&&!ssGuideActive){$('tip').classList.add('dismissed')}
+ return true;
+}
+function doMine(x,y,dmg){if(ssRegion===TOWN_WORLD_ID)return false;let t=tile(x,y);if(!t||t==='bedrock'||t==='stationrock'||!canReach(x,y))return false;
+ if(holdLast!==key(x,y)){holdLast=key(x,y);holdProgress=0;mineFXTimer=0}
+ holdProgress+=dmg;
+ mineFXTimer+=dmg/Math.max(1,miningRate(t));rangeHintTime=MINING_RANGE_HINT_TTL;if(mineFXTimer>.11){mineFXTimer=0;if(holdProgress<tileHP(t)){mineSpark(x,y,t,false);burstMiningPixels(x,y,t,false);playSound(miningSfxType(t),game.tool==='drill'?1.13:game.tool==='hammer'?.86:1);miningHitFX={x,y,t,life:.12,maxLife:.12}}}
+ if(holdProgress>=tileHP(t)){holdProgress=0;holdLast=null;return breakBlock(x,y,t)}return false;
+}
+function tileAction(x,y,force=false){if(paused)return;if(ssRegion===TOWN_WORLD_ID){ssMineNotice('마을 바닥은 보호되어 채굴할 수 없어요');return;}let t=tile(x,y);if(!canReach(x,y)){invalidReach={x,y,life:.65,maxLife:.65};rangeHintTime=.65;ssMineNotice(`사거리 밖 · 채굴 반경 ${effectiveMineReach().toFixed(2)}칸`,true);return}
+ if(t==='stationrock'||t==='bedrock'){invalidReach={x,y,life:.55,maxLife:.55};rangeHintTime=.55;ssMineNotice(t==='stationrock'?'승강장·시설 바닥은 보호되어 채굴할 수 없어요':'기반암은 채굴할 수 없어요',true);return}
+ if(!force&&t==='chest'){chestMenu(x,y);return}
+ if(!force&&t==='bed'){game.spawnX=x;game.spawnY=y;flash('귀환 위치를 침대로 지정했어요');saveGame(true);return}
+ if(t)doMine(x,y,(force?miningRate(t)*.26:miningRate(t)*.18)*p16DPrecisionMultiplier(x,y,t));
+}
+function miningTarget(){if(ssRegion===TOWN_WORLD_ID)return null;if(holdTarget){let t=tile(holdTarget.x,holdTarget.y);return t&&t!=='bedrock'&&t!=='stationrock'&&canReach(holdTarget.x,holdTarget.y)?holdTarget:null}
+ if(stickActive&&stickDir){const {dx,dy}=stickDir,scale=Math.hypot(dx,dy);const seen=new Set();
+  for(let dist=.3;dist<=effectiveMineReach()+.25;dist+=.12){const x=Math.floor(p.x+dx/scale*dist),y=Math.floor(p.y-PLAYER_CENTER_FROM_FEET+dy/scale*dist),k=key(x,y);
+   if(seen.has(k))continue;seen.add(k);const t=tile(x,y);
+   if(t&&t!=='bedrock'&&t!=='bed'&&t!=='chest'&&t!=='stationrock'&&canReach(x,y))return {x,y};
+    if((t==='stationrock'||t==='bedrock')&&canReach(x,y)){ssMineNotice(t==='stationrock'?'시설 바닥은 보호되어 채굴할 수 없어요':'기반암은 채굴할 수 없어요');return null;}
+  }
+  return null;
+ }
+ if(!input.act)return null;
+ let fx=Math.floor(p.x+p.facing*1.08),fy=Math.floor(p.y-PLAYER_CENTER_FROM_FEET),me=Math.floor(p.x);
+ let checks=[[fx,fy],[fx,fy-1],[fx,fy+1],[Math.floor(p.x+p.facing*2.08),fy],[me,Math.floor(p.y+.05)],[me,fy-2]];
+ for(const [x,y] of checks){let t=tile(x,y);if(t&&t!=='bedrock'&&t!=='bed'&&t!=='chest'&&canReach(x,y))return {x,y}}return null;
+}
+// P1.6-A3: bore-through is a *transient next-block head start*, not a second break.
+// No tile changes, XP, ore, cargo, or save writes occur in the secondary target.
+const P16A3_BORE_NATURAL=new Set(['stone','dirt','sand','snow']);
+const p16a3BoreStats={count:0,last:null};
+function p16a3BoreRatio(state=game){return p16DrillRank(state)>=5?.38:p16DrillRank(state)>=4?.24:0;}
+function p16a3Vector(target){
+ if(stickActive&&stickDir)return {dx:Math.sign(stickDir.dx),dy:Math.sign(stickDir.dy)};
+ if(!p||!target)return null;
+ const dx=target.x+.5-p.x,dy=target.y+.5-(p.y-PLAYER_CENTER_FROM_FEET);
+ if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.hypot(dx,dy)<.01)return null;
+ const sector=Math.round(Math.atan2(dy,dx)/(Math.PI/4));
+ const vectors=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+ const [vx,vy]=vectors[(sector+8)%8];return {dx:vx,dy:vy};
+}
+function p16a3BoreTransfer(target){
+ if(!game||!p||game.tool!=='drill'||ssRegion!=='mine'||paused||ssM16TransitionLocked||
+    p16a3BoreRatio()<=0||p16DrillMotion.spin<.60||p16DrillMotion.overheated||
+    !p16DrillMotion.working)return false;
+ const v=p16a3Vector(target);
+ if(!v||(v.dx===0&&v.dy===0))return false;
+ const nx=target.x+v.dx,ny=target.y+v.dy;
+ if(nx<0||nx>=WW||ny<0||ny>=WH-5||!canReach(nx,ny))return false;
+ // No player edits, user-placed tiles, station protection, ore, relic, or chest may be pierced.
+ if(Object.prototype.hasOwnProperty.call(game.edits,key(nx,ny))||stationGeneratedTile(nx,ny)!==undefined)return false;
+ const nextType=tile(nx,ny);
+ if(!P16A3_BORE_NATURAL.has(nextType))return false;
+ const partial=tileHP(nextType)*p16a3BoreRatio();
+ // Only the immediate next rock; never break/collect the downstream tile for free.
+ holdLast=key(nx,ny);holdProgress=partial;mineFXTimer=0;
+ mineSpark(nx,ny,nextType,false);burstMiningPixels(nx,ny,nextType,false);
+ miningHitFX={x:nx,y:ny,t:nextType,life:.16,maxLife:.16};
+ p16a3BoreStats.count++;p16a3BoreStats.last={x:nx,y:ny,t:nextType,partial};
+ return true;
+}
+function mineHold(dt){
+ if(game.tool!=='hammer'||ssRegion!=='mine')p16HammerFractures.clear();
+ const active=game.tool==='drill'&&ssRegion==='mine'&&!ssM16TransitionLocked;
+ if(!active){p16ResetDrillMotion(true);}
+ const target=miningTarget();if(!target){if(active)p16DrillIdle(dt);return;}
+ const t=tile(target.x,target.y);if(!t){if(active)p16DrillIdle(dt);return;}
+ balanceStats().miningSeconds+=dt;
+ const boost=active?p16DrillWork(dt,p16DrillDirection(target)):1;
+ // Verify the primary block was naturally generated before breakBlock updates game.edits.
+ const boreCandidate=active&&t==='stone'&&!Object.prototype.hasOwnProperty.call(game.edits,key(target.x,target.y))&&
+   p16a3BoreRatio()>0&&p16DrillMotion.spin>=.60&&!p16DrillMotion.overheated;
+ const broken=doMine(target.x,target.y,dt*miningRate(t)*boost*p16DPrecisionMultiplier(target.x,target.y,t));
+ if(broken&&boreCandidate)p16a3BoreTransfer(target);
+}
+function collides(x,y){let l=x-PLAYER_HALF_WIDTH,r=x+PLAYER_HALF_WIDTH,t=y-PLAYER_HEIGHT,b=y-.04;for(let tx=Math.floor(l);tx<=Math.floor(r);tx++)for(let ty=Math.floor(t);ty<=Math.floor(b);ty++){if(solid(tile(tx,ty)))return true}return false}
+function moveStep(dx,dy){if(dx){let n=Math.ceil(Math.abs(dx)/.14);for(let i=0;i<n;i++){let d=dx/n;if(!collides(p.x+d,p.y))p.x+=d;else {if(input.left||input.right)ssMineNotice('이동이 막혔어요 · 앞의 블록을 채굴하거나 다른 길로 이동하세요');p.vx=0;break}}}
+ if(dy){let n=Math.ceil(Math.abs(dy)/.14);for(let i=0;i<n;i++){let d=dy/n;if(!collides(p.x,p.y+d))p.y+=d;else {if(d>0)p.grounded=true;p.vy=0;break}}}}
+// A shaft may have a clear exit but no suitable solid anchor three tiles above.
+// Use a real, unprotected bank tile beside the lip; every player move is collision-checked.
+function ropeSurfaceExitPlan(){
+ if(!p||paused)return null;
+ const column=Math.floor(p.x),surfaceY=terrain(column),depth=p.y-surfaceY;
+ if(depth<-.5||depth>6.65)return null;
+ const directions=input.left?[-1,1]:[1,-1];
+ for(const side of directions){
+  const landingX=column+.5+side*1.08;
+  // Actual top bank includes the generated grass tile above terrain().
+  let groundY=null;
+  for(let y=Math.max(1,terrain(landingX)-4);y<=terrain(landingX)+2;y++){
+   if(solid(tile(Math.floor(landingX),y))){groundY=y;break;}
+  }
+  if(groundY===null||Math.abs(groundY-surfaceY)>2.5)continue;
+  const bankTile=tile(Math.floor(landingX),groundY);
+  if(!solid(bankTile)||bankTile==='stationrock'||bankTile==='bedrock')continue;
+  const exitY=Math.min(surfaceY-1.35,groundY-.35);
+  if(!Number.isFinite(exitY)||exitY<1||collides(landingX,exitY))continue;
+  // A narrow shaft must be genuinely open all the way up. No phase-through mining.
+  let clear=true;
+  for(let y=p.y;y>=exitY;y-=.10){if(collides(p.x,y)){clear=false;break;}}
+  if(!clear||collides(p.x,exitY))continue;
+  const n=Math.ceil(Math.abs(landingX-p.x)/.1);
+  for(let i=1;i<=n;i++)if(collides(p.x+(landingX-p.x)*i/n,exitY)){clear=false;break;}
+  if(!clear)continue;
+  return {surfaceY,exitY,landingX,groundY,anchor:{x:Math.floor(landingX),y:groundY,
+   faceX:column+(side>0?1:0),faceY:groundY}};
+ }

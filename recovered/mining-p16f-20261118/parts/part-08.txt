@@ -1,0 +1,650 @@
+  const last=meta.lastRestAt?new Date(meta.lastRestAt).toLocaleString('ko-KR'):'없음';
+  showModal('지하 쉼터',`<p>바위굴 정거장 옆 쉼터예요. 휴식하면 로프 도약·연결 사용권을 회복하고 현재 위치와 진행 상황을 <b>이 브라우저에 저장</b>합니다.</p>
+   <div class="line"><div><strong>휴식 기록</strong><br><small>휴식 ${meta.restCount}회 · 최근 ${last}</small></div></div>
+   <div class="stack"><button class="cta" id="shelterRestBtn" ${ready?'':'disabled'}>휴식하고 저장</button><button id="shelterSaveBtn">진행만 저장</button></div>
+   <p class="note">${ready?'지금 휴식할 수 있어요.':'휴식하려면 쉼터 앞 안전한 바닥에 착지해야 해요.'}<br>체력·산소 회복 기능은 아직 없습니다. 자동 백업·서버 저장이 아니라 기존 로컬 저장소에 기록됩니다. 파일 백업은 메뉴의 [월드 파일 내보내기]를 이용하세요.</p>`);
+  $('shelterRestBtn').onclick=restAtShelter;
+  $('shelterSaveBtn').onclick=()=>{if(!closestShelter()){flash('쉼터에서 멀어졌어요');return;}if(!saveGame(true)){flash('저장이 실패했어요. 메뉴에서 파일로 내보내세요.');return;}closeModal();flash('쉼터에서 현재 진행 상황을 저장했어요 ✓');};
+  return true;
+}
+function restAtShelter(){
+  if(!shelterRestReady()){flash('쉼터 앞 바닥에 착지한 뒤 휴식할 수 있어요');return false;}
+  const prev=JSON.parse(JSON.stringify(game)),old={vx:p.vx,vy:p.vy,fall:p.fall,charges:ropeLeapRemaining,chain:ropeChainRemaining,groundSeconds:ropeGroundStableSeconds};
+  const next=normalizeShelterState(game.shelter);next.restCount=Math.min(1000000,next.restCount+1);next.lastRestAt=new Date().toISOString();next.lastRestX=p.x;next.lastRestY=p.y;
+  game.shelter=next;p.vx=p.vy=0;p.fall=0;ropeLeapRemaining=mobilityDerived().ropeLeapMax;ropeChainRemaining=p16RopeChainCap();ropeGroundStableSeconds=.08;
+  if(!saveGame(true)){
+    game=prev;p.vx=old.vx;p.vy=old.vy;p.fall=old.fall;ropeLeapRemaining=old.charges;ropeChainRemaining=old.chain;ropeGroundStableSeconds=old.groundSeconds;
+    flash('저장이 차단되어 휴식도 취소했어요. 월드 파일 백업을 이용하세요.');return false;
+  }
+  closeModal();updHud();flash('쉼터에서 휴식 완료 · 로프 회복 · 현재 위치 저장 ✓');return true;
+}
+function duriFacilityGallery(){
+ const entries=[['station_shelter','지하 쉼터','근처에서 휴식·진행 저장 가능 (체력/산소 회복 없음)'],['wall_lantern','벽걸이 랜턴','장식, 조명 효과 없음'],['oxygen_capsule','산소 캡슐','장식, 산소 회복 기능 없음'],['safety_net','안전망','장식, 추락 피해 감소 없음']];
+ const html='<p>두리 지하시설 4종을 <b>바위굴 정거장 주변</b>에 배치했습니다. 쉼터는 휴식·로프 도약 회복·진행 저장을 지원하며, 나머지 3종은 장식입니다. 체력·산소·안전망 효과는 없습니다.</p>'+entries.map(([k,label,note])=>
+  '<div class="line"><img src="'+DURI_FACILITY_ASSETS[k]+'" style="width:60px;height:60px;object-fit:contain;image-rendering:pixelated" alt="'+label+'"><div><b>'+label+'</b><br><small>'+note+'</small></div></div>').join('');
+ showModal('두리 지하시설 미리보기',html);
+}
+window.__sandstarShelter={near:()=>!!closestShelter(),ready:shelterRestReady,refresh:updHud,open:shelterMenu,rest:restAtShelter,state:()=>JSON.parse(JSON.stringify(normalizeShelterState(game.shelter)))};
+ window.__sandstarDuriFacilities={get:()=>({enabled:duriFacilitiesVisible,ready:Object.fromEntries(Object.entries(duriFacilityImages).map(([k,i])=>[k,i.complete&&i.naturalWidth>0])),placements:duriFacilityPlacements()}),setEnabled:(on)=>{duriFacilitiesVisible=!!on;try{localStorage.setItem(DURI_FACILITY_PREVIEW_KEY,duriFacilitiesVisible?'1':'0')}catch(_){}return duriFacilitiesVisible},preview:duriFacilityGallery};
+// SANDSTAR M1 separate forest view. All art is drawn procedurally; no external resources.
+function drawM1ForestWorld(){
+ const left=Math.max(11,Math.floor(camera.x/T)-2),right=Math.min(146,Math.ceil((camera.x+viewW)/T)+2);
+ const low=Math.max(0,Math.floor(camera.y/T)-2),high=Math.min(WH-1,Math.ceil((camera.y+viewH)/T)+2);
+ ctx.save();
+ // Far canopy and hazy treeline make this biome feel distinct from the mine.
+ for(let x=left-4;x<=right+4;x+=5){const sx=Math.round(x*T-camera.x),gy=ssM1ForestTerrain(x)*T-camera.y;
+  ctx.globalAlpha=.32;ctx.fillStyle='#3c8b7b';ctx.fillRect(sx-13,gy-255,44,250);
+  ctx.fillStyle='#35765b';ctx.fillRect(sx-31,gy-280,78,65);ctx.fillRect(sx-16,gy-310,52,50);
+ }
+ ctx.globalAlpha=1;
+ for(let y=low;y<=high;y++)for(let x=left;x<=right;x++){
+  const id=tile(x,y);if(!id)continue;
+  const sx=Math.round(x*T-camera.x),sy=Math.round(y*T-camera.y);
+  ctx.drawImage(sprite(id,(x*3+y*7)&3),sx,sy,T+1,T+1);
+  if(y===ssM1ForestTerrain(x)-1){ctx.fillStyle='#8bb969';ctx.fillRect(sx,sy,27,3);}
+ }
+ // Stream and reeds; shallow water is visual in M1, not a full fluid system.
+ for(let x=61;x<=70;x++){
+  const sx=Math.round(x*T-camera.x),sy=Math.round((ssM1ForestTerrain(x)-1)*T-camera.y);
+  if(sx<-T||sx>viewW+T)continue;
+  ctx.fillStyle=game.storyM1.springRepaired?'#3b9fb4':'#416a79';ctx.fillRect(sx,sy+T-10,T+1,10);
+  ctx.fillStyle=game.storyM1.springRepaired?'#88e7d9':'#718e98';ctx.fillRect(sx+4,sy+T-9,14,2);
+  if(x%3===0){ctx.fillStyle='#8bbd76';ctx.fillRect(sx,sy+5,3,9);}
+ }
+ // Handbuilt portal gate, and the sealed spring far upstream.
+ ssM1DrawLandmark(M1_FOREST_GATE_X,'portal',!game.storyM1.springRepaired);
+ ssM1DrawLandmark(M1_FOREST_SPRING_X,'spring',!game.storyM1.springRepaired);
+ // Farm sign and small village edge, apart from the original tile system.
+ const gx=Math.round(36*T-camera.x),gy=Math.round((ssM1ForestTerrain(36)-1)*T-camera.y);
+ if(gx>-100&&gx<viewW+100){ctx.fillStyle='#7d5237';ctx.fillRect(gx-22,gy-41,4,46);ctx.fillRect(gx-40,gy-42,63,20);ctx.fillStyle='#fce7b1';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText('솔아의 밭',gx-9,gy-27)}
+ const fx=Math.round(87*T-camera.x),fy=Math.round((ssM1ForestTerrain(87)-1)*T-camera.y);
+ if(fx>-100&&fx<viewW+100){ctx.fillStyle='#8c593e';ctx.fillRect(fx,fy-32,6,38);ctx.fillRect(fx-18,fy-35,48,17);ctx.fillStyle='#fff1be';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText('잔빛 숲길',fx+7,fy-23)}
+ ctx.restore();
+}
+function ssM1DrawLandmark(x,type,dry){
+ const sx=Math.round(x*T-camera.x),y=Math.round((terrain(x)-1)*T-camera.y);
+ if(sx<-110||sx>viewW+110)return;
+ ctx.save();ctx.textAlign='center';ctx.font='bold 11px sans-serif';
+ if(type==='portal'){
+  ctx.fillStyle='#634a3a';ctx.fillRect(sx-18,y-81,9,86);ctx.fillRect(sx+30,y-81,9,86);ctx.fillRect(sx-18,y-81,57,12);
+  ctx.fillStyle='#b0dbab';ctx.fillRect(sx-12,y-71,45,6);ctx.fillStyle='#ffefd0';ctx.fillText('← 도래마을',sx+12,y-90);
+ }else{
+  ctx.fillStyle='#756e5a';ctx.fillRect(sx-40,y-16,96,19);ctx.fillStyle='#aaa98d';ctx.fillRect(sx-32,y-20,80,8);
+  const glow=.7+Math.sin(frame*.075)*.3;
+  ctx.globalAlpha=glow;ctx.fillStyle=dry?'#7691a5':'#85e9df';ctx.fillRect(sx-6,y-55,20,36);ctx.fillStyle=dry?'#8f98ae':'#e3ffe3';ctx.fillRect(sx-2,y-63,12,11);
+  ctx.globalAlpha=1;ctx.fillStyle='#f8f2c0';ctx.fillText(dry?'잠든 별샘':'되살아난 별샘',sx+5,y-78);
+  if(!dry){ctx.fillStyle='#4fb3bb';ctx.fillRect(sx-40,y-14,96,11);ctx.fillStyle='#b4e4d9';ctx.fillRect(sx-19,y-13,40,2);}
+ }
+ ctx.restore();
+}
+function ssM1DrawStoryNPCs(){
+ if(!p||!game)return;
+ const roster=ssRegion===TOWN_WORLD_ID?[{x:59,name:'하린',coat:'#d2a17c',hair:'#4c382d'}]:ssRegion==='life_forest_01'?[{x:113,name:'서온',coat:'#829db8',hair:'#35374c'}]:[];
+ ctx.save();ctx.textAlign='center';ctx.font='bold 11px sans-serif';
+ for(const npc of roster){
+  const xx=Math.round(npc.x*T-camera.x),yy=Math.round((terrain(npc.x)-1)*T-camera.y);
+  if(xx<-80||xx>viewW+80)continue;
+  ctx.fillStyle='#283f40aa';ctx.fillRect(xx-19,yy-66,53,19);
+  ctx.fillStyle='#fce9bb';ctx.fillText(npc.name,xx+7,yy-52);
+  ctx.fillStyle=npc.hair;ctx.fillRect(xx-1,yy-48,18,10);
+  ctx.fillStyle='#efc99f';ctx.fillRect(xx+1,yy-39,14,12);
+  ctx.fillStyle=npc.coat;ctx.fillRect(xx-3,yy-29,22,22);
+  ctx.fillStyle='#2d3b4b';ctx.fillRect(xx-2,yy-8,9,10);ctx.fillRect(xx+9,yy-8,9,10);
+  ctx.fillStyle='#f2e8b4';ctx.fillRect(xx-1,yy-38,3,3);ctx.fillRect(xx+13,yy-38,3,3);
+ }
+ ctx.restore();
+}
+function ssM1DrawWorldMarkers(){
+ if(ssRegion==='life_forest_01')return;
+ ctx.save();ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ if(ssRegion==='mine'){
+  const cx=Math.round(M1_MINE_CRYSTAL_X*T-camera.x),cy=Math.round((terrain(M1_MINE_CRYSTAL_X)-1)*T-camera.y);
+  if(cx>-110&&cx<viewW+110){const a=.65+.3*Math.sin(frame*.075);ctx.globalAlpha=a;ctx.fillStyle='#71dac8';ctx.fillRect(cx+3,cy-33,20,28);ctx.fillStyle='#d2ffed';ctx.fillRect(cx+9,cy-41,8,10);ctx.globalAlpha=1;ctx.fillStyle='#ecf7cf';ctx.fillText(game.storyM1.crystalSeen?'조사 완료':'빛나는 광맥',cx+14,cy-54);}
+ }
+ ctx.restore();
+}
+function drawWorld(){if(ssRegion==='life_forest_01'){drawM1ForestWorld();return;}let fromX=Math.max(0,Math.floor(camera.x/T)-1),toX=Math.min(WW,Math.ceil((camera.x+viewW)/T)+1),fromY=Math.max(0,Math.floor(camera.y/T)-1),toY=Math.min(WH,Math.ceil((camera.y+viewH)/T)+1);
+ for(let y=fromY;y<=toY;y++)for(let x=fromX;x<=toX;x++){let t=tile(x,y);if(!t)continue;let sx=Math.round(x*T-camera.x),sy=Math.round(y*T-camera.y);ctx.drawImage(sprite(t,(x*3+y*7)&3),sx,sy,T+1,T+1);duriDrawOreWorldTile(t,x,y,sx,sy);if(t==='stone'&&game.worldGenVersion>=3){ssDrawVeinTrace(x,y,sx,sy);if(game.worldGenVersion>=4)ssDrawCavernClue(x,y,sx,sy);} if(t==='wall'){ctx.fillStyle='#160e081a';ctx.fillRect(sx,sy,T,T)} }
+ ssDrawCavernSpecks(fromX,toX,fromY,toY);ssTreasureDraw(fromX,toX,fromY,toY);
+ // grass decoration, old trees and settlement graphics
+ for(let x=fromX;x<=toX;x++){let s=terrain(x),sy=Math.round((s-1)*T-camera.y),sx=Math.round(x*T-camera.x);
+ if(tile(x,s-1)==='grass'){
+   if(rand(x,111)> .75){ctx.fillStyle='#4b8757';ctx.fillRect(sx+5,sy-5,2,7);ctx.fillRect(sx+8,sy-8,2,10);ctx.fillRect(sx+10,sy-4,2,6)}
+   if(rand(x,222)>.954){ctx.fillStyle='#ffe2a1';ctx.fillRect(sx+8,sy-8,4,4);ctx.fillStyle='#7fc690';ctx.fillRect(sx+9,sy-4,2,5)}
+ }
+ if(biomeAt(x)==='desert' && tile(x,s-1)==='sand' && x%17===4){ctx.fillStyle='#45866a';ctx.fillRect(sx+10,sy-3*T,9,3*T);ctx.fillRect(sx+4,sy-2*T,7,7);ctx.fillRect(sx+3,sy-2*T,4,18);ctx.fillRect(sx+19,sy-2*T+8,9,6);ctx.fillRect(sx+24,sy-2*T,5,24)}
+ if(biomeAt(x)==='snow'&&tile(x,s-1)==='snow'&&rand(x,33)>.8){ctx.fillStyle='#edf7ef';ctx.fillRect(sx+6,sy-4,7,4)}
+ if(biomeAt(x)==='forest'&&x>80&&x%12>=3&&x%12<=5){let h=3+Math.floor(rand(x,8)*2),baseY=s-1,baseSY=Math.round(baseY*T-camera.y);let hasTrunk=tile(x,baseY-2)==='wood';if(hasTrunk){ctx.fillStyle='#805637';ctx.fillRect(sx+10,baseSY-(h+1)*T,8,(h+1)*T);ctx.fillStyle='#c08a50';ctx.fillRect(sx+12,baseSY-(h+1)*T,3,(h+1)*T);for(let k=0;k<4;k++){ctx.fillStyle=['#477a50','#578e58','#3c704c','#71a563'][k];ctx.fillRect(sx-22+k*5,baseSY-(h+3)*T+k*5,64-k*7,22)}ctx.fillStyle='#8abe76';ctx.fillRect(sx-5,baseSY-(h+3)*T+8,33,8)}}
+ }
+  for(const building of (ssRegion===TOWN_WORLD_ID?BUILDING_DATA:[])){
+    const img=BUILDING_IMAGES[building.id],sx=Math.round(building.x*T-48-camera.x),foot=(terrain(building.x)-1)*T-camera.y;
+    const sy=Math.round(foot-80);
+    if(sx>viewW+96||sx<-96||sy>viewH+80||sy<-80)continue;
+    if(img.complete&&img.naturalWidth===96){ctx.drawImage(img,sx,sy,96,80);}else{
+      ctx.fillStyle='#775c49';ctx.fillRect(sx+7,sy+18,82,59);
+    }
+    const near=closestBuilding();if(near&&near.id===building.id){
+      ctx.strokeStyle='#ffdea3';ctx.lineWidth=2;ctx.strokeRect(sx+28,sy+34,40,45);
+    }
+  }
+
+ drawDuriFacilities();
+ // Custom lift door sprites: anchored at the same gameplay stations.
+ for(const station of (ssRegion==='mine'?STATION_DATA:[])){
+  const x=station.x*T-camera.x,base=station.foot*T-camera.y;
+  if(x < -LIFT_SPRITE_WIDTH || x > viewW+LIFT_SPRITE_WIDTH || base < -LIFT_SPRITE_HEIGHT || base > viewH+LIFT_SPRITE_HEIGHT)continue;
+  const unlocked=transportState().unlocked.includes(station.id);
+  const near=!!(nearbyStation&&nearbyStation.id===station.id);
+  drawLiftDoor(station,x,base,unlocked,near);
+ }
+}
+function drawPlayerLegacy(){let x=Math.round(p.x*T-camera.x),foot=Math.round(p.y*T-camera.y),s=Math.round(T/16),oy=foot-42+Math.round(Math.sin(frame*.14)*1.2*(Math.abs(p.vx)>0?1:0));
+ if(airLeapControl&&!p.grounded&&Math.abs(p.vx)>1){
+  // Small air streaks show actual sideways velocity, not a new mechanic.
+  ctx.save();ctx.globalAlpha=.54;ctx.fillStyle='#d3f6c3';const tail=p.vx>0?-1:1;
+  ctx.fillRect(x+tail*19,foot-25,tail*8,2);ctx.fillRect(x+tail*23,foot-12,tail*6,2);ctx.restore();
+ }
+ ctx.save();ctx.translate(x,oy);ctx.scale(p.facing,1);const px=(a,b,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(a,b,w,h)};
+ px(-10,2,21,8,'#5a3d32');px(-8,0,17,8,'#d6a574');px(-6,6,13,5,'#e6be85');px(-7,10,14,7,'#f3d7a7');px(2,10,3,3,'#3b3b40');px(-6,14,13,3,'#866d5d');
+ px(-11,2,23,4,'#a37e53');px(-10,-2,19,5,'#e6bd7d');px(-7,-5,13,5,'#f5d89b');px(7,-2,6,5,'#e6b76f');
+ px(-10,17,20,17,'#416c73');px(-7,18,14,9,'#64949a');px(-6,31,6,8,'#4a5963');px(3,31,6,8,'#425362');px(-8,38,8,4,'#43353a');px(2,38,9,4,'#43353a');px(9,21,6,7,'#e1be8b');px(13,22,3,9,'#aa8260');px(15,17,3,18,'#bdc1c4');px(13,18,8,3,'#dbe5d9');ctx.restore();
+}
+
+// SANDSTAR 2.6: standalone pixel sprite atlases, embedded for Android content:// compatibility.
+const MINER_SPRITE_INFO = {"schema":"sandstar.pixelatlas.v1","pack":"SANDSTAR Miner P0","created":"2026-11-09","origin":"original procedural pixel art; no external copyrighted assets","frame_width":32,"frame_height":40,"columns":6,"rows":4,"pixel_art":true,"pivot":{"x":16,"y":39},"render_hint":{"sampling":"nearest","flip_x_for_left":true,"suggested_screen_width":32,"suggested_screen_height":40},"animations":{"idle":{"frames":[0,1,2,3],"frame_duration_ms":225,"loop":true,"meaning":"대기"},"walk":{"frames":[4,5,6,7,8,9],"frame_duration_ms":95,"loop":true,"meaning":"걷기"},"jump":{"frames":[10,11],"frame_duration_ms":170,"loop":false,"meaning":"점프"},"fall":{"frames":[12,13],"frame_duration_ms":150,"loop":false,"meaning":"낙하"},"rope_climb":{"frames":[14,15,16,17],"frame_duration_ms":135,"loop":true,"meaning":"로프 등반"},"rope_leap":{"frames":[18,19,20,21],"frame_duration_ms":95,"loop":false,"meaning":"로프 도약"},"land":{"frames":[22,23],"frame_duration_ms":130,"loop":false,"meaning":"착지"}},"frames":[{"id":"idle_0","index":0,"animation":"idle","frame":0,"x":0,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"idle_1","index":1,"animation":"idle","frame":1,"x":32,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"idle_2","index":2,"animation":"idle","frame":2,"x":64,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"idle_3","index":3,"animation":"idle","frame":3,"x":96,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_0","index":4,"animation":"walk","frame":0,"x":128,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_1","index":5,"animation":"walk","frame":1,"x":160,"y":0,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_2","index":6,"animation":"walk","frame":2,"x":0,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_3","index":7,"animation":"walk","frame":3,"x":32,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_4","index":8,"animation":"walk","frame":4,"x":64,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"walk_5","index":9,"animation":"walk","frame":5,"x":96,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"jump_0","index":10,"animation":"jump","frame":0,"x":128,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"jump_1","index":11,"animation":"jump","frame":1,"x":160,"y":40,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"fall_0","index":12,"animation":"fall","frame":0,"x":0,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"fall_1","index":13,"animation":"fall","frame":1,"x":32,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_climb_0","index":14,"animation":"rope_climb","frame":0,"x":64,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_climb_1","index":15,"animation":"rope_climb","frame":1,"x":96,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_climb_2","index":16,"animation":"rope_climb","frame":2,"x":128,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_climb_3","index":17,"animation":"rope_climb","frame":3,"x":160,"y":80,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_leap_0","index":18,"animation":"rope_leap","frame":0,"x":0,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_leap_1","index":19,"animation":"rope_leap","frame":1,"x":32,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_leap_2","index":20,"animation":"rope_leap","frame":2,"x":64,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"rope_leap_3","index":21,"animation":"rope_leap","frame":3,"x":96,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"land_0","index":22,"animation":"land","frame":0,"x":128,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39},{"id":"land_1","index":23,"animation":"land","frame":1,"x":160,"y":120,"w":32,"h":40,"pivot_x":16,"pivot_y":39}]};
+const MINER_TOOL_INFO = {"schema":"sandstar.tools.v1","frame_width":32,"frame_height":40,"columns":4,"tools":{"pickaxe":{"row":0,"frames":4,"frame_duration_ms":85,"anchor":{"x":16,"y":24}},"drill":{"row":1,"frames":4,"frame_duration_ms":85,"anchor":{"x":16,"y":24}},"hammer":{"row":2,"frames":4,"frame_duration_ms":85,"anchor":{"x":16,"y":24}}}};
+const minerSpriteImage = new Image();
+
+// SANDSTAR 2.15-C tool sprite atlas, 5 appearance tiers x 4 mining frames.
+const forgeAppearanceImage=new Image();
+let forgeAppearanceReady=false;
+forgeAppearanceImage.onload=()=>{forgeAppearanceReady=forgeAppearanceImage.naturalWidth===128&&forgeAppearanceImage.naturalHeight===200};
+forgeAppearanceImage.onerror=()=>{forgeAppearanceReady=false};
+forgeAppearanceImage.src='data:image/png;base64,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';
+function forgeAppearanceTier(rank){
+ const r=Number.isInteger(rank)?Math.max(0,Math.min(20,rank)):0;
+ return r>=10?4:r>=7?3:r>=5?2:r>=3?1:0;
+}
+const FORGE_APPEARANCE_NAMES=['낡은 광부의 곡괭이','구리 장식 곡괭이','강철 곡괭이','결정 공명 곡괭이','흙별의 곡괭이'];
+const FORGE_APPEARANCE_SHORT=['기본형','구리형','강철형','결정형','흙별형'];
+function forgeAppearanceCard(rank,label){
+ const tier=forgeAppearanceTier(rank),name=FORGE_APPEARANCE_NAMES[tier];
+ return `<div class="forge-appearance-slot" data-awakening="${rank>=20?'max':rank>=15?'high':'none'}"><span class="forge-look" role="img" aria-label="${name} 도트 모습" data-tier="${tier}"></span><div><b>${label}</b><small class="forge-long">${name}</small><small class="forge-short">${FORGE_APPEARANCE_SHORT[tier]}</small></div></div>`;
+}
+function forgeAppearancePanel(rank,comparison){
+ const next=Number.isInteger(comparison)?comparison:null;
+ return `<div class="forge-appearance" aria-label="곡괭이 외형 단계 미리보기">${forgeAppearanceCard(rank,'현재 +'+rank)}${next===null?'':'<span class="forge-appearance-arrow" aria-hidden="true">→</span>'+forgeAppearanceCard(next,'목표 +'+next)}</div><div class="forge-appearance-status">강화 단계에 따라 곡괭이 외형이 자동으로 바뀝니다. 외형은 강화 등급에 따라 바뀌며, 곡괭이 강화 효과는 장착 도구에만 적용돼요.</div>`;
+}
+
+const minerToolImage = new Image();
+let minerSpriteReady=false,minerToolsReady=false;
+minerSpriteImage.addEventListener('load',()=>{minerSpriteReady=minerSpriteImage.naturalWidth===192&&minerSpriteImage.naturalHeight===160;});
+minerToolImage.addEventListener('load',()=>{minerToolsReady=minerToolImage.naturalWidth===128&&minerToolImage.naturalHeight===120;});
+minerSpriteImage.src='data:image/png;base64,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';
+minerToolImage.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAAB4CAYAAAA6//q/AAAFGklEQVR4nO2dMWvcWBDHR0cIOI1J4eKKCwf7CbKkWq64LsRgrjgXcXOVSREwGFKmvjKHwXBFcHWNUzjFsWC47opjq0P3CRaMXaRwYdLEpVLYzyfJklbvaebNSPr/QGBbsmZ23vznPWlXs0QAAABGSqLtgBST6Syr27dMF4N93b4MLhBu4E+Oj2qP2d7ZRRLcwhoEbdVNprOsaeDzIAlueMBxkpaqy6QCfvXlU2XinV1cSZgzRxfhdR4QbdVNprPs338+Vu47u7ii7Z1dIqpOzr5XAY7pLrgCWFHdMl0kjx99ey8YbuC3Nq4Lv7dN1lBiTYNthXdyfNRYfYMcsqw6NwDOxv7zp4UBmV+u3f3MPSBE8ovPEOE12e3kzCrVuWDng+KOiVV6ywlw8Nd/7HZjTYMSwmMJhpbq2iKVBNxqbAun8FiuAla9oD4vtOpomuuJ6tccq+bkNrj/3d7ZLQiPbhO9vO4pHFNCbGBilF4fpPyxNA2GvMbRJABR0Sduf6xMg75x/0bKkbLhsmPacPuzTBdJ08C6/damQ7EEILKh+jwx/dESgK9d0QQoM/QqYAWfRBdPAFSB/9FKuCa7USsA0XBVV4eWANrajZIAVquAhl/WqkD0CkBkowpoTgWW7EZLgLzqrFWE2FirAiAS+8+fZm6Lbbdun8oUAOKqcewV1xQowwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYwQMDTOSbRlnrAtKEWLNorSDE9qGqQWTsXohdEOmURRQ/CLF9cPbqGjcSET374Wcx+3X4CoClYaFmEDR8yHcG/f67x7XHuYaRMcQQKoBghywEQcsHX7uctqt8IQoXAEun0DbcdsikyXQm9r0Bkj6k+y/vSuv04EOyvbObnRwfeXVHP91bp83DYj/BLvh0DCeq6CxKngnAGYTQAFjwoQune+tERCr2qwSg0h/gdG99Za/dIZHv2esIjUG6/zJz2zJdJO7cZxdXtVuT7WgJUA6CRhLkffC1Pz34kLiN6KaMVg1sGzYPP9Pm4WcTl4leU4B78Y7bILTulZ8nNABcPnAOwPkfrwu/P/nl91qbRHr3B8oC2DycZWyLQAtB8PGBw75Lvt9ePCz8va4ycNjkFkDnBNAIgkUfYp6/jhABiF0GWpjfYviwTBcJvfhRdUHbRQB83xhiIAjaPlijjQDQJm4ghFY7JMDIQQKMHCTAyIn2ZtCQ+enXv9WveELprePgPn++LV4F9TkxAQAAAAAAAAAAAAAAAAAAAABd6d3bhdxPE1n49LImvfxAyMnxUe1j2T4PiTY92pWdv79LtOTJq8EmSesEgPKGiVcFiKG8tvjY40JDBNI2ezkFxKCu7GuIQNKmdwJoKA/IMdgK8GjxpnH/l9m74HNriEDKJp4LGDnsFUBSeT7EstN3ejkFcFxFSKIhglCb7Akgrby29w8m01m2tXFNRETzyzXcd6jBKwGsK88KGtNPqE2RHroWlJf3g8sX3AjqEct0kcxLScBxzjbHcYpA2qboZeDWxvWoGkL2EfYEWKaLZH65xn3a3qIhAh+buBEkgIYIQm2OJgEwHVUz6ATAdLQa8QSA8u6Tnb/P3Kbti0gCQHlFLC8EBz0FaNKXheBgbwRVsbVxTXPFr6xxWPqQ6eArAKajZqIkgJWFIBLhPmIJYE157v64Vvm3uhCMUgG0E0Fr4PuwEBRfBOLDGDdoiEBbeIBu3qaNXfo1bAIAAAAAAAAAAMA+XwGRWgaMOHyWlAAAAABJRU5ErkJggg==';
+const ANIM_FALLBACK='idle';
+let animName='idle',animClock=0,landClock=0,animWasGrounded=null;
+function resetSpriteAnimation(){animName='idle';animClock=0;landClock=0;animWasGrounded=null;}
+function updateSpriteAnimation(dt){
+ if(!p||paused)return;
+ const grounded=Boolean(p.grounded);
+ if(animWasGrounded===false&&grounded&&!rope.active)landClock=.235;
+ animWasGrounded=grounded;
+ if(!grounded)landClock=0;
+ else landClock=Math.max(0,landClock-dt);
+ let desired='idle';
+ if(rope.active)desired='rope_climb';
+ else if(!grounded&&airLeapControl&&p.vy<3.5)desired='rope_leap';
+ else if(!grounded&&p.vy<-.45)desired='jump';
+ else if(!grounded&&p.vy>.45)desired='fall';
+ else if(landClock>0)desired='land';
+ else if(Math.abs(p.vx)>.48)desired='walk';
+ if(desired!==animName){animName=desired;animClock=0;}
+ else animClock+=dt;
+}
+function currentMinerFrame(){
+ const clip=MINER_SPRITE_INFO.animations[animName]||MINER_SPRITE_INFO.animations[ANIM_FALLBACK];
+ const frames=clip.frames;
+ const duration=Math.max(.02,clip.frame_duration_ms/1000);
+ const position=rope.active&&rope.attached&&animName==='rope_climb'?0:Math.floor(animClock/duration);
+ return frames[clip.loop?position%frames.length:Math.min(frames.length-1,position)];
+}
+function currentMiningDirection(){
+ if(stickActive&&stickDir)return [stickDir.dx,stickDir.dy];
+ if(holdTarget){let dx=holdTarget.x+.5-p.x,dy=holdTarget.y+.5-(p.y-PLAYER_CENTER_FROM_FEET);return [Math.sign(dx),Math.sign(dy)];}
+ return [p.facing||1,0];
+}
+function isMiningAnimationActive(){return (stickActive||Boolean(holdTarget)||input.act)&&Boolean(miningTarget())&&!rope.active;}
+function minerVisualFacing(){
+ if(!isMiningAnimationActive())return p.facing||1;
+ const dx=currentMiningDirection()[0];return dx===0?(p.facing||1):Math.sign(dx);
+}
+function drawEquipmentOverlay(x,foot){
+ if(!isMiningAnimationActive() || (!minerToolsReady && !forgeAppearanceReady))return;
+ const toolId=Object.prototype.hasOwnProperty.call(MINER_TOOL_INFO.tools,game.tool)?game.tool:'pickaxe';
+ const tool=MINER_TOOL_INFO.tools[toolId];
+ const index=Math.floor(performance.now()/tool.frame_duration_ms)%tool.frames;
+ const vec=currentMiningDirection();
+ const dx=vec[0],dy=vec[1];
+ const facing=minerVisualFacing();
+ const a=Math.atan2(dy,Math.abs(dx)||.05);
+ // Mirror the tool toward the target side, then rotate toward the selected upward/downward axis.
+ ctx.save();
+ ctx.translate(x+(dx||facing)*T*.27,foot-T*.58+dy*T*.13);
+ ctx.rotate(a*facing);
+ ctx.scale(facing,1);
+ ctx.imageSmoothingEnabled=false;
+ const useForgeArt=toolId==='pickaxe'&&forgeAppearanceReady;
+ const toolAtlas=useForgeArt?forgeAppearanceImage:minerToolImage;
+ const toolRow=useForgeArt?forgeAppearanceTier(game.pickaxeForge?.rank||0):tool.row;
+ if((useForgeArt||minerToolsReady)) ctx.drawImage(toolAtlas,index*32,toolRow*40,32,40,-T*.4,-T*.64,T*.8,T);
+ ctx.restore();
+}
+function drawPlayer(){
+ if(!minerSpriteReady){
+  const px=Math.round(p.x*T-camera.x),feet=Math.round(p.y*T-camera.y);
+  ctx.save();ctx.translate(px,feet);ctx.scale(PLAYER_DRAW_SIZE/42,PLAYER_DRAW_SIZE/42);ctx.translate(-px,-feet);
+  drawPlayerLegacy();ctx.restore();return;
+ }
+ const x=Math.round(p.x*T-camera.x), foot=Math.round(p.y*T-camera.y);
+ const index=currentMinerFrame(), fw=MINER_SPRITE_INFO.frame_width, fh=MINER_SPRITE_INFO.frame_height, cols=MINER_SPRITE_INFO.columns;
+ // A sprite frame's pivot is centered on the player collision footprint.
+ ctx.save();
+ ctx.translate(x,foot);
+ ctx.scale(minerVisualFacing()<0?-1:1,1);
+ ctx.imageSmoothingEnabled=false;
+ // Grounded, dark single-pixel contour improves legibility on pale and dark rock alike.
+ // It does not scale the sprite beyond its one-tile footprint.
+ ctx.shadowColor='#091d28';ctx.shadowBlur=0;ctx.shadowOffsetX=1;ctx.shadowOffsetY=1;
+ ctx.drawImage(minerSpriteImage,(index%cols)*fw,Math.floor(index/cols)*fh,fw,fh,-PLAYER_DRAW_SIZE/2,-PLAYER_DRAW_SIZE,PLAYER_DRAW_SIZE,PLAYER_DRAW_SIZE);
+ ctx.shadowOffsetX=0;ctx.shadowOffsetY=0;
+ ctx.restore();
+ // Stowed pickaxe remains visible on the right side when not actively mining.
+ // Purely visual: no collision, movement, reach or miningRate changes.
+ if(game.tool==='pickaxe'&&forgeAppearanceReady&&!isMiningAnimationActive()){
+  const tier=forgeAppearanceTier(game.pickaxeForge?.rank||0);
+  ctx.save();ctx.translate(x,foot);ctx.scale(minerVisualFacing()<0?-1:1,1);ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(forgeAppearanceImage,0,tier*40,32,40,-5,-35,30,37);ctx.restore();
+ }
+ drawEquipmentOverlay(x,foot);
+ if(isMiningAnimationActive()){
+  const dir=currentMiningDirection(),a=performance.now()/110;
+  const fx=Math.round(x+dir[0]*T*.43),fy=Math.round(foot-T*.55+dir[1]*T*.36);
+  ctx.save();ctx.globalAlpha=.65+.25*(.5+.5*Math.sin(a));ctx.fillStyle='#fff0a8';
+  ctx.fillRect(fx-1,fy-3,2,6);ctx.fillRect(fx-3,fy-1,6,2);ctx.restore();
+ }
+}
+
+// 2.15-C: scan glows ONLY existing ore tiles within radius; never increases mining reach.
+function drawAffinityRadar(){if(ssRegion==='life_forest_01')return;
+ const radius=pickaxeScanRadius();if(!radius)return;
+ const px=p.x,py=p.y-PLAYER_CENTER_FROM_FEET;
+ const phase=.55+.30*Math.sin(performance.now()/390);
+ ctx.save();ctx.strokeStyle='#d3b9ff';ctx.fillStyle='#f1deff';ctx.lineWidth=1.4;
+ for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+  const x=Math.floor(px)+dx,y=Math.floor(py)+dy;
+  if(Math.hypot(x+.5-px,y+.5-py)>radius+1e-9)continue;
+  if(!visionVisible(x,y)||!ORES.has(tile(x,y)))continue;
+  const sx=Math.round(x*T-camera.x),sy=Math.round(y*T-camera.y);
+  if(sx<-T||sy<-T||sx>viewW||sy>viewH)continue;
+  ctx.globalAlpha=phase;ctx.strokeRect(sx+2,sy+2,T-4,T-4);
+  ctx.fillRect(sx+T/2-1,sy+3,2,5);ctx.fillRect(sx+T/2-3,sy+5,6,2);
+ }
+ ctx.restore();
+}
+
+// SANDSTAR 2.18-H3 RopeArt-P1: five original DURI sprites, rope tile from P1 seam-verified pack.
+// Art only: rope firing, raycasting, swing physics, mining HUD, mobility and save schema are untouched.
+const DURI_ROPE_ASSET_URLS=Object.freeze({
+ "normal":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABOElEQVR4nJXOT0vCcBzH8c9+++Wczsk0ZsPSQAmK8FBg7RFEp55Ct85Bl27dOtRj6FzQE+gUBNE/CsogpSBQzDItnC6Zm1uPYIfv9/p58+ILhFwpLTin26XgeCsXpCLiXljHwgY9FUXeUPDaHKA/Eg/COh42rJczvN21UW9ZcAGH/EEhE2E3Tw0kYhEoYrBCBqoN2//o2JjLq1AlHJKBs7u2V8ylYWgyggACGfiyxlgtTcMZM/QdtkMGzHmNxWSOh5cWbF+4JgNrS5P8ufaJrjUCRxAnA67r4bbSRHEmCU3yd8nA+WPHSyZkFAwFUY5NMnBV7fnLi1lwzvDn4YgM6FoUhayKWr2HX0fYJwMb5hRv/wzx1rAwhjAkA7O6xC7u36HEJ6CKMMnAZeXb7w1clBd0JCX/JKz7B/lhZdNpab4TAAAAAElFTkSuQmCC",
+ "wire":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABXUlEQVR4nGNgwAH+Pc7///Fhx//+eJm/pU68+3CpY8ElcenCa4aLW1czGMgzMnEzczsyMHzGqo4JlwG/H59n8EtyZJDWU/u36+S7S7jU4TTAOMCL4T2zOsPyhWcZTNV5fuNSh9MLk+tWMTAz/2LQ0ORhenzvuzHJBryQiGLg5hFk+MjM/ufa8abFuNTh9IKmqhqDg70Dw4O7t1iUBH4nkuyCmzdvMGzeupPh67dvDJz/eH4wMHwhzYCffxkZ3H18GH78+P3n5Ly963Gpw+kFA20VBgFeLobVy5cxqUiwauNSh9sLB2YxcPGxMYQ4KzP9vM6hx8DwiTQX1LS6Mbg6GTK8P77uH9u/v09xqcNpwIn1+xge7lvJEBemwPTm8z9pkg1QlGRgCKpIZzj/mOXfncffd5BsgKCJDcPeTTcY7py6weRizOdCsgHHl+5gYHpzjiEm3oDh1I1vv3CpAwCxQHO6NMsDHAAAAABJRU5ErkJggg==",
+ "anchor":"data:image/png;base64,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",
+ "hook":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFbElEQVR4nO2WWUxUVxjH/+femcswMyzCILLYSFAbKbIrttKaVAQrtQREEWSLbVPTxKRPfbDV1rSxBUVsjLRxa7XusriAcQOVTVMVI4SlaNhcwAmrMjN37tx7Tx/otBMUcAi8NP0n9+mc7/x/33fOd84F/tcExbAsACB0fujHO3N3Sps2fUX9/fw3AAAhZGrNrQZhIWFrbtfepderKmhySsp9jVqjnVpnG/OQgJA19+rr6JGTJ8wBAQEPAaim3hzD5ixhNfsP/EovXys3LI2OllydXaNt4ewRM4HZJGZZzJaFi98W6uob1IODg88GXwyWE0JAKbUbQDHW4MiMqEzBEOKyNmvdl1cuXxK7nnbDSev0SmPb2LHARq2ANSPbDwA4zkFsrG/kjx7+nffymgGKVy9uGzfW1owKQCkFp1T6qtWOfhqNZhbDMAQALBbL0O7cXT6QcdjT2xtDBoMwMpZlWUaj0czSaNR+CpadaVcFrLSREZEJZ0rOPdqel9eakp7e5u3lmwQAFBRGwdjHcdyAUqmERRBEYLgM1tjZ/nM2fvr5hrZtOdmt50tLOyMXLkqyHR+7AhRYErVkbcHZwiKFSt1zp7bWWHD0xFa9vrvQugAhBBSywmQyQafTuWscNT62CXR0dOQf2ntwc1NTk1Hl4tJz9OSx01FR76a8qhIvAXi46cK3bf/hePXNW/yRQ7/pli2L4T5MiJ8vWAQFpRQgw9tj4nlGp9NhXmCgq1KpjPoHjFLwZpOcsCph9uqkNdze/HxdRVUV/2NO9jFXF9fwcQEy12cVM0pOyMvNlcsuXNpRUnxGkZqRlpicuu4WALUsyQAAWZQsZrMAUZIgSVI/AMiyDAAOGRmZZcnpaZn5e/Yorl28smN33i4RDCNkrV9fPNLvpTZ0dnH2LL9axt2/ey+GF/gbxQUF+3p7e+8mp6eFWsyWuqLCU1EAzFonp3hCCDRaLVxcnTcaDEM3ZVB18trUstiPVgZkf7+Nr6msiuQFvq6/v//8hdLSG27u0zzHBWhuaeHaOzrKeIGvZBgGJjPfUlF+PVSmclNqVqZ/YlJCV1FhIZ7puyFJIhxVKqjUDnHxqxIHYz9YAVd3N+zbk4/qispws8XcSAiBIApV166Wlb3hN2vp+AD1jXld+u5TAGRrD5sE08Oa65XzVJzDn1u+2yrGLI+VHz9+wh06sJ+RJQnL41bKPr4zhTlvzmXysnO4msqqEKs5AFBQubOt42vjkLFupN9rXd7Ww+Wscpr7VmhQg6NWpVidkiabTEZGkmRIkiiXnC1meAMvNNc3hQ3xLxomejWPKzXn6O01w7Nh8XtR9HhhkfTTzz9LCxYtoJ4e0++plI46e9cb8y0YKUIIjILpqaVHjNBNf36/panRr729HV2Pnzb39vZFirL40q04qQDDZwKwiBaTeaCrq/Nm0ZyefgNgNnWKsigQYJSXYXTZ9xxbgxgCFSMpPJyUcFLKYCGxDJnQUvZVAAAoHa6EaJFZKgGEsJBkUSFTeUIAdmH/3VYk+v3Yb+aGBAcPUINoZs1icGjY4qDAkM9s5kw+gLWtfL18g5I/SflW6TBDof/DTWF84KnQ+Hhzq1JX/6JVO00fbr3Xh3htAGtPx8XH5Qh9JjGxJB5F+qs4rb+CkOJgwcNbJ0RGLPwCGD4jkw5g1ZDJ4Nyn72PChRCAKKGmWsQ+X4pHTzoYwSJobWEnFcC6t021jcdYb445HlQgNpsaUWu+g4qEarhP0ylaW9vO2ZmPHZv1r5Tx8Ym1kUvfCRx6NCAKkgDvgJmKwoMnLlbXVK8AGfU3cdIAwIJ1DouIyAsMn59h5s24XX1754OHzZsJIcKU3P//af0FE7p+yTxuuSQAAAAASUVORK5CYII=",
+ "coil":"data:image/png;base64,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"
+});
+const duriRopeArtImages=Object.fromEntries(Object.entries(DURI_ROPE_ASSET_URLS).map(([key,src])=>{const img=new Image();img.src=src;return [key,img]}));
+const DURI_ROPE_SKIN_KEY='sandstar-rope-art-skin-v1';
+let duriRopeSkin='normal';
+try{if(localStorage.getItem(DURI_ROPE_SKIN_KEY)==='wire')duriRopeSkin='wire'}catch(_){}
+function duriArtReady(name){const im=duriRopeArtImages[name];return !!(im&&im.complete&&im.naturalWidth>0)}
+function duriDrawRopeSprite(name,cx,cy,size,angle=0){
+ if(!duriArtReady(name))return false;
+ const im=duriRopeArtImages[name];
+ ctx.save();ctx.imageSmoothingEnabled=false;
+ ctx.translate(Math.round(cx),Math.round(cy));ctx.rotate(angle);
+ ctx.drawImage(im,-size/2,-size/2,size,size);ctx.restore();return true;
+}
+function duriDrawCable(ax,ay,bx,by){
+ const name=duriRopeSkin==='wire'?'wire':'normal';
+ if(!duriArtReady(name))return false;
+ const im=duriRopeArtImages[name],dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy);
+ if(!Number.isFinite(len)||len<2)return false;
+ const tile=T,angle=Math.atan2(dy,dx)-Math.PI/2;
+ ctx.save();ctx.translate(ax,ay);ctx.rotate(angle);ctx.imageSmoothingEnabled=false;
+ // Segment in world pixels, independent of frame timing; avoid slicing over zero-sized remnants.
+ for(let at=0;at<len;at+=tile){
+  const h=Math.min(tile,len-at),sourceH=Math.min(16,16*h/tile);
+  ctx.drawImage(im,0,0,16,sourceH,-tile/2,at,tile,h);
+ }
+ ctx.restore();return true;
+}
+function duriSetRopeSkin(skin){
+ if(skin!=='normal'&&skin!=='wire')return false;
+ duriRopeSkin=skin;try{localStorage.setItem(DURI_ROPE_SKIN_KEY,skin)}catch(_){}
+ return true;
+}
+window.__sandstarDuriRopeArt={ready:()=>Object.fromEntries(Object.keys(DURI_ROPE_ASSET_URLS).map(n=>[n,duriArtReady(n)])),getSkin:()=>duriRopeSkin,setSkin:duriSetRopeSkin,source:'DURI P0 alpha-corrected originals + P1 16px seam-verified cable',hasVisualOnly:true};
+
+function drawRope(){
+ // 2.18-H1: preview includes vertical aim, and active transfer previews.
+ if(ropePointerAim&&(ropePointerAim.gesture==='aim'||ropePointerAim.gesture==='transfer')){
+  const direction=ropePointerAim.direction;
+  const a=ropePreviewAnchor;
+  const usable=ropeGestureTargetValid(direction,a);
+  const originX=p.x*T-camera.x,originY=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+  const vec=ROPE_FIRE_DIRECTIONS[direction]||ROPE_FIRE_DIRECTIONS.up;
+  const tx=(a?a.faceX:p.x+vec[0]*9)*T-camera.x,ty=(a?a.faceY:p.y-PLAYER_CENTER_FROM_FEET+vec[1]*9)*T-camera.y;
+  ctx.save();ctx.lineWidth=2.6;ctx.strokeStyle=usable?'#b9f4d1':'#f2a68d';ctx.globalAlpha=.94;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(originX,originY);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);
+  if(!usable||!duriDrawRopeSprite('hook',tx,ty,20)){ctx.fillStyle=usable?'#b9f4d1':'#f2a68d';ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.fill();}
+  ctx.strokeStyle='#173846';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tx-3,ty);ctx.lineTo(tx+3,ty);if(!usable){ctx.moveTo(tx,ty-3);ctx.lineTo(tx,ty+3);}ctx.stroke();ctx.restore();
+ }
+ else if(!rope.active&&ropeCandidate&&ropeGrabCooldown<=0){
+  const a=ropeCandidate,x=Math.round(a.faceX*T-camera.x),y=Math.round(a.faceY*T-camera.y);
+  const px=Math.round(p.x*T-camera.x),py=Math.round((p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y);
+  ctx.save();ctx.strokeStyle='#b9f4d1';ctx.globalAlpha=.72;ctx.lineWidth=1.5;
+  ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);ctx.stroke();ctx.setLineDash([]);
+  if(!duriDrawRopeSprite('anchor',x,y,18)){ctx.fillStyle='#173a3cdd';ctx.fillRect(x-6,y-6,12,12);
+  ctx.strokeStyle='#e5ffd2';ctx.strokeRect(x-6,y-6,12,12);
+  ctx.fillStyle='#b9f4d1';ctx.fillRect(x-2,y-2,4,4);}ctx.restore();
+ }
+ if(rope.active&&rope.attached&&ropeAim!==0&&remainingRopeLeaps()>0){
+  // The arc is an approximate directional aim hint, not a collision prediction.
+  const x0=p.x*T-camera.x,y0=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+  const vx=ropeAim*4.65,vy=-mobilityDerived().ropeLeapImpulse;
+  ctx.save();ctx.fillStyle='#ddf9bd';ctx.globalAlpha=.77;
+  for(let t=.13;t<.75;t+=.12){const xx=x0+vx*t*T, yy=y0+(vy*t+11.5*t*t)*T;
+   ctx.fillRect(Math.round(xx)-2,Math.round(yy)-2,4,4)}ctx.restore();
+ }
+ if(ropeSnap&&ropeSnap.life>0){
+  const f=1-ropeSnap.life/ropeSnap.maxLife;
+  const x1=ropeSnap.ax*T-camera.x,y1=ropeSnap.ay*T-camera.y;
+  const x2=ropeSnap.bx*T-camera.x,y2=ropeSnap.by*T-camera.y;
+  const midX=(x1+x2)/2,midY=(y1+y2)/2;
+  ctx.save();ctx.strokeStyle='#f6df9c';ctx.lineWidth=3;
+  ctx.globalAlpha=Math.min(1,ropeSnap.life/.16);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(midX-7*f,midY-11*f);ctx.moveTo(midX+7*f,midY+11*f);ctx.lineTo(x2+12*f,y2+18*f);ctx.stroke();ctx.restore();
+ }
+ if(!rope.active||!rope.anchor)return;let a=rope.anchor;
+ let x=a.faceX*T-camera.x,y=a.faceY*T-camera.y,px=p.x*T-camera.x,py=(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y;
+ ctx.save();
+ if(!duriDrawCable(x,y,px,py)){
+  // Safe fallback if data URI image decoding is disabled on a browser.
+  ctx.lineWidth=4;ctx.strokeStyle='#253b47';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(px,py);ctx.stroke();
+  ctx.lineWidth=2;ctx.strokeStyle='#f3de9e';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(px,py);ctx.stroke();
+ }
+ if(!duriDrawRopeSprite('anchor',x,y,24)){
+  ctx.fillStyle='#d7e8de';ctx.fillRect(Math.round(x-4),Math.round(y-4),8,8);
+  ctx.fillStyle='#f4cf8f';ctx.fillRect(Math.round(x-2),Math.round(y-2),4,4);
+ }
+ const rlen=Math.hypot(px-x,py-y);
+ if(rlen>18)duriDrawRopeSprite('hook',x+(px-x)/rlen*14,y+(py-y)/rlen*14,14,Math.atan2(py-y,px-x)+Math.PI/2);
+ ctx.restore();}
+function drawParticles(dt){for(let i=particles.length-1;i>=0;i--){let o=particles[i];o.x+=o.vx*dt;o.y+=o.vy*dt;o.vy+=160*dt;o.life-=dt;if(o.life<=0){particles.splice(i,1);continue}ctx.globalAlpha=Math.min(1,o.life*2);ctx.fillStyle=o.color;ctx.fillRect(Math.round(o.x-camera.x),Math.round(o.y-camera.y),5,5)}ctx.globalAlpha=1}
+// Reach guide reflects the same SP-upgraded radius used by mining collision checks.
+// Only visible while the player is actively aiming/mining or briefly after an interaction.
+function drawMineReach(){
+ if(!(stickActive||input.act||holdTarget||rangeHintTime>0))return;
+ const cx=Math.round(p.x*T-camera.x),cy=Math.round((p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y);
+ const a=(stickActive||input.act||holdTarget)?0.65:Math.min(.65,rangeHintTime/.65*.55);
+ ctx.save();ctx.globalAlpha=a;
+ ctx.strokeStyle='#e5f7d4';ctx.lineWidth=1.5;ctx.setLineDash([3,5]);ctx.beginPath();ctx.arc(cx,cy,effectiveMineReach()*T,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+ // Markers move as the character's mine-reach stat increases.
+ ctx.fillStyle='#f9de91';for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])ctx.fillRect(Math.round(cx+dx*effectiveMineReach()*T)-2,Math.round(cy+dy*effectiveMineReach()*T)-2,4,4);
+ ctx.restore();
+}
+function drawCornerTarget(sx,sy,color){
+ const margin=2,corner=6,l=sx+margin,t=sy+margin,r=sx+T-margin,b=sy+T-margin;
+ ctx.save();ctx.strokeStyle='#142732';ctx.lineWidth=4;ctx.beginPath();
+ ctx.moveTo(l+corner,t);ctx.lineTo(l,t);ctx.lineTo(l,t+corner);ctx.moveTo(r-corner,t);ctx.lineTo(r,t);ctx.lineTo(r,t+corner);
+ ctx.moveTo(l,b-corner);ctx.lineTo(l,b);ctx.lineTo(l+corner,b);ctx.moveTo(r-corner,b);ctx.lineTo(r,b);ctx.lineTo(r,b-corner);ctx.stroke();
+ ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.restore();
+}
+function drawHighlight(){
+ const t=miningTarget()||hover;
+ if(t&&canReach(t.x,t.y)&&tile(t.x,t.y)){
+  const sx=Math.round(t.x*T-camera.x),sy=Math.round(t.y*T-camera.y);
+  drawCornerTarget(sx,sy,'#fff0a8');
+  if(holdLast===key(t.x,t.y)&&holdProgress>0){
+   const progress=Math.min(1,holdProgress/tileHP(tile(t.x,t.y))),crack=Math.min(4,Math.floor(progress*5));
+   // Inside the target tile so the indicator never covers another tile.
+   ctx.fillStyle='#102638';ctx.fillRect(sx+3,sy+3,T-6,4);
+   ctx.fillStyle=progress>.75?'#ffe49d':'#b3f2d5';ctx.fillRect(sx+3,sy+3,Math.round((T-6)*progress),4);
+   ctx.strokeStyle='#fff4cb';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sx+T/2,sy+8);ctx.lineTo(sx+T/2+crack*2,sy+12+crack);
+   ctx.lineTo(sx+T/2-2-crack,sy+14+crack*1.2);ctx.stroke();
+  }
+ }
+ if(invalidReach&&invalidReach.life>0){
+  const sx=Math.round(invalidReach.x*T-camera.x),sy=Math.round(invalidReach.y*T-camera.y);
+  ctx.save();ctx.globalAlpha=Math.min(1,invalidReach.life/.25);drawCornerTarget(sx,sy,'#ff9c8f');ctx.restore();
+ }
+}
+function drawMiningImpact(){
+ // Brief pixel-star impact feedback; no new physics, collision or extra reach.
+ for(const [f,broken] of [[miningHitFX,false],[miningBreakFX,true]]){
+  if(!f||f.life<=0)continue;
+  const t=1-f.life/f.maxLife,cx=Math.round((f.x+.5)*T-camera.x),cy=Math.round((f.y+.5)*T-camera.y);
+  const radius=broken?Math.round(4+10*t):Math.round(2+4*t);
+  ctx.save();ctx.globalAlpha=(1-t)*(broken?.95:.7);ctx.fillStyle=broken?'#fff3b6':'#effff2';
+  for(const [x,y] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   ctx.fillRect(cx+x*radius-2,cy+y*radius-2,4,4);
+   if(broken)ctx.fillRect(cx+x*(radius+4)-1,cy+y*(radius+4)-1,2,2);
+  }
+  ctx.restore();
+ }
+}
+
+// 2.18-C drawTime replaced by per-tile three-state visibility mask.
+function drawFloatTexts(){ctx.save();ctx.font='bold 12px system-ui';ctx.textAlign='center';for(const o of floatTexts){ctx.globalAlpha=Math.min(1,o.life*1.4);let x=o.x-camera.x,y=o.y-camera.y;ctx.lineWidth=3;ctx.strokeStyle='#183044';ctx.strokeText(o.v,x,y);ctx.fillStyle=o.color;ctx.fillText(o.v,x,y)}ctx.restore()}
+function draw(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;ctx.save();if(shake>.05){ctx.translate((Math.sin(frame*2.2)*shake)|0,(Math.cos(frame*1.9)*shake)|0)}drawSky();drawWorld();drawLivingWorld();ssM17DrawObjectMarker();ssM1DrawWorldMarkers();ssM16DrawPortalPrompt();farmWorldDrawForestPortal();archWorldDrawForestPortal();ssM1DrawStoryNPCs();drawAffinityRadar();p16DDrawTrace();drawArtifactLens();drawRope();drawParticles(0);drawMineReach();p16DrawHammerFractures();drawHighlight();drawMiningImpact();drawMiningPixels();drawFloatTexts();drawVisibilityMask();drawPlayer();ctx.restore()}
+function resize(){let box=cv.getBoundingClientRect();viewW=box.width;viewH=box.height;dpr=Math.min(window.devicePixelRatio||1,2);cv.width=Math.ceil(viewW*dpr);cv.height=Math.ceil(viewH*dpr);ctx.imageSmoothingEnabled=false;}
+function loop(now){let dt=Math.min(.045,Math.max(0,(now-last)/1000));last=now;frame++;if(farmWorldActive){farmWorldTick(dt);requestAnimationFrame(loop);return;}if(archWorldActive){archWorldTick(dt);requestAnimationFrame(loop);return;}if(t25Tick(dt,now)){requestAnimationFrame(loop);return;}ssGuideTick(now);ssMineNoticeTick(now);if(!paused){const bm=balanceStats(),oldX=p.x,oldY=p.y;updatePhysics(dt);updateVisionCache();claimMilestoneXp();bm.activeSeconds+=dt;livingWorldTick(dt);const traveled=Math.hypot(p.x-oldX,p.y-oldY);
+ if(traveled>dt*.3)bm.movingSeconds+=dt;
+ if(traveled>0&&traveled<dt*11+.2)noteArtifactDistance(traveled);
+ artifactTravelCheckpoint+=dt;
+ if(artifactTravelCheckpoint>1.2){artifactTravelCheckpoint=0;tryAwardEarnedArtifacts();}mineHold(dt);p16DUpdateHud();updateSpriteAnimation(dt);
+ saveTimer+=dt;if(saveTimer>6){saveGame(true);saveTimer=0}hudTimer+=dt;if(hudTimer>.18){ssCavernCheckDiscovery();updHud();hudTimer=0}}
+ if(paused&&menuType==='바람장터'){balanceStats().marketSeconds+=dt;balanceStats().activeSeconds+=dt;}
+ tickMiningPixels(dt);
+ if(toastUntil&&now>toastUntil){$('toast').classList.remove('on');toastUntil=0}
+ rangeHintTime=Math.max(0,rangeHintTime-dt);for(const fx of [invalidReach,miningHitFX,miningBreakFX]){if(fx)fx.life=Math.max(0,fx.life-dt)}if(invalidReach?.life===0)invalidReach=null;if(miningHitFX?.life===0)miningHitFX=null;if(miningBreakFX?.life===0)miningBreakFX=null;
+ for(let i=particles.length-1;i>=0;i--){let o=particles[i];o.x+=o.vx*dt;o.y+=o.vy*dt;o.vy+=160*dt;o.life-=dt;if(o.life<=0)particles.splice(i,1)}
+ for(let i=floatTexts.length-1;i>=0;i--){let o=floatTexts[i];o.y+=o.vy*dt;o.life-=dt;if(o.life<=0)floatTexts.splice(i,1)}if(ropeSnap){ropeSnap.life-=dt;if(ropeSnap.life<=0)ropeSnap=null}shake*=Math.pow(.04,dt);updateRopeAutoMoveHud();draw();requestAnimationFrame(loop)}
+function pointerTile(e){let r=cv.getBoundingClientRect();return {x:Math.floor((e.clientX-r.left+camera.x)/T),y:Math.floor((e.clientY-r.top+camera.y)/T)}}
+// Mouse secondary click is a dedicated rope action. Pointerdown must never mine on that button.
+cv.addEventListener('mousedown',e=>{if(ssM16TransitionLocked)return;if(e.button!==2)return;e.preventDefault();if(ssM15Scene==='mining')desktopRightClickRope(e);});
+cv.addEventListener('pointerdown',e=>{if(paused||ssM16TransitionLocked)return;if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();let q=pointerTile(e);if(farmWorldTryForestTap(q))return;if(archWorldTryForestTap(q))return;if(ssM16TryPortalTap(q))return;if(ssTreasureTryTap(q))return;if(ssM17TryObjectTap(q))return;if(shelterTileHit(q)&&closestShelter()){shelterMenu();return}let near=closestStation();if(near&&Math.abs(q.x+.5-near.x)<=1.3&&q.y>=near.foot-3.5&&q.y<=near.foot){stationMenu();return}const b=near?null:closestBuilding();if(b&&Math.abs(q.x+.5-b.x)<=2.6&&q.y>=terrain(b.x)-6&&q.y<=terrain(b.x)){enterNearbyBuilding();return}let tt=tile(q.x,q.y);hover=q;if(tt==='bed'||tt==='chest'){tileAction(q.x,q.y);return}if(ssM15Scene!=='mining')return;holdTarget=q;holdLast=null;holdProgress=0;tileAction(q.x,q.y);try{cv.setPointerCapture(e.pointerId)}catch(e){}});
+cv.addEventListener('pointermove',e=>{if(paused)return;let q=pointerTile(e);hover=q;if(holdTarget&&e.buttons){holdTarget=q;rangeHintTime=MINING_RANGE_HINT_TTL}});
+const release=()=>{holdTarget=null;holdLast=null;holdProgress=0};cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);cv.addEventListener('lostpointercapture',release);cv.addEventListener('contextmenu',e=>e.preventDefault());
+// 2.18-H3: left pad owns movement/rope aim; right independent pad owns mining.
+const stick=$('mineStick');
+let hudPadPointerId=null,hudPadDir=null,hudMinePointerId=null,hudMineHeld=false;
+const HUD_8_DIRECTIONS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function setStickDirection(dx,dy){
+ rangeHintTime=MINING_RANGE_HINT_TTL;
+ if(!stickDir||stickDir.dx!==dx||stickDir.dy!==dy){holdProgress=0;holdLast=null;}
+ stickDir={dx,dy};stickActive=true;
+}
+function stopMineStick(){
+ p16DrillMotion.spin=0;p16DrillMotion.dir=null;p16DrillMotion.working=false;p16DrillMotion.effective=1;
+ stickActive=false;stickDir=null;stickPointerId=null;holdProgress=0;holdLast=null;
+}
+function hudPadRopeDirection(d){
+ if(!d)return null;
+ if(d.dx===0&&d.dy===0)return null;
+ if(d.dy>0)return null; // Down and down-diagonals are for mining, not grappling.
+ return d.dx<0?(d.dy<0?'upleft':'left'):d.dx>0?(d.dy<0?'upright':'right'):'up';
+}
+function hudSyncRopeAim(){
+ if(!ropePointerAim||!hudPadDir)return;
+ const g=ropePointerAim,aim=hudPadRopeDirection(hudPadDir);
+ g.padUsed=true;g.padInvalid=!aim;
+ if(!aim){ropePreviewAnchor=null;ropeGestureFeedback();return;}
+ g.direction=aim;g.gesture=g.wasActive?'transfer':'aim';
+ ropeHold=false;ropeHoldTime=0;ropeHoldChainDelay=0;
+ ropePreviewAnchor=ropeGestureTarget(aim);ropeGestureFeedback();
+}
+function hudRefreshPadInput(){
+ const d=hudPadDir,aiming=!!ropePointerAim;
+ // Left pad solely owns movement/rope aim; the mining pad owns mining independently.
+ input.left=!!d&&!aiming&&d.dx<0;
+ input.right=!!d&&!aiming&&d.dx>0;
+  const canReel=!!rope.active;
+  input.reelIn=!!d&&!aiming&&canReel&&d.dy<0;
+  input.reelOut=!!d&&!aiming&&canReel&&d.dy>0;
+ if(aiming&&d)hudSyncRopeAim();
+}
+function hudSetPadDirection(dx,dy){
+ hudPadDir=dx||dy?{dx,dy}:null;
+ stick.classList.toggle('pad-on',!!hudPadDir);
+ stick.setAttribute('aria-pressed',hudPadDir?'true':'false');
+ const r=stick.clientWidth*.17;
+ stick.style.setProperty('--jx',`${dx*r}px`);stick.style.setProperty('--jy',`${dy*r}px`);
+ for(const el of stick.querySelectorAll('.dir'))el.classList.toggle('active',el.dataset.dir===`${dx},${dy}`);
+ hudRefreshPadInput();
+}
+function hudSetPadFromPoint(clientX,clientY){
+ const rect=stick.getBoundingClientRect(),dx=clientX-(rect.left+rect.width/2),dy=clientY-(rect.top+rect.height/2);
+ if(Math.hypot(dx,dy)<12){hudSetPadDirection(0,0);return;}
+ const i=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;
+ hudSetPadDirection(...HUD_8_DIRECTIONS[i]);
+}
+function hudReleasePad(){hudPadPointerId=null;hudSetPadDirection(0,0);}
+stick.addEventListener('pointerdown',e=>{
+ if(paused||hudPadPointerId!==null)return;
+ e.preventDefault();hudPadPointerId=e.pointerId;hudSetPadFromPoint(e.clientX,e.clientY);
+ try{stick.setPointerCapture(e.pointerId)}catch(_){}
+});
+stick.addEventListener('pointermove',e=>{
+ if(e.pointerId!==hudPadPointerId||paused)return;
+ e.preventDefault();hudSetPadFromPoint(e.clientX,e.clientY);
+});
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(ev,e=>{
+ if(e.pointerId===hudPadPointerId)hudReleasePad();
+});
+stick.addEventListener('keydown',e=>{
+ const dirs={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],q:[-1,-1],e:[1,-1],z:[-1,1],c:[1,1]};
+ const d=dirs[e.key];if(d){e.preventDefault();e.stopPropagation();if(!paused)hudSetPadDirection(...d);}
+});
+stick.addEventListener('keyup',e=>{
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','q','e','z','c'].includes(e.key)){
+  e.preventDefault();e.stopPropagation();hudSetPadDirection(0,0);
+ }
+});
+stick.addEventListener('blur',()=>{if(hudPadPointerId===null)hudSetPadDirection(0,0)});
+// 2.18-H3: one-thumb independent continuous 8-way mining.
+const hudMinePad=$('mineDirectPad');
+let mineStartX=0,mineStartY=0;
+function mineIsCompact(){return window.matchMedia('(orientation:portrait)').matches;}
+function mineUpdateDirection(dx,dy){
+ const magnitude=Math.hypot(dx,dy);
+ if(magnitude<11){if(!hudMineHeld||!stickActive)setStickDirection(p.facing||1,0);return;}
+ const i=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;
+ const [mx,my]=HUD_8_DIRECTIONS[i];
+ setStickDirection(mx,my);
+ const r=hudMinePad.clientWidth*.17;
+ hudMinePad.style.setProperty('--jx',`${mx*r}px`);hudMinePad.style.setProperty('--jy',`${my*r}px`);
+ for(const el of hudMinePad.querySelectorAll('.dir'))el.classList.toggle('active',el.dataset.dir===`${mx},${my}`);
+}
+function minePointerDirection(e,initial=false){
+ if(mineIsCompact()){
+  // Portrait compact mode is a relative drag: no need to hit tiny arrows.
+  if(initial){setStickDirection(p.facing||1,0);return;}
+  mineUpdateDirection(e.clientX-mineStartX,e.clientY-mineStartY);
+ }else{
+  const r=hudMinePad.getBoundingClientRect();
+  mineUpdateDirection(e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2);
+ }
+}
+function hudReleaseMine(id=null){
+ if(id!==null&&id!==hudMinePointerId)return;
+ hudMinePointerId=null;hudMineHeld=false;input.act=false;
+ hudMinePad.classList.remove('on');hudMinePad.setAttribute('aria-pressed','false');
+ hudMinePad.style.setProperty('--jx','0px');hudMinePad.style.setProperty('--jy','0px');
+ for(const el of hudMinePad.querySelectorAll('.dir'))el.classList.remove('active');
+ stopMineStick();hudRefreshPadInput();
+}
+hudMinePad.addEventListener('pointerdown',e=>{
+ if(paused||hudMinePointerId!==null||ropePointerAim)return;
+ e.preventDefault();hudMinePointerId=e.pointerId;hudMineHeld=true;input.act=true;
+ mineStartX=e.clientX;mineStartY=e.clientY;
+ hudMinePad.classList.add('on');hudMinePad.setAttribute('aria-pressed','true');
+ minePointerDirection(e,true);hudRefreshPadInput();
+ try{hudMinePad.setPointerCapture(e.pointerId)}catch(_){}
+});
+hudMinePad.addEventListener('pointermove',e=>{
+ if(paused||hudMinePointerId!==e.pointerId)return;
+ e.preventDefault();minePointerDirection(e);
+});
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])hudMinePad.addEventListener(ev,e=>hudReleaseMine(e.pointerId));
+hudMinePad.addEventListener('keydown',e=>{
+ const dirs={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],q:[-1,-1],e:[1,-1],z:[-1,1],c:[1,1]};
+ if(!dirs[e.key]||paused)return;
+ e.preventDefault();e.stopPropagation();hudMineHeld=true;input.act=true;
+ hudMinePad.classList.add('on');hudMinePad.setAttribute('aria-pressed','true');
+ setStickDirection(...dirs[e.key]);hudRefreshPadInput();
+});
+hudMinePad.addEventListener('keyup',e=>{
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','q','e','z','c'].includes(e.key)){
+  e.preventDefault();e.stopPropagation();hudReleaseMine();
+ }
+});
+hudMinePad.addEventListener('blur',()=>{if(hudMinePointerId===null&&hudMineHeld)hudReleaseMine();});
+$('jump').addEventListener('pointerdown',e=>{if(paused)return;e.preventDefault();requestJump();});
+$('jump').addEventListener('pointerup',()=>{input.jump=false;});
+$('jump').addEventListener('pointercancel',()=>{input.jump=false;});
+function ssReliableButton(id,action){
+ // v10.1: Native click must own the action. Opening a menu at pointerup
+ // retargeted the synthesized touch click onto its newly visible backdrop,
+ // immediately closing the menu before the player could see it.
+ // One click works for mouse, keyboard (Enter/Space), touchscreen and assistive tech.
+ const button=$(id);let lastActivated=-1e9;
+ button.addEventListener('click',e=>{
+  if(e.button!==0)return;
+  const now=performance.now();
+  if(now-lastActivated<160){e.preventDefault();e.stopPropagation();return;}
+  lastActivated=now;e.stopPropagation();action();
+ });
+}
+ssReliableButton('menuBtn',ssHubToggle);
+ssReliableButton('placeBadge',profileMenu);
+ssReliableButton('inventoryBtn',inventoryMenu);
+ssReliableButton('bagBtn',bagMenu);
+// P1.6-F auto toggle: not persisted. Manual climbing remains the default.
+const ropeAutoMoveButton=$('ropeAutoMove');
+function updateRopeAutoMoveHud(){
+ const show=!!rope.active&&rope.mode!=='swing'&&(rope.mode==='vertical'||rope.mode==='pull')&&!paused&&!ssM16TransitionLocked&&ssM15Scene==='mining'&&ssRegion==='mine';
+ if(ropeAutoMoveButton.hidden===show)ropeAutoMoveButton.hidden=!show;
+ const active=show&&ropeAutoMoveEnabled;
+ const pressed=active?'true':'false';
+ if(ropeAutoMoveButton.getAttribute('aria-pressed')!==pressed){
+  ropeAutoMoveButton.setAttribute('aria-pressed',pressed);
+  ropeAutoMoveButton.querySelector('.rope-auto-symbol').textContent=active?'Ⅱ':'▶';
+  ropeAutoMoveButton.querySelector('.rope-auto-label').textContent=active?'자동 중지':'자동 상승';
+  ropeAutoMoveButton.setAttribute('aria-label',active?'로프 자동 상승 중지':'로프 자동 상승 시작');
+ }
+}
+ropeAutoMoveButton.addEventListener('click',e=>{
+ e.stopPropagation();
+ if(paused||ssM16TransitionLocked||ssM15Scene!=='mining'||ssRegion!=='mine'||!rope.active||(rope.mode!=='vertical'&&rope.mode!=='pull'))return;
+ ropeAutoMoveEnabled=!ropeAutoMoveEnabled;
+ if(ropeAutoMoveEnabled&&rope.mode==='vertical')rope.nextSearchSpent=false;
+ ropeStatusNotice=.6;
+ updateRopeAutoMoveHud();
+});
+const ropeButton=$('ropeBtn');
+ropeButton.addEventListener('pointerdown',e=>{
+ if(paused||ropeButton.disabled||ropePointerAim)return; // second fingers cannot steal rope capture
+ e.preventDefault();lastRopePointerAt=performance.now();
+ ropeHoldFromActive=rope.active;ropeHold=false;ropeHoldTime=0;ropeHoldUsed=false;ropeHoldChainDelay=0;
+ ropePointerAim={id:e.pointerId,x:e.clientX,y:e.clientY,lastY:e.clientY,direction:'up',wasActive:rope.active,gesture:'tap'};
