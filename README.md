@@ -6,8 +6,9 @@
 
 ## 저장소 현황
 
-이 공개 저장소에는 타이틀 브리지, 복구한 QA 빌드, 개발·릴리스 기록이 있습니다. `main`은 2026년 11월 19일에 정리한 복구 스냅샷입니다. 운영 게임은 Cloudflare Workers에서 서비스하며, 최신 운영 빌드와 GitHub 소스의 동기화는 진행 전입니다.
+이 공개 저장소에는 타이틀 브리지, 복구한 QA 빌드, 개발·릴리스 기록이 있습니다. 2026년 11월 23일 확인한 운영 게임은 Cloudflare Worker v38에서 서비스합니다. 운영 모듈의 SHA-256을 확인했으며, GitHub로의 게임 소스 이관은 진행 중입니다.
 
+- [Worker v38 운영 배포 기록](docs/DEPLOYMENT_V38.md)
 - [복구 당시 상태와 근거](docs/STATUS.md)
 - [개발·릴리스 절차](docs/OPERATIONS.md)
 - [운영 소스 이관 체크리스트](docs/SOURCE_IMPORT.md)
