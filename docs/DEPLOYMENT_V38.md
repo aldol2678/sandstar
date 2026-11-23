@@ -25,6 +25,8 @@ Cloudflare에서 읽은 Worker 모듈 바이트의 SHA-256과 크기가 릴리�
 Python 3과 Node.js가 필요합니다. 저장소 루트에서 [패치·빌드 스크립트](../tools/phase0-v38)를 임시 디렉터리로 복사해 실행합니다.
 
 ```sh
+(
+set -eu
 build_dir="$(mktemp -d)"
 cp tools/phase0-v38/*.py tools/phase0-v38/extract-html.mjs "$build_dir/"
 cp /path/to/SANDSTAR_v37_main-inner.mjs "$build_dir/v37-baseline-main-inner.mjs"
@@ -44,6 +46,7 @@ sha256sum -c <<'SHA256'
 f2cb9415016dad6d0df5084aa42c2ec66b0c12a8e19b7c41608c535ca641bd51  phase0-index.html
 78b4503ad11f8944710bef061d861e95befc72b5debfc719e205c6c02c60ed07  phase0-main-inner.mjs
 SHA256
+)
 ```
 
 ## 검증 결과
