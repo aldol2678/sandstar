@@ -32,7 +32,8 @@ DST = BUILD / "fcb-index.html"
 html = SRC.read_text(encoding="utf-8")
 base_sha = hashlib.sha256(html.encode()).hexdigest()
 BASES = {"f2cb9415016dad6d0df5084aa42c2ec66b0c12a8e19b7c41608c535ca641bd51": "v38",
-         "0011760fcf95be632b308b15a0840b787023d1a7a80ca5629868155003a0933b": "v39"}
+         "0011760fcf95be632b308b15a0840b787023d1a7a80ca5629868155003a0933b": "v39",
+         "20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b": "v41"}
 assert base_sha in BASES, base_sha
 print("base:", BASES[base_sha], base_sha, "qa hooks:", QA)
 

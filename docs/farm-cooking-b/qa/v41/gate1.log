@@ -1,0 +1,16 @@
+# Gate 1 (v41) — 기준선 대조, 2026-11-23T06:13:48Z
+# 출처: Drive 폴더 16eLssdTjK3LBX3N0u8PiieDMj8qbqNpJ, 00_README-V41-CHUNKS.md
+part00: OK
+part01: OK
+part02: OK
+part03: OK
+part04: OK
+part05: OK
+part06: OK
+part07: OK
+part08: OK
+part09: OK
+main.mjs 25062108B
+main.mjs: OK
+node --check OK
+exit 0

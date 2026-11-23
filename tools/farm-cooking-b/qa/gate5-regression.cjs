@@ -2,7 +2,8 @@
 // farm+cooking B build as on the untouched v38 baseline, with zero console/page errors and failed requests.
 // Every scenario runs on both builds with the same world seed; values are compared field by field.
 // Usage: node gate5-regression.cjs <baseline-url> <fcb-url> <outdir> [<v38-url-for-old-save-fixture>]
-// baseline = the production base the fcb build sits on (v38, or v39 = v38 + PR #12); fcb = default (non-QA) build.
+// baseline = the production base the fcb build sits on (v41 / v39 / v38); fcb = default (non-QA) build.
+// On v40+ bases the lumber_01 scenario and the baseline-save carry-over check also run.
 const fs = require('fs');
 const path = require('path');
 const { openGame, newWorld, continueWorld, log } = require('./lib.cjs');
@@ -129,6 +130,39 @@ const SCENARIOS = {
     r.lifeButton = await page.evaluate(() => { const b = document.getElementById('m1ActionBtn'); return { visible: !!b && !b.hidden && b.offsetParent !== null, text: (b?.textContent || '').trim() }; });
     return r;
   },
+  // v40/v41 잔빛 벌목장 (lumber_01): enter from the forest gate, grove A vitality 3→0 (P16 fix),
+  // depletion penalty, 4th chop blocked, state kept across a save + reload, exit back to the forest.
+  async lumber(page) {
+    const r = {};
+    if (!(await page.evaluate(() => !!window.__sandstarLumberWorld))) { r.absent = true; return r; }
+    await townGate(page, 15, 11);
+    await page.click('#town25dAction');
+    await travelDone(page, 'life_forest_01');
+    await wait(500);
+    await page.evaluate(() => { const x = window.__sandstarLumberWorld.portalX; const y = window.__sandstarTownM22.surface(Math.floor(x)); window.__sandstarHUDM15.setTestPosition(x, y - 1); });
+    await wait(300);
+    if ((await page.evaluate(() => window.__sandstarHUDM15.get().scene)) === 'mining') await page.evaluate(() => window.__sandstarHUDM15.toggleTool());
+    await wait(300);
+    r.gateButton = await page.evaluate(() => { const b = document.getElementById('lumberForestGateAction'); return !!b && !b.hidden; });
+    r.tryEnter = await page.evaluate(() => window.__sandstarLumberWorld.tryEnter());
+    await travelDone(page, 'lumber_01').catch(() => {});
+    await wait(500);
+    r.entered = await page.evaluate(() => window.__sandstarLumberWorld.state().active);
+    const fcbEnergy = () => page.evaluate(() => window.__sandstarFarmCooking?.state?.()?.energy ?? null);
+    r.fcbOnly = { energyBefore: await fcbEnergy() };
+    const read = () => page.evaluate(() => { const s = window.__sandstarLumberWorld.state(), g = s.v1.groves.grove_a; return { vitality: g.vitality, penalty: (g.depletedUntil || 0) > Date.now(), wood: s.wood, softPine: s.v1.woods.soft_pine, pineSapling: s.v1.saplings.pine_sapling, cutCounter: s.v1.cutCounter, lastCut: s.v1.lastCutGroveId }; });
+    r.chops = [await read()];
+    for (let i = 0; i < 4; i++) { const ret = await page.evaluate(() => window.__sandstarLumberWorld.action('chop', 'grove_a')); await wait(150); r.chops.push({ ret, ...(await read()) }); }
+    r.fcbOnly.energyAfter = await fcbEnergy();
+    await page.evaluate(() => window.__sandstarDebug.save());
+    await wait(200);
+    r.saved = await page.evaluate(k => { const g = JSON.parse(localStorage.getItem(k) || '{}'), a = g.lumberWorldV1?.groves?.grove_a; return a ? { vitality: a.vitality, penalty: (a.depletedUntil || 0) > Date.now(), softPine: g.lumberWorldV1.woods.soft_pine } : null; }, SAVE_KEY);
+    r.exit = await page.evaluate(() => window.__sandstarLumberWorld.exit(true));
+    await travelDone(page, 'life_forest_01').catch(() => {});
+    await wait(500);
+    r.back = await page.evaluate(() => ({ lumberActive: window.__sandstarLumberWorld.state().active, region: window.__sandstarM1.state().region }));
+    return r;
+  },
 };
 
 (async () => {
@@ -152,8 +186,8 @@ const SCENARIOS = {
   const pairs = [...new Set(Object.keys(results).map(k => k.replace(/-(base|fcb)$/, '')))];
   for (const key of pairs) {
     const a = results[`${key}-base`], b = results[`${key}-fcb`];
-    const strip = o => { const c = { ...o }; delete c.problems; delete c.qaHooks; return c; };
-    check(`${key}: fcb == base (all fields except qaHooks)`, JSON.stringify(strip(a)) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
+    const strip = o => { const c = { ...o }; delete c.problems; delete c.qaHooks; delete c.fcbOnly; return c; };
+    check(`${key}: fcb == base (all fields except qaHooks/fcbOnly)`, JSON.stringify(strip(a)) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
     check(`${key}: fcb no page/console errors, no failed requests`, b.problems.length === 0, b.problems.slice(0, 3).join(' | '));
     check(`${key}: baseline also clean (reference)`, a.problems.length === 0, a.problems.slice(0, 3).join(' | '));
   }
@@ -179,6 +213,15 @@ const SCENARIOS = {
   check('forest: arrival toast matches baseline', results['pc-forest-fcb'].arrivalToast === results['pc-forest-base'].arrivalToast, results['pc-forest-fcb'].arrivalToast);
   const fo = results['pc-forest-fcb'];
   check('P0-3: life button stays visible in mining mode next to a tree', fo.region === 'life_forest_01' && fo.lifeButton.visible && /생활 조작/.test(fo.lifeButton.text), JSON.stringify(fo.lifeButton));
+  const lu = results['pc-lumber-fcb'];
+  if (lu && !lu.absent) {
+    check('lumber: forest gate button shows and entry reaches lumber_01', lu.gateButton && lu.tryEnter && lu.entered, JSON.stringify({ gate: lu.gateButton, tryEnter: lu.tryEnter, entered: lu.entered }));
+    check('lumber: grove A vitality 3→2→1→0, penalty on the 3rd chop, 4th chop blocked (v41 P16)', JSON.stringify(lu.chops.map(c => c.vitality)) === '[3,2,1,0,0]' && lu.chops[3].penalty && lu.chops[4].ret === false, JSON.stringify(lu.chops));
+    check('lumber: cutCounter/lastCut/sapling kept (no orphan state)', lu.chops[4].lastCut === 'grove_a' && lu.chops[4].pineSapling >= 1 && lu.chops[4].softPine >= 2, JSON.stringify(lu.chops[4]));
+    check('lumber: depleted grove + woods persisted in the save', lu.saved && lu.saved.vitality === 0 && lu.saved.penalty && lu.saved.softPine === lu.chops[4].softPine, JSON.stringify(lu.saved));
+    check('lumber: exit returns to life_forest_01', lu.exit !== false && !lu.back.lumberActive && lu.back.region === 'life_forest_01', JSON.stringify(lu.back));
+    check('lumber: chopping does not touch farm 기력 (separate from grove 활력)', lu.fcbOnly.energyBefore !== null && lu.fcbOnly.energyBefore === lu.fcbOnly.energyAfter, JSON.stringify(lu.fcbOnly));
+  }
   // ---- old save restore: a save made on the archived v38 build loads on baseline and fcb alike
   if (oldSaveUrl) {
     log(lines, `== old save fixture from ${oldSaveUrl}`);
@@ -226,6 +269,33 @@ const SCENARIOS = {
     check('old save: missing energy defaults to 100', loaded.fcb.energy === 100, String(loaded.fcb.energy));
     check('old save: no errors on baseline or fcb', loaded.base.problems.length === 0 && loaded.fcb.problems.length === 0, [...loaded.base.problems, ...loaded.fcb.problems].slice(0, 3).join(' | '));
     results.oldSave = { fixture: { mined: fixture.mined, coins: fixture.coins, plots: fixture.livingP0.plots }, loaded };
+  }
+  // ---- current-production save: a save made on the baseline after logging loads on fcb unchanged
+  if (results['pc-lumber-base'] && !results['pc-lumber-base'].absent) {
+    log(lines, `== baseline save (lumber) from ${baseUrl}`);
+    const s = await openGame({ url: baseUrl });
+    await newWorld(s.page, '777002');
+    await SCENARIOS.lumber.call({ tag: 'save-fixture' }, s.page, false);
+    await s.page.evaluate(() => window.__sandstarDebug.save());
+    await wait(200);
+    const snap = page => page.evaluate(k => { const g = JSON.parse(localStorage.getItem(k) || '{}'); return { lumber: g.lumberWorldV1 ? { groves: Object.fromEntries(Object.entries(g.lumberWorldV1.groves).map(([id, v]) => [id, v.vitality])), woods: g.lumberWorldV1.woods, saplings: g.lumberWorldV1.saplings, quests: g.lumberWorldV1.quests } : null, wood: g.inv?.wood, coins: g.coins, mined: g.mined, bag: g.livingP0?.bag }; }, SAVE_KEY);
+    const before = await snap(s.page);
+    const state = await s.context.storageState();
+    await s.browser.close();
+    for (const o of state.origins) o.origin = new URL(fcbUrl).origin;
+    const t2 = await openGame({ url: fcbUrl, storageState: state });
+    await continueWorld(t2.page);
+    await wait(800);
+    const live = await t2.page.evaluate(() => { const v = window.__sandstarLumberWorld.state().v1; return { groves: Object.fromEntries(Object.entries(v.groves).map(([id, g]) => [id, g.vitality])), woods: v.woods, saplings: v.saplings, energy: window.__sandstarFarmCooking.state().energy }; });
+    await t2.page.evaluate(() => window.__sandstarDebug.save());
+    await wait(200);
+    const after = await snap(t2.page);
+    const problems = t2.problems;
+    await t2.browser.close();
+    const strip = o => JSON.stringify({ ...o, bag: undefined });
+    check('baseline save: lumber grove/woods/saplings/quests, wood, coins carry over to fcb unchanged after re-save', before.lumber && strip(before) === strip(after) && JSON.stringify(live.groves) === JSON.stringify(before.lumber.groves), `${strip(before).slice(0, 200)} → ${strip(after).slice(0, 200)}`);
+    check('baseline save: living bag kept, energy defaults to 100, no errors', JSON.stringify(before.bag) === JSON.stringify(Object.fromEntries(Object.keys(before.bag).map(k => [k, after.bag[k]]))) && live.energy === 100 && problems.length === 0, JSON.stringify({ energy: live.energy, problems: problems.slice(0, 3) }));
+    results.baselineSave = { before, after, live };
   }
   fs.writeFileSync(path.join(out, 'gate5-results.json'), JSON.stringify(results, null, 1));
   log(lines, `== Gate 5 total: ${pass} pass, ${fail} fail`);

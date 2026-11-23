@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build the farm+cooking B Worker module.
 #
-# Usage: tools/farm-cooking-b/build.sh [--base v39|v38] [--qa] [build-dir]
-#   --base v39 (default)  production baseline: v38 + tools/onboarding/patch-v38.py (PR #12),
-#                         Cloudflare sandstar v39, module SHA-256 c28b2b61...
+# Usage: tools/farm-cooking-b/build.sh [--base v41|v39|v38] [--qa] [build-dir]
+#   --base v41 (default)  production baseline: release/v41/main.mjs (Cloudflare sandstar v41,
+#                         8b55cd67-1c76-4d75-ab1e-40ee437727d3), module SHA-256 7da5888c...
+#   --base v39            v38 + tools/onboarding/patch-v38.py (PR #12), module SHA-256 c28b2b61...
 #   --base v38            the archived v38 module (release/v38/main.mjs)
 #   --qa                  local QA build: adds the world-time skip / scene mode hooks the
 #                         Playwright gates use. Never deploy a --qa build.
@@ -11,7 +12,7 @@
 # Local build only: no upload, no deploy.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-base=v39 qa=""
+base=v41 qa=""
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -27,6 +28,10 @@ sha256sum -c <<SHA256
 78b4503ad11f8944710bef061d861e95befc72b5debfc719e205c6c02c60ed07  $root/release/v38/main.mjs
 SHA256
 case "$base" in
+  v41) sha256sum -c <<SHA256
+7da5888cd96d8b99b624e06d59a5492b29b3b67b442bc421f5e72ebc6a4ba5c3  $root/release/v41/main.mjs
+SHA256
+       cp "$root/release/v41/main.mjs" "$out/base-main.mjs";;
   v38) cp "$root/release/v38/main.mjs" "$out/base-main.mjs";;
   v39) python3 "$root/tools/onboarding/patch-v38.py" "$root/release/v38/main.mjs" "$out/base-main.mjs"
        sha256sum -c <<SHA256

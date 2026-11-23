@@ -1,0 +1,69 @@
+-- pc-town-base: {"qaHooks":null,"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"21 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"problems":[]}
+-- pc-town-fcb: {"qaHooks":{"qaHooks":false,"advance":"undefined","setSceneMode":"undefined"},"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"21 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"problems":[]}
+-- pc-ruins-base: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- pc-ruins-fcb: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- pc-mine-base: {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.","protectedCells":[31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,54,55,56],"firstDig":{"before":{"mined":0,"tile":"dirt"},"after":{"mined":1,"tile":null}},"problems":[]}
+-- pc-mine-fcb: {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.","protectedCells":[31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,54,55,56],"firstDig":{"before":{"mined":0,"tile":"dirt"},"after":{"mined":1,"tile":null}},"problems":[]}
+-- pc-forest-base: {"gate":"🪓 벌목장으로 이동","arrivalToast":"새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"},"problems":[]}
+-- pc-forest-fcb: {"gate":"🪓 벌목장으로 이동","arrivalToast":"새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"},"problems":[]}
+-- pc-lumber-base: {"gateButton":true,"tryEnter":true,"entered":true,"fcbOnly":{"energyBefore":null,"energyAfter":null},"chops":[{"vitality":3,"penalty":false,"wood":0,"softPine":0,"pineSapling":0,"cutCounter":0,"lastCut":""},{"ret":true,"vitality":2,"penalty":false,"wood":2,"softPine":1,"pineSapling":0,"cutCounter":1,"lastCut":"grove_a"},{"ret":true,"vitality":1,"penalty":false,"wood":4,"softPine":2,"pineSapling":1,"cutCounter":0,"lastCut":"grove_a"},{"ret":true,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"},{"ret":false,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"}],"saved":{"vitality":0,"penalty":true,"softPine":2},"exit":true,"back":{"lumberActive":false,"region":"life_forest_01"},"problems":[]}
+-- pc-lumber-fcb: {"gateButton":true,"tryEnter":true,"entered":true,"fcbOnly":{"energyBefore":100,"energyAfter":100},"chops":[{"vitality":3,"penalty":false,"wood":0,"softPine":0,"pineSapling":0,"cutCounter":0,"lastCut":""},{"ret":true,"vitality":2,"penalty":false,"wood":2,"softPine":1,"pineSapling":0,"cutCounter":1,"lastCut":"grove_a"},{"ret":true,"vitality":1,"penalty":false,"wood":4,"softPine":2,"pineSapling":1,"cutCounter":0,"lastCut":"grove_a"},{"ret":true,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"},{"ret":false,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"}],"saved":{"vitality":0,"penalty":true,"softPine":2},"exit":true,"back":{"lumberActive":false,"region":"life_forest_01"},"problems":[]}
+-- m390-town-base: {"qaHooks":null,"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"19 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"overflow":0,"problems":[]}
+-- m390-town-fcb: {"qaHooks":{"qaHooks":false,"advance":"undefined","setSceneMode":"undefined"},"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"19 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"overflow":0,"problems":[]}
+-- m390-ruins-base: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- m390-ruins-fcb: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS pc-town: fcb == base (all fields except qaHooks/fcbOnly) — {"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":["갱이@91,336","광부 오두막@84,230","광산 입구@56,366","나@
+PASS pc-town: fcb no page/console errors, no failed requests
+PASS pc-town: baseline also clean (reference)
+PASS pc-ruins: fcb == base (all fields except qaHooks/fcbOnly) — {"entered":true,"renderer":"three","returned":true}
+PASS pc-ruins: fcb no page/console errors, no failed requests
+PASS pc-ruins: baseline also clean (reference)
+PASS pc-mine: fcb == base (all fields except qaHooks/fcbOnly) — {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.","protectedCells":[31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,54,55,56],"firstDig":{"before":{"mined":0,"tile":"dirt"},"after":{"mined":1,"tile":null}}}
+PASS pc-mine: fcb no page/console errors, no failed requests
+PASS pc-mine: baseline also clean (reference)
+PASS pc-forest: fcb == base (all fields except qaHooks/fcbOnly) — {"gate":"🪓 벌목장으로 이동","arrivalToast":"새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"}}
+PASS pc-forest: fcb no page/console errors, no failed requests
+PASS pc-forest: baseline also clean (reference)
+PASS pc-lumber: fcb == base (all fields except qaHooks/fcbOnly) — {"gateButton":true,"tryEnter":true,"entered":true,"chops":[{"vitality":3,"penalty":false,"wood":0,"softPine":0,"pineSapling":0,"cutCounter":0,"lastCut":""},{"ret":true,"vitality":2,"penalty":false,"wood":2,"softPine":1,"pineSapling":0,"cutCounter":1,"lastCut":"grove_a"},{"ret":true,"vitality":1,"pen
+PASS pc-lumber: fcb no page/console errors, no failed requests
+PASS pc-lumber: baseline also clean (reference)
+PASS m390-town: fcb == base (all fields except qaHooks/fcbOnly) — {"quest":{"visible":true,"text":"광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":["갱이@58,211","광부 오두막@53,147","광산 입구@36,234",
+PASS m390-town: fcb no page/console errors, no failed requests
+PASS m390-town: baseline also clean (reference)
+PASS m390-ruins: fcb == base (all fields except qaHooks/fcbOnly) — {"entered":true,"renderer":"three","returned":true}
+PASS m390-ruins: fcb no page/console errors, no failed requests
+PASS m390-ruins: baseline also clean (reference)
+PASS P0-1 pc: town objective strip visible with quest text — 광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요.
+PASS P0-1 m390: town objective strip visible
+PASS P0-2: logging gate named 벌목장 입구 → 잔빛숲 — 🪓 벌목장으로 이동 / 벌목장 입구 → 잔빛숲
+PASS P0-5 pc: PC help text — WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동
+PASS P0-5 m390: no PC keys in town help on touch — 조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동
+PASS P0-5: fullmap opens and draws gate + player labels (pc, m390) — 21/19 labels
+PASS P0-5: kitchen counter adds no fullmap label
+PASS P0-6: rescue uses the in-game modal, no native dialog
+PASS m390: town has no horizontal overflow — 0
+PASS Phase 1 pc: walk into ruins and back out — {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS Phase 1 m390: walk into ruins and back out — {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS P0-4: mine apron shows the protected-floor guidance — 승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.
+PASS mine: protected cells identical to baseline — 18 cells: 31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,54,55,56
+PASS mine: first dig at X46 works — {"before":{"mined":0,"tile":"dirt"},"after":{"mined":1,"tile":null}}
+PASS fcb default build exposes no QA hooks — {"qaHooks":false,"advance":"undefined","setSceneMode":"undefined"}
+PASS forest: arrival toast matches baseline — 새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.
+PASS P0-3: life button stays visible in mining mode next to a tree — {"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"}
+PASS lumber: forest gate button shows and entry reaches lumber_01 — {"gate":true,"tryEnter":true,"entered":true}
+PASS lumber: grove A vitality 3→2→1→0, penalty on the 3rd chop, 4th chop blocked (v41 P16) — [{"vitality":3,"penalty":false,"wood":0,"softPine":0,"pineSapling":0,"cutCounter":0,"lastCut":""},{"ret":true,"vitality":2,"penalty":false,"wood":2,"softPine":1,"pineSapling":0,"cutCounter":1,"lastCut":"grove_a"},{"ret":true,"vitality":1,"penalty":false,"wood":4,"softPine":2,"pineSapling":1,"cutCounter":0,"lastCut":"grove_a"},{"ret":true,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"},{"ret":false,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"}]
+PASS lumber: cutCounter/lastCut/sapling kept (no orphan state) — {"ret":false,"vitality":0,"penalty":true,"wood":5,"softPine":2,"pineSapling":1,"cutCounter":1,"lastCut":"grove_a"}
+PASS lumber: depleted grove + woods persisted in the save — {"vitality":0,"penalty":true,"softPine":2}
+PASS lumber: exit returns to life_forest_01 — {"lumberActive":false,"region":"life_forest_01"}
+PASS lumber: chopping does not touch farm 기력 (separate from grove 활력) — {"energyBefore":100,"energyAfter":100}
+== old save fixture from http://127.0.0.1:8738/
+fixture {"mined":1,"coins":77,"plots":{"plot:34":{"plantedAt":190,"watered":true,"crop":"wheat"},"plot:37":{"plantedAt":0,"watered":true,"crop":"carrot"},"plot:40":{"plantedAt":null,"watered":false,"crop":null}},"region":"mine"}
+PASS old save: fixture carries a v38 mining edit — 1
+PASS old save: v38 save loads on baseline and fcb with the same world, coins, mining edits and bag — {"mined":1,"coins":77,"seed":777001,"region":"mine","bag":{"seed":6,"crop":0,"seed_wheat":2,"seed_potato":3,"seed_carrot":2,"sapling":0,"wheat":0,"potato":0,"carrot":4,"river_fish":0,"perch":0,"carp":0,"bread":0,"soup":0,"stew":0}}
+PASS old save: growing v38 plots migrate to the stage model — {"p34":{"plantedAt":190,"watered":true,"crop":"wheat","stage":1,"wateredAt":200},"p37":{"plantedAt":0,"watered":false,"crop":"carrot","stage":3,"wateredAt":null}}
+PASS old save: missing energy defaults to 100 — 100
+PASS old save: no errors on baseline or fcb
+== baseline save (lumber) from http://127.0.0.1:8750/
+PASS baseline save: lumber grove/woods/saplings/quests, wood, coins carry over to fcb unchanged after re-save — {"lumber":{"groves":{"grove_a":0,"grove_b":3,"grove_c":3},"woods":{"soft_pine":2,"stream_willow":0,"mine_oak":0,"village_ash":0},"saplings":{"pine_sapling":1,"willow_sapling":0,"oak_sapling":0},"quest → {"lumber":{"groves":{"grove_a":0,"grove_b":3,"grove_c":3},"woods":{"soft_pine":2,"stream_willow":0,"mine_oak":0,"village_ash":0},"saplings":{"pine_sapling":1,"willow_sapling":0,"oak_sapling":0},"quest
+PASS baseline save: living bag kept, energy defaults to 100, no errors — {"energy":100,"problems":[]}
+== Gate 5 total: 51 pass, 0 fail

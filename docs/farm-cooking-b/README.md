@@ -3,6 +3,30 @@
 기준선: Worker v38 모듈 `release/v38/main.mjs` (24,939,305B, SHA-256 `78b4503a…c60ed07`).
 브랜치: `feat/farm-cooking-b-20261123`. 모아가 Gate 1~3을 Drive 번들로 독립 검증한 뒤, 알돌 결정(모아 전달, 2026-11-23 13:03)으로 공개 레포에 푸시하고 Draft PR을 열었다. 병합·Ready 전환·배포는 알돌 승인 전까지 하지 않는다.
 
+## v41 합본 (2026-11-23 15시대, 모아 인계 — PR #13 v39 후보는 보류)
+
+운영이 Worker v41(Cloudflare `8b55cd67-1c76-4d75-ab1e-40ee437727d3`, 14:44 KST 배포)로 바뀌어 농장·요리를 v41 위에 다시 얹었다. v41 = v40(v39 + 잔빛 벌목장 `lumber_01`, P1~P15) + P16(`lumberWorldInitState()` 상태 유지 수정). 공개된 v40/v41 패치 스크립트가 없어 모듈 파일 자체를 기준선으로 쓴다: `release/v41/main.mjs` (25,062,108B, SHA-256 `7da5888c…a4ba5c3`, HTML SHA `20034576…`). Drive 청크 10개를 받아 재조립했다(`qa/v41/gate1.log`).
+
+| 산출물 | 명령 | fcb-main.mjs SHA-256 |
+| --- | --- | --- |
+| 운영 후보 (QA 훅 없음) | `build.sh` (기본 `--base v41`) | `3b36af90b2bb9525b574f4d2c49132d4f943139db1592fd27c31ed1e37d683ff` (26,507,300B, v41 대비 +1,445,192B) |
+| 로컬 QA 빌드 | `build.sh --qa` | `70541b827b3ddbaf51b3e841d097065faf9fd120a03bd6b6111d68639852531a` |
+
+- 패치 기준 문자열 46개가 v41에서도 모두 한 번씩 일치했다. 패치 코드 변경은 허용 기준선에 v41 HTML SHA를 추가한 것뿐이다.
+- 벌목장의 '활력'은 나무 군락의 값(군락별 3→0, 고갈되면 180초 페널티)이고, 플레이어 '기력'(`livingP0.energy`)과는 다른 값이다. 벌목은 기력을 쓰지 않는다(Gate 5에서 확인).
+- v41 검증 로그는 `qa/v41/`에 있다.
+  - Gate 1: 청크 10개 + 합본 SHA 일치, `node --check` 통과.
+  - QA 빌드: Gate 2 92/92, Gate 3 60/60, Gate 4 34/34.
+  - Gate 5 51/51 (v41 원본 대비 기본 빌드):
+    - Phase 0 회귀, 유적 진입·복귀, 채굴 보호 18칸이 원본과 같음, X46 첫 채굴, 숲 첫 진입 점프 안내.
+    - 신규: 벌목장 진입·군락 A 활력 3→2→1→0·고갈 페널티·4번째 차단·묘목·저장 유지·숲 복귀가 원본과 필드별로 같음.
+    - 신규: v41에서 만든 세이브(벌목 진행 포함)가 이 빌드에서 그대로 열리고 다시 저장해도 같음.
+    - QA 훅 미노출, v38 세이브 복구, 에러 0.
+- v41 미해결:
+  1. 배포 시작 CPU: v41은 첫 배포 때 Cloudflare `Script startup exceeded CPU time limit [10021]`에 걸렸고, 재시도로 통과했다(541ms). 이 빌드는 GLB base64 때문에 약 1.4MB 더 크다. 시작 시간은 측정하지 않았다. 배포를 승인한다면 먼저 확인이 필요하다. 대안은 GLB를 모듈 밖(정적 자산)으로 옮기는 것이다.
+  2. v41 원본의 벌목 코드는 `livingP0.bag.wood`·`livingP0.stats.cut`에 쓰려고 하지만, 전역 `livingP0` 변수가 없어(정본은 `game.livingP0`) 그 쓰기는 실행되지 않는다. 목재는 `game.inv.wood`로만 들어간다. 이번 변경과 무관하고 손대지 않았다(모아 쪽 판단 필요).
+  3. 실기기 터치 확인과 Cloudflare 프리뷰 배포는 하지 않았다(로컬 Playwright만).
+
 ## v39 합본 (2026-11-23 오후, 알돌 결정 — 모아 전달)
 
 운영이 Worker v39(PR #12, v38 + `tools/onboarding/patch-v38.py`, 모듈 SHA `c28b2b61…`, Cloudflare `066dc5dc-cb98-400c-ae57-ef49e6410e8c`)로 바뀌어, 농장·요리를 v39 위에 다시 얹었다. PR #12 브랜치(`fix/first-mining-route` @ `51215b5`)를 이 브랜치에 병합했다.
@@ -22,12 +46,13 @@
 ## 빌드
 
 ```sh
-tools/farm-cooking-b/build.sh --base v39          # 운영 후보: dist/farm-cooking-b-v39/ (gitignored)
-tools/farm-cooking-b/build.sh --base v39 --qa     # 게이트용 QA 빌드: dist/farm-cooking-b-v39-qa/
-node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v39-qa/fcb-main.mjs 8743   # 로컬 프리뷰
+tools/farm-cooking-b/build.sh                     # 운영 후보 (기본 --base v41): dist/farm-cooking-b-v41/ (gitignored)
+tools/farm-cooking-b/build.sh --qa                # 게이트용 QA 빌드: dist/farm-cooking-b-v41-qa/
+tools/farm-cooking-b/build.sh --base v39          # 보류된 v39 후보 (PR #13 기존 결과 재현용)
+node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v41-qa/fcb-main.mjs 8743   # 로컬 프리뷰
 ```
 
-`build.sh`는 v38 SHA를 확인하고, `--base v39`이면 PR #12 스크립트로 v39 모듈을 만든 뒤 SHA `c28b2b61…`를 확인한다. 이어서 HTML을 추출하고(`tools/phase0-v38/extract-html.mjs`), `patch-farm-cooking.py`로 패치합니다. 패치는 정확히 1회 일치하는 문자열만 치환하고, 하나라도 어긋나면 쓰기 전에 중단합니다. 그다음 `rebuild-worker.py`로 HTML 상수만 바꿔 워커를 재조립하고, 모듈과 인라인 스크립트 문법을 검사합니다. 배포·업로드는 하지 않습니다.
+`build.sh`는 v38 SHA를 확인하고, `--base v41`(기본)이면 `release/v41/main.mjs`의 SHA `7da5888c…`를 확인해 그대로 기준선으로 쓴다. `--base v39`이면 PR #12 스크립트로 v39 모듈을 만든 뒤 SHA `c28b2b61…`를 확인한다. 이어서 HTML을 추출하고(`tools/phase0-v38/extract-html.mjs`), `patch-farm-cooking.py`로 패치합니다. 패치는 정확히 1회 일치하는 문자열만 치환하고, 하나라도 어긋나면 쓰기 전에 중단합니다. 그다음 `rebuild-worker.py`로 HTML 상수만 바꿔 워커를 재조립하고, 모듈과 인라인 스크립트 문법을 검사합니다. 배포·업로드는 하지 않습니다.
 
 ## 게이트 현황
 
