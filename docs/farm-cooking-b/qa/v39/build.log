@@ -1,0 +1,8 @@
+base: v39 · qa hooks: off
+c28b2b61768bf63a5e89360e3d207a83c7b9672c8b46ac4c796113aefd9bbc49  /home/user/sandstar/dist/farm-cooking-b-v39/base-main.mjs
+c0ab302bd2a13f8ba3438731af3d63184b23ee816916fd8379487aabdab8d858  /home/user/sandstar/dist/farm-cooking-b-v39/fcb-index.html
+b8d86f70c9c164fc5e780940b94aefc573c2922f0717c8a56fa0cc2f76cc500c  /home/user/sandstar/dist/farm-cooking-b-v39/fcb-main.mjs
+base: v39 · qa hooks: --qa
+c28b2b61768bf63a5e89360e3d207a83c7b9672c8b46ac4c796113aefd9bbc49  /home/user/sandstar/dist/farm-cooking-b-v39-qa/base-main.mjs
+8defcb150bd51d0fbebbabc59bc0ccb63c5d331f0a3f42476b8c05286c3a87f2  /home/user/sandstar/dist/farm-cooking-b-v39-qa/fcb-index.html
+39e987ff04758d081b8b3e1e08fd74ce066d3d17128e63ec7e2fdae67bbcc621  /home/user/sandstar/dist/farm-cooking-b-v39-qa/fcb-main.mjs

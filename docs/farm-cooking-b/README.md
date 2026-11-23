@@ -3,14 +3,31 @@
 기준선: Worker v38 모듈 `release/v38/main.mjs` (24,939,305B, SHA-256 `78b4503a…c60ed07`).
 브랜치: `feat/farm-cooking-b-20261123`. 모아가 Gate 1~3을 Drive 번들로 독립 검증한 뒤, 알돌 결정(모아 전달, 2026-11-23 13:03)으로 공개 레포에 푸시하고 Draft PR을 열었다. 병합·Ready 전환·배포는 알돌 승인 전까지 하지 않는다.
 
+## v39 합본 (2026-11-23 오후, 알돌 결정 — 모아 전달)
+
+운영이 Worker v39(PR #12, v38 + `tools/onboarding/patch-v38.py`, 모듈 SHA `c28b2b61…`, Cloudflare `066dc5dc-cb98-400c-ae57-ef49e6410e8c`)로 바뀌어, 농장·요리를 v39 위에 다시 얹었다. PR #12 브랜치(`fix/first-mining-route` @ `51215b5`)를 이 브랜치에 병합했다.
+
+| 산출물 | 명령 | fcb-main.mjs SHA-256 |
+| --- | --- | --- |
+| 운영 후보 (QA 훅 없음) | `build.sh --base v39` | `b8d86f70c9c164fc5e780940b94aefc573c2922f0717c8a56fa0cc2f76cc500c` (26,385,303B) |
+| 로컬 QA 빌드 | `build.sh --base v39 --qa` | `39e987ff04758d081b8b3e1e08fd74ce066d3d17128e63ec7e2fdae67bbcc621` |
+
+- 테스트 훅(시간 건너뛰기 `advance`, `setSceneMode`)은 호스트명 조건을 없애고 `--qa` 빌드에만 넣는다. 기본 빌드는 빌드 단계에서 훅 문자열이 없음을 검사하고, Gate 5에서 런타임에도 노출되지 않음을 확인했다(이온 의견).
+- 2.5D 스틸은 three.js 렌더를 유지한다(이온 의견). 실제 게임 크기에서 어긋나는 컷만 Blender로 다시 뽑는다.
+- v39 검증 로그: `qa/v39/`
+  - Gate 2 92/92, Gate 3 60/60, Gate 4 34/34 (QA 빌드)
+  - Gate 5 40/40 (v39 원본 대비 기본 빌드): Phase 0 회귀, 유적 진입·복귀, 채굴 보호 18칸(X31~45, X54~56) 원본과 동일, X46 첫 채굴, 숲 첫 진입 점프 안내, QA 훅 미노출, v38 세이브(채굴 기록·코인·자라던 밭) 복구, 에러 0
+- 아래 v38 기준 결과(`qa/*.log`)는 참고 기록이다.
+
 ## 빌드
 
 ```sh
-tools/farm-cooking-b/build.sh            # dist/farm-cooking-b/ (gitignored)
-node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # 로컬 프리뷰
+tools/farm-cooking-b/build.sh --base v39          # 운영 후보: dist/farm-cooking-b-v39/ (gitignored)
+tools/farm-cooking-b/build.sh --base v39 --qa     # 게이트용 QA 빌드: dist/farm-cooking-b-v39-qa/
+node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v39-qa/fcb-main.mjs 8743   # 로컬 프리뷰
 ```
 
-`build.sh`는 v38 SHA를 확인한 뒤 HTML을 추출하고(`tools/phase0-v38/extract-html.mjs`), `patch-farm-cooking.py`로 패치합니다. 패치는 정확히 1회 일치하는 문자열만 치환하고, 하나라도 어긋나면 쓰기 전에 중단합니다. 그다음 `rebuild-worker.py`로 HTML 상수만 바꿔 워커를 재조립하고, 모듈과 인라인 스크립트 문법을 검사합니다. 배포·업로드는 하지 않습니다.
+`build.sh`는 v38 SHA를 확인하고, `--base v39`이면 PR #12 스크립트로 v39 모듈을 만든 뒤 SHA `c28b2b61…`를 확인한다. 이어서 HTML을 추출하고(`tools/phase0-v38/extract-html.mjs`), `patch-farm-cooking.py`로 패치합니다. 패치는 정확히 1회 일치하는 문자열만 치환하고, 하나라도 어긋나면 쓰기 전에 중단합니다. 그다음 `rebuild-worker.py`로 HTML 상수만 바꿔 워커를 재조립하고, 모듈과 인라인 스크립트 문법을 검사합니다. 배포·업로드는 하지 않습니다.
 
 ## 게이트 현황
 
@@ -22,6 +39,8 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 | 4 하이브리드 연출 | 통과 34/34 | `qa/gate4.log` — PC 3D lazy-load·회전·전환·폐기, GLB 차단/변조 시 2.5D 폴백, 모바일 390 2.5D·넘침 0 |
 | 5 회귀 | 통과 31/31 | `qa/gate5.log`, `qa/gate5-results.json` — v38 원본과 같은 시드로 같은 시나리오를 돌려 필드별 비교: P0-1~P0-6(+0b), 유적 걷기 진입·복귀(PC·모바일), 전체 지도 라벨 동일(요리대 라벨 추가 없음), 콘솔·페이지 에러 0, 실패 요청 0 |
 | 6 PR | Draft PR | 모아 Gate 1~3 독립 검증 완료(Drive 번들 `aad9bc4`). 병합·Ready 전환·배포는 하지 않음 |
+
+(위 표는 v38 기준 결과. v39 합본 결과는 위 "v39 합본" 절과 `qa/v39/`.)
 
 ## 쓴 수치 (알돌 조정용, 모두 `patch-farm-cooking.py` 한 곳에 있음)
 

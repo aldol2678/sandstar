@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """SANDSTAR farm + cooking B (2026-11-23) on the Worker v38 baseline.
 
-Input : <build>/v38-index.html  (extracted from release/v38/main.mjs, SHA f2cb9415...)
+Input : <build>/base-index.html  (HTML extracted from the v38 module, or from the v39 module
+        = v38 + tools/onboarding/patch-v38.py; both accepted by SHA below)
+Usage : patch-farm-cooking.py <build-dir> [--qa]
+        --qa adds the local QA hooks (world-time skip, scene mode override). The
+        default build has neither, whatever host serves it.
 Output: <build>/fcb-index.html
 
 Scope (brief 01_BRIEF-FARM-COOKING-B.md, sections 2-3):
@@ -21,12 +25,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BUILD = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE
 ASSETS = HERE.parent.parent / "assets" / "duri"
-SRC = BUILD / "v38-index.html"
+SRC = BUILD / "base-index.html"
+QA = "--qa" in sys.argv[2:]
 DST = BUILD / "fcb-index.html"
 
 html = SRC.read_text(encoding="utf-8")
 base_sha = hashlib.sha256(html.encode()).hexdigest()
-assert base_sha == "f2cb9415016dad6d0df5084aa42c2ec66b0c12a8e19b7c41608c535ca641bd51", base_sha
+BASES = {"f2cb9415016dad6d0df5084aa42c2ec66b0c12a8e19b7c41608c535ca641bd51": "v38",
+         "0011760fcf95be632b308b15a0840b787023d1a7a80ca5629868155003a0933b": "v39"}
+assert base_sha in BASES, base_sha
+print("base:", BASES[base_sha], base_sha, "qa hooks:", QA)
 
 
 def rep_once(old, new, label, count=1):
@@ -372,8 +380,7 @@ window.__sandstarFarmCooking=Object.freeze({version:'farm-cooking-b-20261123',
  kitchen:()=>{const t=fcbKitchenTarget();return {x:t.x,z:t.z,near:fcbKitchenNear()}},
  openKitchen:()=>fcbKitchenMenu(),cook:id=>fcbCook(id),eat:id=>livingEatFood(id),
  sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),
- // Local preview / QA only: skip world time. Not exposed on the production host.
- ...(location.hostname!=='sandstar.aldol.app'?{advance:sec=>{if(!Number.isFinite(sec)||sec<0||sec>3600)return false;livingWorldTick(sec);if(farmWorldActive)farmWorldRefreshHud();return true;}}:{})
+ __FCB_QA_HOOKS__
 });
 """
 rep_once("function t25Interact(){", FCB_KITCHEN + "function t25Interact(){", "kitchen functions")
@@ -569,9 +576,11 @@ rep_once("function closeModal(){$('overlay').classList.remove('open');",
 rep_once(" sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),",
          " sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),\n scene:()=>({mode:fcbScene.mode,reason:fcbScene.reason,focus:fcbScene.focus,frames:fcbScene.frames,teardowns:fcbScene.teardowns,lastTeardown:fcbScene.lastTeardown,fetched:[...fcbScene.fetched],has3d:!!fcbScene.three,models:Object.keys(fcbScene.three?.models||{}),manifest:JSON.parse(JSON.stringify(FCB_GLB_MANIFEST))}),\n sceneFocus:id=>fcbSceneFocus(id),sceneProbe:()=>fcbSceneProbe(),",
          "QA hook: scene state")
-rep_once(" ...(location.hostname!=='sandstar.aldol.app'?{advance:",
-         " ...(location.hostname!=='sandstar.aldol.app'?{setSceneMode:m=>{if(!['auto','2.5d','3d'].includes(m))return false;fcbScene.want=m;return true;},advance:",
-         "QA hook: scene mode override (non-prod)")
+# QA hooks are compiled in only for `--qa` builds (local preview + Playwright gates).
+QA_HOOKS = (" // Local QA build only (--qa): world-time skip and scene mode override.\n"
+            " qaHooks:true,setSceneMode:m=>{if(!['auto','2.5d','3d'].includes(m))return false;fcbScene.want=m;return true;},"
+            "advance:sec=>{if(!Number.isFinite(sec)||sec<0||sec>3600)return false;livingWorldTick(sec);if(farmWorldActive)farmWorldRefreshHud();return true;}") if QA else " qaHooks:false"
+rep_once(" __FCB_QA_HOOKS__", QA_HOOKS, "QA hooks (build option)")
 rep_once(".fcb-scene{display:none}",
          """.fcb-scene{display:block}
 .fcb-stage{position:relative;display:flex;gap:10px;align-items:stretch;padding:8px 8px 14px;border-radius:12px;background:linear-gradient(#2f5a52,#1d3d37);border:1px solid #9ac6a655;overflow:hidden}

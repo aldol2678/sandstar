@@ -1,12 +1,14 @@
 // Gate 5: regression — Phase 0 (P0-1..P0-6 + 0b) and Phase 1 ruins walk-in/out behave the same on the
 // farm+cooking B build as on the untouched v38 baseline, with zero console/page errors and failed requests.
 // Every scenario runs on both builds with the same world seed; values are compared field by field.
-// Usage: node gate5-regression.cjs <baseline-url> <fcb-url> <outdir>
+// Usage: node gate5-regression.cjs <baseline-url> <fcb-url> <outdir> [<v38-url-for-old-save-fixture>]
+// baseline = the production base the fcb build sits on (v38, or v39 = v38 + PR #12); fcb = default (non-QA) build.
 const fs = require('fs');
 const path = require('path');
-const { openGame, newWorld, log } = require('./lib.cjs');
+const { openGame, newWorld, continueWorld, log } = require('./lib.cjs');
 
-const [baseUrl, fcbUrl, out] = [process.argv[2] || 'http://127.0.0.1:8738/', process.argv[3] || 'http://127.0.0.1:8739/', process.argv[4] || '.'];
+const [baseUrl, fcbUrl, out, oldSaveUrl] = [process.argv[2] || 'http://127.0.0.1:8738/', process.argv[3] || 'http://127.0.0.1:8739/', process.argv[4] || '.', process.argv[5] || ''];
+const SAVE_KEY = 'sandstar-p1-world-v1:official-m25d';
 fs.mkdirSync(out, { recursive: true });
 const lines = [];
 let pass = 0, fail = 0;
@@ -24,6 +26,7 @@ const SCENARIOS = {
   // P0-1 objective strip, P0-2 naming, P0-5 touch wording + fullmap labels, kitchen target is label-free
   async town(page, mobile) {
     const r = {};
+    r.qaHooks = await page.evaluate(() => { const k = window.__sandstarFarmCooking; return k ? { qaHooks: k.qaHooks, advance: typeof k.advance, setSceneMode: typeof k.setSceneMode } : null; });
     r.quest = await page.evaluate(() => { const el = document.getElementById('t25Quest'); const t = document.getElementById('t25QuestText'); return { visible: !!el && el.offsetParent !== null && el.getBoundingClientRect().height > 0, text: t?.textContent || '' }; });
     r.help = await page.evaluate(() => document.querySelector('.t25-help')?.textContent || '');
     r.loggingAction = await townGate(page, 15, 11);
@@ -93,6 +96,19 @@ const SCENARIOS = {
     await wait(300);
     r.tapped = tapped;
     r.notice = await page.evaluate(() => document.getElementById('ssMineFeedback')?.textContent || '');
+    // protected apron cells across the old 49-cell range X19-67 (y79/y80 read as stationrock when protected)
+    r.protectedCells = await page.evaluate(() => { const M = window.__sandstarTownM22, out = []; for (let x = 19; x <= 67; x++) if (M.tile(x, 79) === 'stationrock' || M.tile(x, 80) === 'stationrock') out.push(x); return out; });
+    // first dig at X46 (v39 quest step): stand at X46 and tap the floor until it breaks
+    await page.evaluate(() => { const y = window.__sandstarM1.state().player.y; window.__sandstarHUDM15.setTestPosition(46.5, y); });
+    await wait(300);
+    const before = await page.evaluate(() => ({ mined: window.__sandstarTitleP0.state().worldMined, tile: window.__sandstarTownM22.tile(46, Math.floor(window.__sandstarM1.state().player.y) + 1) }));
+    let afterDig = before;
+    for (let i = 0; i < 40 && afterDig.mined === before.mined; i++) {
+      await page.evaluate(() => { const p = window.__sandstarM1.state().player; window.__sandstarDebug.tap(46, Math.floor(p.y) + 1); });
+      await wait(120);
+      afterDig = await page.evaluate(() => ({ mined: window.__sandstarTitleP0.state().worldMined, tile: window.__sandstarTownM22.tile(46, Math.floor(window.__sandstarM1.state().player.y) + 1) }));
+    }
+    r.firstDig = { before, after: afterDig };
     return r;
   },
   // P0-3: in mining mode next to a tree the life button stays visible as a mode-switch hint
@@ -101,6 +117,7 @@ const SCENARIOS = {
     r.gate = await townGate(page, 15, 11);
     await page.click('#town25dAction');
     await travelDone(page, 'life_forest_01');
+    r.arrivalToast = await page.evaluate(() => document.getElementById('toast')?.textContent || '');
     await wait(500);
     r.region = await page.evaluate(() => window.__sandstarM1.state().region);
     await page.evaluate(() => { const y = window.__sandstarTownM22.surface(82); window.__sandstarHUDM15.setTestPosition(82.5, y - 1); });
@@ -119,7 +136,7 @@ const SCENARIOS = {
   for (const mobile of [false, true]) {
     for (const name of Object.keys(SCENARIOS)) {
       if (mobile && !['town', 'ruins'].includes(name)) continue;
-      for (const [build, url] of [['v38', baseUrl], ['fcb', fcbUrl]]) {
+      for (const [build, url] of [['base', baseUrl], ['fcb', fcbUrl]]) {
         const tag = `${mobile ? 'm390' : 'pc'}-${name}-${build}`;
         const { browser, page, problems } = await openGame({ url, mobile });
         await newWorld(page, '424242');
@@ -132,13 +149,13 @@ const SCENARIOS = {
       }
     }
   }
-  const pairs = [...new Set(Object.keys(results).map(k => k.replace(/-(v38|fcb)$/, '')))];
+  const pairs = [...new Set(Object.keys(results).map(k => k.replace(/-(base|fcb)$/, '')))];
   for (const key of pairs) {
-    const a = results[`${key}-v38`], b = results[`${key}-fcb`];
-    const strip = o => { const c = { ...o }; delete c.problems; return c; };
-    check(`${key}: fcb == v38 (all fields)`, JSON.stringify(strip(a)) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
+    const a = results[`${key}-base`], b = results[`${key}-fcb`];
+    const strip = o => { const c = { ...o }; delete c.problems; delete c.qaHooks; return c; };
+    check(`${key}: fcb == base (all fields except qaHooks)`, JSON.stringify(strip(a)) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
     check(`${key}: fcb no page/console errors, no failed requests`, b.problems.length === 0, b.problems.slice(0, 3).join(' | '));
-    check(`${key}: v38 baseline also clean (reference)`, a.problems.length === 0, a.problems.slice(0, 3).join(' | '));
+    check(`${key}: baseline also clean (reference)`, a.problems.length === 0, a.problems.slice(0, 3).join(' | '));
   }
   // absolute expectations on the fcb build
   const t = results['pc-town-fcb'], tm = results['m390-town-fcb'];
@@ -155,9 +172,61 @@ const SCENARIOS = {
   check('Phase 1 pc: walk into ruins and back out', ru.entered && ru.returned, JSON.stringify(ru));
   check('Phase 1 m390: walk into ruins and back out', rum.entered && rum.returned, JSON.stringify(rum));
   const mi = results['pc-mine-fcb'];
-  check('P0-4: mine apron shows the protected-floor guidance', mi.region === 'mine' && /보호 구역/.test(mi.notice), mi.notice);
+  check('P0-4: mine apron shows the protected-floor guidance', mi.region === 'mine' && /보호/.test(mi.notice), mi.notice);
+  check('mine: protected cells identical to baseline', JSON.stringify(mi.protectedCells) === JSON.stringify(results['pc-mine-base'].protectedCells), `${mi.protectedCells.length} cells: ${mi.protectedCells.join(',')}`);
+  check('mine: first dig at X46 works', mi.firstDig.after.mined > mi.firstDig.before.mined, JSON.stringify(mi.firstDig));
+  check('fcb default build exposes no QA hooks', JSON.stringify(t.qaHooks) === JSON.stringify({ qaHooks: false, advance: 'undefined', setSceneMode: 'undefined' }) && JSON.stringify(tm.qaHooks) === JSON.stringify(t.qaHooks), JSON.stringify(t.qaHooks));
+  check('forest: arrival toast matches baseline', results['pc-forest-fcb'].arrivalToast === results['pc-forest-base'].arrivalToast, results['pc-forest-fcb'].arrivalToast);
   const fo = results['pc-forest-fcb'];
   check('P0-3: life button stays visible in mining mode next to a tree', fo.region === 'life_forest_01' && fo.lifeButton.visible && /생활 조작/.test(fo.lifeButton.text), JSON.stringify(fo.lifeButton));
+  // ---- old save restore: a save made on the archived v38 build loads on baseline and fcb alike
+  if (oldSaveUrl) {
+    log(lines, `== old save fixture from ${oldSaveUrl}`);
+    let s = await openGame({ url: oldSaveUrl });
+    await newWorld(s.page, '777001');
+    // mine edits on v38: dig at X70 (outside every protected range)
+    await townGate(s.page, -15, 11); await s.page.click('#town25dAction'); await travelDone(s.page, 'mine'); await wait(500);
+    await s.page.evaluate(() => { const y = window.__sandstarTownM22.surface(70); window.__sandstarHUDM15.setTestPosition(70.5, y - 1); });
+    await wait(300);
+    for (let i = 0; i < 40; i++) { const m = await s.page.evaluate(() => { window.__sandstarDebug.tap(70, window.__sandstarTownM22.surface(70)); return window.__sandstarTitleP0.state().worldMined; }); if (m > 0) break; await wait(120); }
+    await s.page.evaluate(() => window.__sandstarHUDM15.setTestPosition(40.5, window.__sandstarM1.state().player.y));
+    await wait(200);
+    await s.page.evaluate(() => window.__sandstarDebug.save()); // existing v38 debug hook: persist the mining edit now
+    await wait(200);
+    // a half-grown v38 plot (timer model): plant + water wheat on plot 34 directly in the save
+    const state = await s.context.storageState();
+    await s.browser.close();
+    let fixture;
+    for (const o of state.origins) for (const it of o.localStorage) if (it.name === SAVE_KEY) {
+      const g = JSON.parse(it.value);
+      g.livingP0.clock = Math.max(g.livingP0.clock, 200);
+      g.livingP0.plots['plot:34'] = { plantedAt: g.livingP0.clock - 10, watered: true, crop: 'wheat' };   // 10s into 75s: still growing
+      g.livingP0.plots['plot:37'] = { plantedAt: 0, watered: true, crop: 'carrot' };                     // 200s >= 90s: ripe
+      g.livingP0.bag.seed_wheat = 2; g.livingP0.bag.seed_carrot = 2; g.livingP0.bag.carrot = 4; g.coins = 77;
+      delete g.livingP0.energy; delete g.livingP0.counts;
+      it.value = JSON.stringify(g); fixture = g;
+    }
+    log(lines, 'fixture', { mined: fixture.mined, coins: fixture.coins, plots: fixture.livingP0.plots, region: fixture.storyM1?.region });
+    const loaded = {};
+    for (const [build, url] of [['base', baseUrl], ['fcb', fcbUrl]]) {
+      // localStorage is per origin (port included): move the fixture to the target server's origin
+      const st = JSON.parse(JSON.stringify(state)); for (const o of st.origins) o.origin = new URL(url).origin;
+      const t2 = await openGame({ url, storageState: st });
+      await continueWorld(t2.page);
+      await wait(800);
+      loaded[build] = await t2.page.evaluate(() => { const L = window.__SANDSTAR_LIVING_P11__.getState(); return { title: window.__sandstarTitleP0.state(), region: window.__sandstarM1.state().region, bag: L.bag, plots: L.plots, energy: L.energy }; });
+      loaded[build].problems = t2.problems;
+      await t2.browser.close();
+    }
+    const keep = o => JSON.stringify({ mined: o.title.worldMined, coins: o.title.worldCoins, seed: o.title.worldSeed, region: o.region, bag: o.bag });
+    check('old save: fixture carries a v38 mining edit', fixture.mined >= 1, String(fixture.mined));
+    check('old save: v38 save loads on baseline and fcb with the same world, coins, mining edits and bag', keep(loaded.base) === keep(loaded.fcb) && loaded.fcb.title.worldMined === fixture.mined && loaded.fcb.title.worldCoins === 77, keep(loaded.fcb));
+    const p34 = loaded.fcb.plots['plot:34'], p37 = loaded.fcb.plots['plot:37'];
+    check('old save: growing v38 plots migrate to the stage model', p34.crop === 'wheat' && p34.stage === 1 && p34.watered === true && p37.crop === 'carrot' && p37.stage === 3 && !p37.watered, JSON.stringify({ p34, p37 }));
+    check('old save: missing energy defaults to 100', loaded.fcb.energy === 100, String(loaded.fcb.energy));
+    check('old save: no errors on baseline or fcb', loaded.base.problems.length === 0 && loaded.fcb.problems.length === 0, [...loaded.base.problems, ...loaded.fcb.problems].slice(0, 3).join(' | '));
+    results.oldSave = { fixture: { mined: fixture.mined, coins: fixture.coins, plots: fixture.livingP0.plots }, loaded };
+  }
   fs.writeFileSync(path.join(out, 'gate5-results.json'), JSON.stringify(results, null, 1));
   log(lines, `== Gate 5 total: ${pass} pass, ${fail} fail`);
   fs.writeFileSync(path.join(out, 'gate5.log'), lines.join('\n') + '\n');
