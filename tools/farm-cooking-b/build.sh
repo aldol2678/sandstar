@@ -12,6 +12,7 @@ SHA256
 node "$root/tools/phase0-v38/extract-html.mjs" "$root/release/v38/main.mjs" "$out/v38-index.html"
 python3 "$root/tools/farm-cooking-b/patch-farm-cooking.py" "$out"
 python3 "$root/tools/farm-cooking-b/rebuild-worker.py" "$root/release/v38/main.mjs" "$out/fcb-index.html" "$out/fcb-main.mjs"
+python3 "$root/tools/farm-cooking-b/add-worker-assets.py" "$out/fcb-main.mjs" "$root/assets/glb"
 node --check "$out/fcb-main.mjs"
 # Inline JavaScript syntax check: every <script> block of the patched HTML.
 node -e '

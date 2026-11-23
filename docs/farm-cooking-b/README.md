@@ -17,9 +17,9 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 | 게이트 | 상태 | 근거 |
 | --- | --- | --- |
 | 1 기준선 | 통과 | `qa/gate1.log` — 청크 3개 + 합본 SHA 일치, 종료 코드 0. Cloudflare v38 버전 ID `052cb034-a10f-49fa-b6c3-4cafd2d7ede9`는 모아 측 대조값(이 세션에서 직접 조회하지 않음) |
-| 2 농장 루프 | 통과 92/92 | `qa/gate2.log` — PC 1280×800 + 모바일 390×844 |
-| 3 요리 | 통과 60/60 | `qa/gate3.log` — PC + 모바일 390 |
-| 4 하이브리드 연출 | 시작 전 | GLB 식별 완료(Drive `05_GLB-IDENTIFIED.md`): 밀 `crop-c073`, 감자 `crop-c047`, 당근 `crop-carrot`. 물고기는 맞는 GLB가 없어 생선스튜는 P5 2D 스프라이트 사용. 요리대 모달에 `#fcbScene` 자리만 둠(숨김) |
+| 2 농장 루프 | 통과 92/92 | `qa/gate2.log` — PC 1280×800 + 모바일 390×844 (Gate 4 빌드 `bab291a8…`에서 재실행) |
+| 3 요리 | 통과 60/60 | `qa/gate3.log` — PC + 모바일 390 (Gate 4 빌드에서 재실행) |
+| 4 하이브리드 연출 | 통과 34/34 | `qa/gate4.log` — PC 3D lazy-load·회전·전환·폐기, GLB 차단/변조 시 2.5D 폴백, 모바일 390 2.5D·넘침 0 |
 | 5 회귀 | 시작 전 | — |
 | 6 PR | 보류 | 모아의 Gate 1~3 독립 검증(Drive 번들) 전까지 푸시·PR 금지 |
 
@@ -37,6 +37,19 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 | 회복량 | 빵 +25 · 당근수프 +35 · 생선스튜 +50 (최대 100) |
 | 식사 보너스 | v38 기존 유지: 월드 시간 180초 (빵 농사·수프 벌목·스튜 낚시) |
 | 요리대 위치 | 2.5D 마을 (x −3.4, z −6.0), 바람장터와 상인 마루의 동쪽 |
+
+## Gate 4 — 요리 장면 2.5D + 3D 하이브리드
+
+| 구성 | 내용 |
+| --- | --- |
+| 3D 재료 | `assets/glb/` 3종 (밀 `crop-c073` · 감자 `crop-c047` · 당근 `crop-carrot`, 합계 1,020,308B, tris 3,868~4,167). 794개 중 이 3개만 사용 |
+| 물고기 | 맞는 GLB 없음 → P5 2D 스프라이트(피라미) |
+| 2.5D | `assets/fcb-renders/*-3q.png`: 같은 GLB를 게임 내장 three r160으로 3/4 시점(요 45°, 고도 30°) 렌더 후 물체에 맞춰 128px로 자름 (`render-stills.cjs`). Blender 렌더가 오면 같은 파일명으로 바꾸면 됨 |
+| 3D 로더 | v38에 이미 들어 있는 `window.THREE`(r160)·`window.GLTFLoader`를 재사용 (유적 `archThreeLoadGlbs`와 같은 `loader.parse` 방식). 유적의 `archThree` 렌더러·씬은 유적 캔버스에 묶여 있어 재사용하지 않고, 요리대 전용 112px 렌더러를 따로 만듦 |
+| lazy-load | GLB는 HTML에 넣지 않고 워커 경로 `/fcb/glb/<이름>-<SHA8>.glb`(불변 캐시)로 제공 (`add-worker-assets.py`). 요리대를 열 때만 내려받고, 크기·SHA-256 확인 후 파싱 |
+| 폐기 | 요리대를 닫거나 다른 화면으로 바뀌면 렌더러·지오메트리·텍스처 dispose + `forceContextLoss`, 캔버스 제거 |
+| 2.5D 폴백 | GLB 실패(네트워크·SHA 불일치·파싱), 터치 기기(`pointer:coarse`), 폭 600px 미만, 동작 줄이기 설정, `deviceMemory<4`, CPU 4코어 미만이면 2.5D만 사용. 요리는 장면과 무관하게 항상 가능 |
+| 크기 | HTML +108KB(코드 + 2.5D 스틸), 워커 모듈 26,384,859B (v38 대비 +1,445,554B, GLB base64 포함) |
 
 ## 세이브 영향
 

@@ -1,12 +1,14 @@
 // Shared Playwright helpers for the farm+cooking B gates (local preview only).
 const { chromium, devices } = require('playwright');
 
-async function openGame({ url, mobile = false, storageState } = {}) {
+async function openGame({ url, mobile = false, storageState, serviceWorkers } = {}) {
   const browser = await chromium.launch();
   const ctxOpts = mobile
     ? { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } }
     : { viewport: { width: 1280, height: 800 } };
   if (storageState) ctxOpts.storageState = storageState;
+  // 'block' lets page.route intercept fetches that the game's PWA service worker would otherwise handle.
+  if (serviceWorkers) ctxOpts.serviceWorkers = serviceWorkers;
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
   const problems = [];

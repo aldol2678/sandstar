@@ -406,6 +406,192 @@ FCB_CSS = """<style id="fcb-style">
 </head>"""
 rep_once("</head>", FCB_CSS, "styles")
 
+# ------------------------------------------------------------------ Gate 4: kitchen scene (2.5D stills + lazy 3D GLB)
+# 2.5D: 3/4-view stills rendered from the optimized GLBs (assets/fcb-renders, render-stills.cjs) and the P5
+# fish sprite, always shown. 3D: v38 already inlines three r160 + GLTFLoader (window.THREE/GLTFLoader, used by
+# the ruins); the kitchen reuses that library with its own small renderer, created only while the kitchen
+# modal is open, fed by GLBs fetched on demand from the Worker (/fcb/glb/*, add-worker-assets.py), and
+# disposed on close. Any failure, mobile/coarse pointer, narrow screen, reduced motion or low-end device
+# stays on the 2.5D stills; cooking never depends on the scene.
+GLB_DIR = HERE.parent.parent / "assets" / "glb"
+RENDERS = HERE.parent.parent / "assets" / "fcb-renders"
+glb_sums = dict(reversed(l.split()) for l in (GLB_DIR / "SHA256SUMS.txt").read_text().splitlines() if l.strip())
+glb_manifest = {}
+for key, stem in [("wheat", "wheat-crop-c073"), ("potato", "potato-crop-c047"), ("carrot", "carrot-crop-carrot")]:
+    data = (GLB_DIR / f"{stem}.glb").read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    assert sha == glb_sums[f"{stem}.glb"], f"glb sha {stem}"
+    glb_manifest[key] = {"url": f"/fcb/glb/{stem}-{sha[:8]}.glb", "sha256": sha, "bytes": len(data), "source": f"{stem}.glb"}
+stills = {k: "data:image/png;base64," + base64.b64encode((RENDERS / f"{k}-3q.png").read_bytes()).decode() for k in ("wheat", "potato", "carrot")}
+
+FCB_SCENE = r"""
+// ---- farm+cooking B Gate 4: kitchen scene — 2.5D stills always, lazy 3D GLB highlight on capable desktops ----
+const FCB_GLB_MANIFEST=Object.freeze(__GLB_MANIFEST__);
+const FCB_STILL_SRC=Object.freeze(__STILLS__);
+const FCB_SCENE_ITEMS=Object.freeze([{id:'wheat',name:'밀',glb:true},{id:'potato',name:'감자',glb:true},{id:'carrot',name:'당근',glb:true},{id:'fish',name:'물고기',glb:false}]);
+const FCB_RECIPE_FOCUS=Object.freeze({bread:'wheat',soup:'carrot',stew:'potato'});
+const FCB_KITCHEN_TITLE='🍳 바람장터 요리대';
+const fcbScene={el:null,mode:'off',reason:'',focus:'wheat',want:'auto',three:null,loads:0,frames:0,teardowns:0,lastTeardown:'',fetched:[]};
+function fcbSceneStill(id){return id==='fish'?FCB_SPRITE_SRC.river_fish:FCB_STILL_SRC[id];}
+function fcbScene3dBlocker(){
+ if(fcbScene.want==='2.5d')return 'forced-2.5d';
+ if(!window.THREE||!window.GLTFLoader)return 'no-three';
+ if(fcbScene.want==='3d')return '';
+ try{if(matchMedia('(pointer:coarse)').matches)return 'mobile';}catch(_){}
+ if(innerWidth<600)return 'narrow-screen';
+ try{if(matchMedia('(prefers-reduced-motion: reduce)').matches)return 'reduced-motion';}catch(_){}
+ if(navigator.deviceMemory&&navigator.deviceMemory<4)return 'low-memory';
+ if(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<4)return 'low-cpu';
+ return '';
+}
+function fcbSceneBuild(){
+ const el=document.createElement('div');el.className='fcb-stage';el.dataset.mode='2.5d';
+ el.innerHTML=`<div class="fcb-hero"><img class="fcb-hero-still" alt="" width="112" height="112"><span class="fcb-hero-tag"></span></div><div class="fcb-side"><div class="fcb-shelf" role="group" aria-label="재료 미리보기">${FCB_SCENE_ITEMS.map(it=>`<button type="button" class="fcb-shelf-item" data-fcb-focus="${it.id}" aria-label="${it.name} 보기"><img class="${it.glb?'':'fcb-sprite'}" src="${fcbSceneStill(it.id)}" alt="" width="40" height="40"><span>${it.name}</span></button>`).join('')}</div><small class="fcb-mode-note"></small></div>`;
+ el.querySelectorAll('[data-fcb-focus]').forEach(b=>b.addEventListener('click',()=>fcbSceneFocus(b.dataset.fcbFocus)));
+ return el;
+}
+function fcbSceneSync(){
+ const el=fcbScene.el;if(!el)return;
+ const it=FCB_SCENE_ITEMS.find(x=>x.id===fcbScene.focus)||FCB_SCENE_ITEMS[0];
+ const show3d=fcbScene.mode==='3d'&&it.glb&&!!fcbScene.three;
+ el.dataset.mode=fcbScene.mode;el.dataset.focus=it.id;
+ const still=el.querySelector('.fcb-hero-still');still.src=fcbSceneStill(it.id);still.hidden=show3d;still.classList.toggle('fcb-sprite',!it.glb);
+ if(fcbScene.three)fcbScene.three.canvas.hidden=!show3d;
+ el.querySelector('.fcb-hero-tag').textContent=`${it.name} · ${show3d?'3D':it.glb?'2.5D':'2D'}`;
+ el.querySelectorAll('[data-fcb-focus]').forEach(b=>b.classList.toggle('selected',b.dataset.fcbFocus===it.id));
+ el.querySelector('.fcb-mode-note').textContent=fcbScene.mode==='3d'?(it.glb?'3D 미리보기 · 끌어서 돌려 보세요':'물고기는 2D 그림으로 보여줘요'):fcbScene.mode==='loading'?'3D 모델 불러오는 중… 그동안 2.5D로 보여줘요':it.glb?'2.5D 렌더 미리보기':'물고기는 2D 그림으로 보여줘요';
+}
+function fcbSceneFocus(id){if(!FCB_SCENE_ITEMS.some(x=>x.id===id))return false;fcbScene.focus=id;if(fcbScene.three)fcbScene.three.zoomT=0;fcbSceneSync();return true;}
+function fcbSceneTeardown(why){
+ fcbScene.loads++;
+ const th=fcbScene.three;fcbScene.three=null;
+ if(th){
+  cancelAnimationFrame(th.raf);th.canvas.remove();
+  th.scene.traverse(o=>{if(!o.isMesh)return;o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const k of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap'])m[k]?.dispose?.();m.dispose();}});
+  th.renderer.dispose();th.renderer.forceContextLoss();
+ }
+ if(fcbScene.mode!=='off'){fcbScene.teardowns++;fcbScene.lastTeardown=why;}
+ fcbScene.mode='off';fcbScene.reason='';
+}
+function fcbSceneMount(host,wasOpen){
+ if(!host)return;
+ if(!fcbScene.el)fcbScene.el=fcbSceneBuild();
+ if(!wasOpen)fcbSceneTeardown('reopen');
+ host.appendChild(fcbScene.el);
+ if(fcbScene.mode==='off'){
+  const blocker=fcbScene3dBlocker();
+  if(blocker){fcbScene.mode='2.5d';fcbScene.reason=blocker;}
+  else void fcbScene3dStart();
+ }
+ fcbSceneSync();
+}
+async function fcbScene3dStart(){
+ const token=++fcbScene.loads;fcbScene.mode='loading';fcbScene.reason='';fcbSceneSync();
+ try{
+  const T=window.THREE;
+  const canvas=document.createElement('canvas');canvas.className='fcb-hero-3d';canvas.hidden=true;
+  const renderer=new T.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power'});
+  renderer.setClearColor(0x000000,0);renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(112,112,false);
+  const scene=new T.Scene(),camera=new T.PerspectiveCamera(30,1,.1,50),pivot=new T.Group();
+  scene.add(new T.HemisphereLight(0xfff4dc,0x2a3a34,1.1));const sun=new T.DirectionalLight(0xffe7c2,1.8);sun.position.set(3,5,4);scene.add(sun);scene.add(pivot);
+  const el=30*Math.PI/180;camera.position.set(0,Math.sin(el)*3.6,Math.cos(el)*3.6);camera.lookAt(0,0,0);
+  const th={T,renderer,canvas,scene,camera,pivot,models:{},yaw:Math.PI/4,drag:null,zoomT:0,raf:0,last:0};
+  fcbScene.three=th;
+  const loader=new window.GLTFLoader();
+  for(const [id,m] of Object.entries(FCB_GLB_MANIFEST)){
+   const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),10000);let buf;
+   try{const res=await fetch(m.url,{signal:ctl.signal});if(!res.ok)throw new Error('http '+res.status+' '+id);buf=await res.arrayBuffer();}finally{clearTimeout(timer);}
+   if(token!==fcbScene.loads)return;
+   if(buf.byteLength!==m.bytes)throw new Error('size '+id);
+   if(crypto?.subtle){const dig=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');if(dig!==m.sha256)throw new Error('sha '+id);}
+   const gltf=await new Promise((ok,no)=>loader.parse(buf,'',ok,no));
+   if(token!==fcbScene.loads){gltf.scene.traverse(o=>{if(o.isMesh){o.geometry?.dispose();}});return;}
+   const model=gltf.scene,box=new T.Box3().setFromObject(model),size=box.getSize(new T.Vector3()),c=box.getCenter(new T.Vector3()),s=1.6/Math.max(size.x,size.y,size.z);
+   model.scale.setScalar(s);model.position.set(-c.x*s,-c.y*s,-c.z*s);
+   const holder=new T.Group();holder.add(model);holder.visible=false;pivot.add(holder);th.models[id]=holder;fcbScene.fetched.push(id);
+  }
+  if(token!==fcbScene.loads)return;
+  const hero=fcbScene.el?.querySelector('.fcb-hero');if(!hero)throw new Error('scene detached');
+  hero.insertBefore(canvas,hero.querySelector('.fcb-hero-tag'));
+  canvas.addEventListener('pointerdown',e=>{th.drag={x:e.clientX,yaw:th.yaw};canvas.setPointerCapture?.(e.pointerId);});
+  canvas.addEventListener('pointermove',e=>{if(th.drag)th.yaw=th.drag.yaw+(e.clientX-th.drag.x)*0.012;});
+  for(const ev of ['pointerup','pointercancel'])canvas.addEventListener(ev,()=>{th.drag=null;});
+  fcbScene.mode='3d';fcbSceneSync();
+  th.raf=requestAnimationFrame(fcbScene3dFrame);
+ }catch(err){
+  if(token!==fcbScene.loads)return;
+  fcbSceneTeardown('glb-failed');
+  fcbScene.mode='2.5d';fcbScene.reason='glb-failed: '+(err&&err.message||err);
+  console.info('kitchen 3D unavailable, 2.5D fallback:',fcbScene.reason);
+  fcbSceneSync();
+ }
+}
+function fcbScene3dRender(th){
+ for(const [id,h] of Object.entries(th.models))h.visible=id===fcbScene.focus;
+ const z=.55+.45*(1-Math.pow(1-th.zoomT,3));
+ th.pivot.rotation.y=th.yaw;th.pivot.scale.setScalar(z);
+ th.renderer.render(th.scene,th.camera);
+}
+function fcbScene3dFrame(now){
+ const th=fcbScene.three;if(!th)return;
+ const open=$('overlay').classList.contains('open')&&menuType===FCB_KITCHEN_TITLE&&!!fcbScene.el?.isConnected;
+ if(!open){fcbSceneTeardown('left-kitchen');return;}
+ const dt=th.last?Math.min(.05,(now-th.last)/1000):0;th.last=now;
+ if(!th.drag)th.yaw+=dt*0.9;
+ th.zoomT=Math.min(1,th.zoomT+dt*2.2);
+ if(th.models[fcbScene.focus]){fcbScene3dRender(th);fcbScene.frames++;}
+ th.raf=requestAnimationFrame(fcbScene3dFrame);
+}
+function fcbSceneProbe(){
+ const th=fcbScene.three;if(!th)return null;
+ fcbScene3dRender(th);
+ const gl=th.renderer.getContext(),w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,d=new Uint8Array(w*h*4);
+ gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,d);
+ let opaque=0,hsh=2166136261;for(let i=3;i<d.length;i+=4){if(d[i]>0)opaque++;}
+ for(let i=0;i<d.length;i+=16){hsh^=d[i];hsh=Math.imul(hsh,16777619)>>>0;}
+ return {w,h,opaque,hash:hsh.toString(16),yaw:th.yaw,focus:fcbScene.focus,contextLost:gl.isContextLost()};
+}
+""".replace("__GLB_MANIFEST__", json.dumps(glb_manifest, separators=(",", ":"))).replace("__STILLS__", json.dumps(stills, separators=(",", ":")))
+
+rep_once("function fcbKitchenMenu(){", FCB_SCENE + "function fcbKitchenMenu(){", "scene functions")
+rep_once(" const w=game.livingP0=normalizeLivingP0(game.livingP0),near=fcbKitchenNear();",
+         " const w=game.livingP0=normalizeLivingP0(game.livingP0),near=fcbKitchenNear(),sceneWasOpen=!!(fcbScene.el&&fcbScene.el.isConnected&&menuType===FCB_KITCHEN_TITLE&&$('overlay').classList.contains('open'));",
+         "kitchen: scene state before re-render")
+rep_once(" $('dialog').classList.add('fcb-kitchen-modal');",
+         " $('dialog').classList.add('fcb-kitchen-modal');\n fcbSceneMount($('fcbScene'),sceneWasOpen);",
+         "kitchen: mount scene")
+rep_once(" updHud();flash(r.message);t25Notify(r.message);",
+         " updHud();flash(r.message);t25Notify(r.message);\n if(FCB_RECIPE_FOCUS[id])fcbScene.focus=FCB_RECIPE_FOCUS[id];if(fcbScene.three)fcbScene.three.zoomT=0;",
+         "cook: highlight main ingredient")
+rep_once("function closeModal(){$('overlay').classList.remove('open');",
+         "function closeModal(){try{if(fcbScene.mode!=='off')fcbSceneTeardown('closed');}catch(_){}$('overlay').classList.remove('open');",
+         "closeModal: dispose kitchen scene")
+rep_once(" sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),",
+         " sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),\n scene:()=>({mode:fcbScene.mode,reason:fcbScene.reason,focus:fcbScene.focus,frames:fcbScene.frames,teardowns:fcbScene.teardowns,lastTeardown:fcbScene.lastTeardown,fetched:[...fcbScene.fetched],has3d:!!fcbScene.three,models:Object.keys(fcbScene.three?.models||{}),manifest:JSON.parse(JSON.stringify(FCB_GLB_MANIFEST))}),\n sceneFocus:id=>fcbSceneFocus(id),sceneProbe:()=>fcbSceneProbe(),",
+         "QA hook: scene state")
+rep_once(" ...(location.hostname!=='sandstar.aldol.app'?{advance:",
+         " ...(location.hostname!=='sandstar.aldol.app'?{setSceneMode:m=>{if(!['auto','2.5d','3d'].includes(m))return false;fcbScene.want=m;return true;},advance:",
+         "QA hook: scene mode override (non-prod)")
+rep_once(".fcb-scene{display:none}",
+         """.fcb-scene{display:block}
+.fcb-stage{position:relative;display:flex;gap:10px;align-items:stretch;padding:8px 8px 14px;border-radius:12px;background:linear-gradient(#2f5a52,#1d3d37);border:1px solid #9ac6a655;overflow:hidden}
+.fcb-stage::after{content:"";position:absolute;left:0;right:0;bottom:0;height:9px;background:repeating-linear-gradient(90deg,#90674f 0 22px,#b5895e 22px 24px)}
+.fcb-stage [hidden]{display:none!important}
+.fcb-hero{position:relative;flex:none;width:112px;height:112px;border-radius:10px;background:radial-gradient(circle at 50% 62%,#fff4ce40,transparent 70%)}
+.fcb-hero-still,.fcb-hero-3d{display:block;width:112px;height:112px;object-fit:contain;touch-action:none}
+.fcb-hero-still.fcb-sprite{image-rendering:pixelated;padding:18px;box-sizing:border-box}
+.fcb-hero-tag{position:absolute;left:4px;bottom:4px;font-size:10px;font-weight:800;background:#0f2d2acc;border-radius:6px;padding:1px 6px}
+.fcb-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;justify-content:space-between}
+.fcb-shelf{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.fcb-shelf-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0;padding:3px 2px;border-radius:8px;border:1px solid #ffffff22;background:#0f2d2a99;color:inherit;font:700 10px system-ui;cursor:pointer}
+.fcb-shelf-item img{width:40px;height:40px;object-fit:contain}
+.fcb-shelf-item img.fcb-sprite{image-rendering:pixelated;padding:6px;box-sizing:border-box}
+.fcb-shelf-item.selected{border-color:#e8cc80;background:#e8cc8026}
+.fcb-mode-note{opacity:.85}
+.fcb-kitchen .fcb-stage .fcb-shelf-item{min-width:0;min-height:0;margin:0;padding:3px 2px;font:700 10px/1.2 system-ui;white-space:nowrap;letter-spacing:0}
+@media (max-width:420px){.fcb-hero,.fcb-hero-still,.fcb-hero-3d{width:88px;height:88px}.fcb-shelf-item img{width:32px;height:32px}.fcb-kitchen .fcb-stage .fcb-shelf-item{font-size:9px;padding:2px 1px}}""",
+         "scene styles")
+
 DST.write_text(html, encoding="utf-8")
 print("fcb html bytes:", len(html.encode()), "sha256:", hashlib.sha256(html.encode()).hexdigest(),
       "delta:", len(html.encode()) - len(SRC.read_text(encoding='utf-8').encode()))
