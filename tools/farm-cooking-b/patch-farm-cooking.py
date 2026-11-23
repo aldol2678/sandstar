@@ -33,9 +33,14 @@ html = SRC.read_text(encoding="utf-8")
 base_sha = hashlib.sha256(html.encode()).hexdigest()
 BASES = {"f2cb9415016dad6d0df5084aa42c2ec66b0c12a8e19b7c41608c535ca641bd51": "v38",
          "0011760fcf95be632b308b15a0840b787023d1a7a80ca5629868155003a0933b": "v39",
-         "20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b": "v41"}
+         "20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b": "v41",
+         "3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6": "v44"}
 assert base_sha in BASES, base_sha
 print("base:", BASES[base_sha], base_sha, "qa hooks:", QA)
+# v44 (live 2026-11-23 evening) reworked the farm HUD (compact header, seed counts on the seed
+# buttons, no exit button: exit = action button / tap at the west gate / Esc), the forge hint text
+# and closeModal (NPC voice stop). Those anchors are version-specific; everything else is shared.
+V44 = BASES[base_sha] == "v44"
 
 
 def rep_once(old, new, label, count=1):
@@ -234,9 +239,14 @@ rep_once("  const type=plot.watered?'plot.harvest':'plot.water';",
          "forest plot action")
 
 # ------------------------------------------------------------------ farm_01 world
-rep_once('<div class="farm-stats"><div id="farmWorldBag">🌱 씨앗 · 밀 3 / 감자 3 / 당근 3</div><div id="farmWorldCoords">X 6 · Y 16</div></div>',
-         '<div class="farm-stats"><div id="farmWorldBag">🌱 씨앗 · 밀 3 / 감자 3 / 당근 3</div><div id="farmWorldEnergy">⚡ 기력</div><div id="farmWorldHarvest">🧺 수확물</div><div id="farmWorldCoords">X 6 · Y 16</div><button id="farmWorldBagBtn" class="fcb-farm-bag" type="button">🎒 가방</button></div>',
-         "farm HUD energy + bag button")
+if V44:
+    rep_once('<div class="farm-stats"><span class="scene-nav">',
+             '<div class="farm-stats"><span id="farmWorldEnergy" class="fcb-farm-chip">⚡ 100</span><span id="farmWorldHarvest" class="fcb-farm-chip">🧺 0·0·0</span><button id="farmWorldBagBtn" class="fcb-farm-bag" type="button">🎒 가방</button><span class="scene-nav">',
+             "farm HUD energy + bag button (v44 compact header)")
+else:
+    rep_once('<div class="farm-stats"><div id="farmWorldBag">🌱 씨앗 · 밀 3 / 감자 3 / 당근 3</div><div id="farmWorldCoords">X 6 · Y 16</div></div>',
+             '<div class="farm-stats"><div id="farmWorldBag">🌱 씨앗 · 밀 3 / 감자 3 / 당근 3</div><div id="farmWorldEnergy">⚡ 기력</div><div id="farmWorldHarvest">🧺 수확물</div><div id="farmWorldCoords">X 6 · Y 16</div><button id="farmWorldBagBtn" class="fcb-farm-bag" type="button">🎒 가방</button></div>',
+             "farm HUD energy + bag button")
 rep_once(""" if(plot.plantedAt===null)return '🌱 '+LIVING_CROPS[farmSelectedSeed].name+' 심기';
  if(!plot.watered)return '💧 물 주기';
  const t=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90);
@@ -248,17 +258,27 @@ rep_once(""" if(plot.plantedAt===null)return '🌱 '+LIVING_CROPS[farmSelectedSe
  const remaining=livingStageSeconds(plot.crop)-(game.livingP0.clock-plot.wateredAt);
  return '🌿 자라는 중 '+Math.max(1,Math.ceil(remaining))+'초';""",
          "farm action label")
-rep_once(" $('farmWorldBag').textContent=`🌱 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;",
-         " $('farmWorldBag').textContent=`🌱 씨앗 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;\n {const e=$('farmWorldEnergy');if(e)e.textContent=`⚡ 기력 ${Math.floor(game.livingP0.energy)}/${LIVING_ENERGY.max}`;const hv=$('farmWorldHarvest');if(hv)hv.textContent=`🧺 밀 ${bag.wheat} · 감자 ${bag.potato} · 당근 ${bag.carrot}`;}",
-         "farm HUD refresh")
+if V44:
+    rep_once(" const btn=$('farmWorldAction');btn.textContent=farmWorldActionLabel();btn.disabled=!farmWorldNearPlot()&&!farmWorldNearbyGate();",
+             " {const e=$('farmWorldEnergy');if(e)e.textContent=`⚡ ${Math.floor(game.livingP0.energy)}/${LIVING_ENERGY.max}`;const hv=$('farmWorldHarvest');if(hv){hv.textContent=`🧺 ${bag.wheat}·${bag.potato}·${bag.carrot}`;hv.title=`수확물 밀 ${bag.wheat} · 감자 ${bag.potato} · 당근 ${bag.carrot}`;hv.setAttribute('aria-label',hv.title);}}\n const btn=$('farmWorldAction');btn.textContent=farmWorldActionLabel();btn.disabled=!farmWorldNearPlot()&&!farmWorldNearbyGate();",
+             "farm HUD refresh (v44)")
+else:
+    rep_once(" $('farmWorldBag').textContent=`🌱 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;",
+             " $('farmWorldBag').textContent=`🌱 씨앗 밀 ${bag.seed_wheat} · 감자 ${bag.seed_potato} · 당근 ${bag.seed_carrot}`;\n {const e=$('farmWorldEnergy');if(e)e.textContent=`⚡ 기력 ${Math.floor(game.livingP0.energy)}/${LIVING_ENERGY.max}`;const hv=$('farmWorldHarvest');if(hv)hv.textContent=`🧺 밀 ${bag.wheat} · 감자 ${bag.potato} · 당근 ${bag.carrot}`;}",
+             "farm HUD refresh")
 rep_once(""" if(!plot.watered)return farmWorldCommand('plot.water',near.id);
  return farmWorldCommand('plot.harvest',near.id);""",
          """ if(plot.stage<3&&!plot.watered)return farmWorldCommand('plot.water',near.id);
  return farmWorldCommand('plot.harvest',near.id);""",
          "farm action dispatch")
-rep_once("$('farmWorldExit').addEventListener('click',farmWorldTryExit);",
-         "$('farmWorldExit').addEventListener('click',farmWorldTryExit);\n$('farmWorldBagBtn').addEventListener('click',e=>{e.stopPropagation();farmWorldClearInput();ssBagCategory='living';ssBagSelection='';bagMenu();});",
-         "farm bag button")
+if V44:
+    rep_once("$('farmWorldAction').addEventListener('click',farmWorldAction);",
+             "$('farmWorldAction').addEventListener('click',farmWorldAction);\n$('farmWorldBagBtn').addEventListener('click',e=>{e.stopPropagation();farmWorldClearInput();ssBagCategory='living';ssBagSelection='';bagMenu();});",
+             "farm bag button (v44)")
+else:
+    rep_once("$('farmWorldExit').addEventListener('click',farmWorldTryExit);",
+             "$('farmWorldExit').addEventListener('click',farmWorldTryExit);\n$('farmWorldBagBtn').addEventListener('click',e=>{e.stopPropagation();farmWorldClearInput();ssBagCategory='living';ssBagSelection='';bagMenu();});",
+             "farm bag button")
 rep_once(""" if(plot?.plantedAt!==null&&plot){
   const duration=plot.crop==='legacy'?90:(LIVING_CROPS[plot.crop]?.seconds||90),ratio=Math.min(1,(game.livingP0.clock-plot.plantedAt)/duration);
   const colors=plot.crop==='wheat'?['#6a9c54','#8ebc65','#d8b95d']:plot.crop==='carrot'?['#6ab45b','#6aa94a','#f4a456']:['#55a35e','#80b267','#b8d48b'];
@@ -319,8 +339,10 @@ rep_once("   if(selected.category==='artifact'){characterTab='artifacts';charact
          "bag action: eat")
 
 # ------------------------------------------------------------------ village kitchen counter (2.5D town)
-rep_once(" {id:'forge',type:'service',x:9,z:-1.95,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이·장비 제작 · 기존 대장간 메뉴'},",
-         " {id:'forge',type:'service',x:9,z:-1.95,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이·장비 제작 · 기존 대장간 메뉴'},\n {id:'kitchen',type:'service',x:-3.4,z:-6.0,title:'요리대',label:'🍳 요리대 이용',hint:'빵·당근 수프·생선 스튜 만들기'},",
+FORGE_LINE = ("{id:'forge',type:'service',x:9,z:-1.95,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이 강화 · 속성 부여'}," if V44 else
+              "{id:'forge',type:'service',x:9,z:-1.95,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이·장비 제작 · 기존 대장간 메뉴'},")
+rep_once(" "+FORGE_LINE+"",
+         " "+FORGE_LINE+"\n {id:'kitchen',type:'service',x:-3.4,z:-6.0,title:'요리대',label:'🍳 요리대 이용',hint:'빵·당근 수프·생선 스튜 만들기'},",
          "town target: kitchen")
 rep_once("t25Add('barrel-market','장터 앞 통',-7.9,.35,-2.3,.7,.7,.7,'#765d46');",
          "t25Add('barrel-market','장터 앞 통',-7.9,.35,-2.3,.7,.7,.7,'#765d46');\nt25Add('kitchen-counter','장터 요리대',-3.4,.45,-6.0,1.4,.9,.8,'#90674f');\nt25Add('kitchen-top','요리대 상판',-3.4,.93,-6.0,1.5,.08,.9,'#b5895e');\nt25Add('kitchen-pot','요리대 냄비',-3.75,1.15,-6.0,.5,.36,.5,'#487b76');\nt25Add('kitchen-board','요리대 도마',-3.0,1.0,-6.0,.45,.06,.4,'#e8cc80');",
@@ -571,15 +593,20 @@ rep_once(" $('dialog').classList.add('fcb-kitchen-modal');",
 rep_once(" updHud();flash(r.message);t25Notify(r.message);",
          " updHud();flash(r.message);t25Notify(r.message);\n if(FCB_RECIPE_FOCUS[id])fcbScene.focus=FCB_RECIPE_FOCUS[id];if(fcbScene.three)fcbScene.three.zoomT=0;",
          "cook: highlight main ingredient")
-rep_once("function closeModal(){$('overlay').classList.remove('open');",
-         "function closeModal(){try{if(fcbScene.mode!=='off')fcbSceneTeardown('closed');}catch(_){}$('overlay').classList.remove('open');",
-         "closeModal: dispose kitchen scene")
+if V44:
+    rep_once("function closeModal(){\n if($('ssNpcLine'))ssNpcStopVoice();\n $('overlay').classList.remove('open');",
+             "function closeModal(){\n try{if(fcbScene.mode!=='off')fcbSceneTeardown('closed');}catch(_){}\n if($('ssNpcLine'))ssNpcStopVoice();\n $('overlay').classList.remove('open');",
+             "closeModal: dispose kitchen scene (v44)")
+else:
+    rep_once("function closeModal(){$('overlay').classList.remove('open');",
+             "function closeModal(){try{if(fcbScene.mode!=='off')fcbSceneTeardown('closed');}catch(_){}$('overlay').classList.remove('open');",
+             "closeModal: dispose kitchen scene")
 rep_once(" sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),",
-         " sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),\n scene:()=>({mode:fcbScene.mode,reason:fcbScene.reason,focus:fcbScene.focus,frames:fcbScene.frames,teardowns:fcbScene.teardowns,lastTeardown:fcbScene.lastTeardown,fetched:[...fcbScene.fetched],has3d:!!fcbScene.three,models:Object.keys(fcbScene.three?.models||{}),manifest:JSON.parse(JSON.stringify(FCB_GLB_MANIFEST))}),\n sceneFocus:id=>fcbSceneFocus(id),sceneProbe:()=>fcbSceneProbe(),",
+         " sprites:()=>Object.keys(FCB_SPRITE_SRC),spriteReady:id=>!!fcbImg(id),\n scene:()=>({mode:fcbScene.mode,reason:fcbScene.reason,focus:fcbScene.focus,frames:fcbScene.frames,teardowns:fcbScene.teardowns,lastTeardown:fcbScene.lastTeardown,fetched:[...fcbScene.fetched],has3d:!!fcbScene.three,models:Object.keys(fcbScene.three?.models||{}),manifest:JSON.parse(JSON.stringify(FCB_GLB_MANIFEST))}),",
          "QA hook: scene state")
 # QA hooks are compiled in only for `--qa` builds (local preview + Playwright gates).
-QA_HOOKS = (" // Local QA build only (--qa): world-time skip and scene mode override.\n"
-            " qaHooks:true,setSceneMode:m=>{if(!['auto','2.5d','3d'].includes(m))return false;fcbScene.want=m;return true;},"
+QA_HOOKS = (" // Local QA build only (--qa): world-time skip, scene mode override, scene focus/pixel probe.\n"
+            " qaHooks:true,sceneFocus:id=>fcbSceneFocus(id),sceneProbe:()=>fcbSceneProbe(),setSceneMode:m=>{if(!['auto','2.5d','3d'].includes(m))return false;fcbScene.want=m;return true;},"
             "advance:sec=>{if(!Number.isFinite(sec)||sec<0||sec>3600)return false;livingWorldTick(sec);if(farmWorldActive)farmWorldRefreshHud();return true;}") if QA else " qaHooks:false"
 rep_once(" __FCB_QA_HOOKS__", QA_HOOKS, "QA hooks (build option)")
 rep_once(".fcb-scene{display:none}",

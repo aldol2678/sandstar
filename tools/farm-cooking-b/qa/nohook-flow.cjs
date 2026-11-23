@@ -63,8 +63,8 @@ const walkLog = [];
   }
 
   await newWorld(page, '626262');
-  const hooks = await page.evaluate(() => { const k = window.__sandstarFarmCooking; return { qaHooks: k.qaHooks, advance: typeof k.advance, setSceneMode: typeof k.setSceneMode }; });
-  check('default build: no QA hooks (no time skip available)', hooks.qaHooks === false && hooks.advance === 'undefined' && hooks.setSceneMode === 'undefined', JSON.stringify(hooks));
+  const hooks = await page.evaluate(() => { const k = window.__sandstarFarmCooking; return { qaHooks: k.qaHooks, advance: typeof k.advance, setSceneMode: typeof k.setSceneMode, sceneProbe: typeof k.sceneProbe, sceneFocus: typeof k.sceneFocus }; });
+  check('default build: no QA hooks (no time skip, no scene probe/focus)', hooks.qaHooks === false && ['advance', 'setSceneMode', 'sceneProbe', 'sceneFocus'].every(k => hooks[k] === 'undefined'), JSON.stringify(hooks));
 
   // ---- town → farm gate
   check('walk to the farm gate', await walkTown(-16.6, -2, 0.8));
@@ -120,7 +120,11 @@ const walkLog = [];
 
   // ---- back to town → kitchen
   check('walk to the farm exit', await walkFarm(4.6, 16.5));
-  await press('#farmWorldExit');
+  // v44 has no exit button: at the west gate the action button reads "마을로…" and exits
+  const exitSel = (await page.$('#farmWorldExit')) && (await page.isVisible('#farmWorldExit')) ? '#farmWorldExit' : '#farmWorldAction';
+  const exitLabel = (await page.textContent(exitSel)).trim();
+  await press(exitSel);
+  log(lines, `farm exit via ${exitSel} ("${exitLabel}")`);
   await busyDone('village_hub_01');
   await wait(400);
   check('walk to the village kitchen counter', await walkTown(-3.4, -4.8, 0.5) && (await page.evaluate(() => window.__sandstarFarmCooking.kitchen().near)));

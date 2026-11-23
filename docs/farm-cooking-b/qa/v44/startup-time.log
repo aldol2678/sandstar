@@ -1,0 +1,6 @@
+# 2026-11-23T14:20:35Z node v22.23.5, 4 CPU — 로컬 대용 측정 (Cloudflare 수치 아님). inline = 같은 소스를 --glb inline으로 빌드한 비교용
+v44 {"bytes":25067606,"runs":21,"importMsMedian":872.8,"importMsMin":802.3,"importMsMax":965.5,"firstFetchMsMedian":134,"status":200}
+candidate {"bytes":25152066,"runs":21,"importMsMedian":895,"importMsMin":843.7,"importMsMax":974,"firstFetchMsMedian":136.3,"status":200}
+inline {"bytes":26512872,"runs":21,"importMsMedian":876.2,"importMsMin":810.3,"importMsMax":1056.2,"firstFetchMsMedian":132.1,"status":200}
+ratio candidate/v44: import 1.025 · bytes 1.003
+exit 0

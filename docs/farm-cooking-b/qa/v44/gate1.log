@@ -1,0 +1,16 @@
+# Gate 1 (v44) — 기준선 대조, 2026-11-23T14:05:31Z
+# 출처: Drive 폴더 18eFW8fp8bCRPhjyjRl2Kq0Mc7-j_PAz6, 00_README-V44-CHUNKS.md (모아, 라이브 서빙 스크립트)
+part00: OK
+part01: OK
+part02: OK
+part03: OK
+part04: OK
+part05: OK
+part06: OK
+part07: OK
+part08: OK
+part09: OK
+main.mjs 25067606B
+main.mjs: OK
+node --check OK
+exit 0

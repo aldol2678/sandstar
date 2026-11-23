@@ -74,7 +74,8 @@ async function runLoop(page, tag, crop, stageSeconds) {
   check(`${tag} ${crop}: harvest (button "${lh}") -> +3 ${crop}, +1 seed, plot empty, counted`,
     s.bag[crop] === mid.bag[crop] + 3 && s.bag['seed_' + crop] === mid.bag['seed_' + crop] + 1 && s.plots[plot.id].plantedAt === null && s.plots[plot.id].stage === 0 && s.counts.harvested[crop] === mid.counts.harvested[crop] + 1,
     `bag ${crop} ${mid.bag[crop]}->${s.bag[crop]}, harvested ${s.counts.harvested[crop]}`);
-  const hud = await page.textContent('#farmWorldHarvest');
+  // v41 HUD: "🧺 밀 3 · 감자 0 · 당근 0"; v44 compact HUD: "🧺 3·0·0" with the names in title/aria-label
+  const hud = await page.evaluate(() => { const el = document.getElementById('farmWorldHarvest'); return el.textContent + ' | ' + (el.title || ''); });
   check(`${tag} ${crop}: HUD shows crop count`, hud.includes(`${LIVING_NAME[crop]} ${s.bag[crop]}`), hud);
 }
 const LIVING_NAME = { wheat: '밀', potato: '감자', carrot: '당근' };

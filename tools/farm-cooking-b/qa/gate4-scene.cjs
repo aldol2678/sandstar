@@ -28,7 +28,7 @@ async function openWithIngredients({ mobile, seed, route }) {
   s.glb = [];
   s.page.on('request', r => { if (r.url().includes('/fcb/glb/')) s.glb.push(r.url().split('/').pop()); });
   s.glbResp = [];
-  s.page.on('response', r => { if (r.url().includes('/fcb/glb/')) s.glbResp.push([r.url().split('/').pop(), r.status()]); });
+  s.page.on('response', r => { if (r.url().includes('/fcb/glb/')) { s.glbResp.push([r.url().split('/').pop(), r.status()]); s.glbHdr = r.headers(); } });
   if (route) await s.page.route('**/fcb/glb/**', route);
   await continueWorld(s.page);
   await s.page.waitForFunction(() => window.__sandstarTown25D.state().active, null, { timeout: 30000 });
@@ -64,6 +64,11 @@ const stageClip = page => page.evaluate(() => { const r = document.querySelector
   check('pc: 3D highlight active', sc.mode === '3d' && sc.has3d && sc.models.join() === 'wheat,potato,carrot', JSON.stringify(sc));
   const totalBytes = Object.values(manifest).reduce((n, m) => n + m.bytes, 0);
   check('pc: exactly the 3 ingredient GLBs fetched, all 200', s.glb.length === 3 && s.glbResp.every(([, c]) => c === 200), JSON.stringify(s.glbResp) + ` total ${totalBytes}B`);
+  // GLBs come from outside the Worker module (static assets) with the immutable model headers
+  const h = s.glbHdr || {};
+  check('pc: GLB response is model/gltf-binary with an immutable cache header', /model\/gltf-binary/.test(h['content-type'] || '') && /immutable/.test(h['cache-control'] || ''), JSON.stringify({ type: h['content-type'], cache: h['cache-control'] }));
+  const inModule = process.env.FCB_MODULE ? require('fs').readFileSync(process.env.FCB_MODULE, 'utf8').includes('FCB_GLB=') : null;
+  if (inModule !== null) check('module carries no GLB bytes (GLBs served as static assets)', inModule === false, process.env.FCB_MODULE);
   const p1 = await page.evaluate(() => window.__sandstarFarmCooking.sceneProbe());
   await page.waitForTimeout(600);
   const p2 = await page.evaluate(() => window.__sandstarFarmCooking.sceneProbe());

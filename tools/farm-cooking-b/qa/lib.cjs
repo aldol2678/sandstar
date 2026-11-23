@@ -55,7 +55,9 @@ async function enterFarm(page) {
 async function exitFarmToTown(page) {
   await page.evaluate(() => window.__sandstarFarmWorld.testMove(4.6, 16.5));
   await page.waitForTimeout(100);
-  await page.click('#farmWorldExit');
+  // v41 has a separate exit button; v44 removed it — the action button exits when standing at the west gate
+  const exitBtn = await page.$('#farmWorldExit');
+  if (exitBtn && await exitBtn.isVisible()) await exitBtn.click(); else await page.click('#farmWorldAction');
   await page.waitForFunction(() => window.__sandstarWorldLoadingM25B.ready('village_hub_01') && !window.__sandstarWorldLoadingM25B.state().busy, null, { timeout: 30000 });
   await page.waitForTimeout(400);
 }

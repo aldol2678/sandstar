@@ -3,6 +3,37 @@
 기준선: Worker v38 모듈 `release/v38/main.mjs` (24,939,305B, SHA-256 `78b4503a…c60ed07`).
 브랜치: `feat/farm-cooking-b-20261123`. 모아가 Gate 1~3을 Drive 번들로 독립 검증한 뒤, 알돌 결정(모아 전달, 2026-11-23 13:03)으로 공개 레포에 푸시하고 Draft PR을 열었다. 병합·Ready 전환·배포는 알돌 승인 전까지 하지 않는다.
 
+## v44 재구성 + CPU 한도 대책 (2026-11-23 밤, 알돌 결정 — 모아 전달 22:56)
+
+라이브가 게임 버전 v44가 되어(배포 카운터는 v45지만, 서빙 내용 기준), 농장·요리를 v44 위에 다시 얹었다. 기준선은 `release/v44/main.mjs`(25,067,606B, SHA-256 `0951ddf7…ecd4c3`, HTML SHA `3caaa6c3…`)이다. 모아가 라이브 엔드포인트에서 받은 서빙 스크립트이며, Drive 청크 10개를 재조립해 SHA를 확인했다(`qa/v44/gate1.log`).
+
+**v44에 맞춘 패치 변경** (패치 기준 문자열 5개가 v44에서 바뀌어, 그 부분만 버전별로 분기 — 나머지는 공통)
+- 농장 HUD: v44는 HUD를 간소화했다(씨앗 수는 씨앗 버튼에, 머리에 프로필·메뉴, 좌표·부제·출구 버튼 제거). 그래서 기력 `⚡ 83/100`과 수확물 `🧺 밀·감자·당근` 칩, 가방 버튼을 프로필·메뉴 앞에 붙였다. 수확물 칩의 이름은 title/aria-label에 넣었다.
+- 농장 나가기: v44에는 출구 버튼이 없다. 서쪽 출구에서 행동 버튼 / 출구 탭 / Esc로 나간다(v44 원본 그대로).
+- 대장간 안내 문구, `closeModal`(v44의 NPC 음성 정지)에 맞춰 요리대 대상 추가와 장면 정리 위치를 옮겼다.
+
+**CPU 한도 대책 — GLB를 모듈 밖으로**
+- GLB 3종을 Worker 모듈에서 빼서 Cloudflare Workers Static Assets로 낸다. `build.sh`가 `<빌드>/assets/fcb/glb/<이름>-<SHA8>.glb`와 `_headers`(model/gltf-binary, 1년 immutable)를 만든다(`stage-static-assets.py`).
+- 경로는 그대로 `/fcb/glb/…`이고, 페이지는 요리대를 열 때만 받아 크기·SHA-256를 확인한다(기존과 같음).
+- 모듈에 GLB base64가 남으면 빌드가 실패한다. 이전 방식(모듈에 넣기)은 `--glb inline`으로 남겼다.
+- 배포 명령에 `--assets <빌드>/assets`가 추가된다(테스트 Worker 예: `wrangler deploy fcb-main.mjs --name <테스트이름> --compatibility-date 2026-11-18 --no-bundle --assets assets`). 로컬 미리보기는 `serve.mjs <모듈> <포트> --assets <빌드>/assets`이다(정적 에셋 우선 → 없으면 Worker).
+- `sceneProbe`·`sceneFocus`를 `--qa` 빌드로만 옮겼다. 기본 빌드에서는 빌드 검사와 Gate 5·훅 없는 흐름에서 없음을 확인한다.
+
+| 산출물 | 명령 | 결과 |
+| --- | --- | --- |
+| 운영 후보 (QA 훅 없음) | `build.sh` (기본 `--base v44 --glb static`) | 워커 `fcb-main.mjs` SHA-256 `2c2161739d80b985e8eb0a8831396dd4ec1d7b71626d9b2cddcff0defbfa4bc1` (25,152,066B, v44 대비 +84,460B) + `assets/` GLB 3개 1,020,308B |
+| 로컬 QA 빌드 | `build.sh --qa` | 워커 SHA-256 `2909f64759da3b44000ddb75629514649b6ae303f48aab6493d4784e096ee9fb` |
+
+**v44 검증** (`qa/v44/`, 로컬 프리뷰, 정적 에셋 포함, 모두 종료 코드 0)
+- Gate 1: 청크 10개 + 합본 SHA 일치.
+- QA 빌드: Gate 2 92/92, Gate 3 60/60, Gate 4 36/36. Gate 4에는 GLB 응답 헤더(model/gltf-binary + immutable)와 모듈 안 GLB 없음이 추가됐다.
+- 운영 후보: Gate 5 51/51(v44 원본 대비), 훅 없는 흐름 PC 26/26 · 모바일 27/27.
+- Gate 5 스크립트 수정 2건: v44에 맞춘 시험 경로이며 판정 완화가 아니다.
+  - 마을 메뉴 버튼(`#town25dMenu`)이 없어져 긴급 구조를 ☰ 메뉴 → 설정 → 긴급 구조로 찾는다.
+  - v44 원본은 마을 하단 조작 안내 줄을 없앴다. 그래서 '원본에 줄이 없으면 원본과 같을 것 + 터치에서 PC 키 없음'으로 판정한다.
+- 시작 시간(로컬 대용, `startup-time.log`, 21회 번갈아): v44 873ms · 후보 895ms · 같은 소스 inline 876ms(중앙값). 로컬에서는 세 모듈이 잡음 범위라 GLB 분리의 효과를 판별할 수 없다. **Cloudflare 테스트 Worker cold start 확인은 모아에게 요청 예정**(이 컨테이너에는 Cloudflare 자격증명이 없음).
+- 기록 정정: 게이트 스크립트가 로그 파일을 직접 쓰는데 같은 파일에 표준출력도 붙여 써서, v41·v44 Gate 2~4 로그의 첫 줄(빌드 SHA 머리말)이 지워지고 NUL 바이트가 끼어 있었다. NUL을 지우고 머리말을 다시 넣었다(결과 줄은 그대로). 이후로는 표준출력을 다른 파일로 보낸다.
+
 ## v41 합본 (2026-11-23 15시대, 모아 인계 — PR #13 v39 후보는 보류)
 
 운영이 Worker v41(Cloudflare `8b55cd67-1c76-4d75-ab1e-40ee437727d3`, 14:44 KST 배포)로 바뀌어 농장·요리를 v41 위에 다시 얹었다. v41 = v40(v39 + 잔빛 벌목장 `lumber_01`, P1~P15) + P16(`lumberWorldInitState()` 상태 유지 수정). 공개된 v40/v41 패치 스크립트가 없어 모듈 파일 자체를 기준선으로 쓴다: `release/v41/main.mjs` (25,062,108B, SHA-256 `7da5888c…a4ba5c3`, HTML SHA `20034576…`). Drive 청크 10개를 받아 재조립했다(`qa/v41/gate1.log`).
@@ -53,10 +84,11 @@
 ## 빌드
 
 ```sh
-tools/farm-cooking-b/build.sh                     # 운영 후보 (기본 --base v41): dist/farm-cooking-b-v41/ (gitignored)
-tools/farm-cooking-b/build.sh --qa                # 게이트용 QA 빌드: dist/farm-cooking-b-v41-qa/
+tools/farm-cooking-b/build.sh                     # 운영 후보 (기본 --base v44, GLB는 정적 에셋): dist/farm-cooking-b-v44/{fcb-main.mjs,assets/} (gitignored)
+tools/farm-cooking-b/build.sh --qa                # 게이트용 QA 빌드: dist/farm-cooking-b-v44-qa/
+tools/farm-cooking-b/build.sh --base v41 --glb inline   # 보류된 v41 방식
 tools/farm-cooking-b/build.sh --base v39          # 보류된 v39 후보 (PR #13 기존 결과 재현용)
-node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v41-qa/fcb-main.mjs 8743   # 로컬 프리뷰
+node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v44-qa/fcb-main.mjs 8743 --assets dist/farm-cooking-b-v44-qa/assets   # 로컬 프리뷰
 ```
 
 `build.sh`는 v38 SHA를 확인하고, `--base v41`(기본)이면 `release/v41/main.mjs`의 SHA `7da5888c…`를 확인해 그대로 기준선으로 쓴다. `--base v39`이면 PR #12 스크립트로 v39 모듈을 만든 뒤 SHA `c28b2b61…`를 확인한다. 이어서 HTML을 추출하고(`tools/phase0-v38/extract-html.mjs`), `patch-farm-cooking.py`로 패치합니다. 패치는 정확히 1회 일치하는 문자열만 치환하고, 하나라도 어긋나면 쓰기 전에 중단합니다. 그다음 `rebuild-worker.py`로 HTML 상수만 바꿔 워커를 재조립하고, 모듈과 인라인 스크립트 문법을 검사합니다. 배포·업로드는 하지 않습니다.

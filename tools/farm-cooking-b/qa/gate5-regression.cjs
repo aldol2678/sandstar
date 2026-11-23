@@ -27,7 +27,7 @@ const SCENARIOS = {
   // P0-1 objective strip, P0-2 naming, P0-5 touch wording + fullmap labels, kitchen target is label-free
   async town(page, mobile) {
     const r = {};
-    r.qaHooks = await page.evaluate(() => { const k = window.__sandstarFarmCooking; return k ? { qaHooks: k.qaHooks, advance: typeof k.advance, setSceneMode: typeof k.setSceneMode } : null; });
+    r.qaHooks = await page.evaluate(() => { const k = window.__sandstarFarmCooking; return k ? { qaHooks: k.qaHooks, advance: typeof k.advance, setSceneMode: typeof k.setSceneMode, sceneProbe: typeof k.sceneProbe, sceneFocus: typeof k.sceneFocus } : null; });
     r.quest = await page.evaluate(() => { const el = document.getElementById('t25Quest'); const t = document.getElementById('t25QuestText'); return { visible: !!el && el.offsetParent !== null && el.getBoundingClientRect().height > 0, text: t?.textContent || '' }; });
     r.help = await page.evaluate(() => document.querySelector('.t25-help')?.textContent || '');
     r.loggingAction = await townGate(page, 15, 11);
@@ -53,7 +53,9 @@ const SCENARIOS = {
     // P0-6 rescue opens an in-game modal, never native confirm()
     let nativeDialog = false;
     page.once('dialog', d => { nativeDialog = true; d.dismiss().catch(() => {}); });
-    await page.click('#town25dMenu');
+    // v41: town menu button → settings modal. v43+/v44: shared ☰ menu (data-scene-menu) → 설정 → 긴급 구조
+    if (await page.$('#town25dMenu')) await page.click('#town25dMenu');
+    else { await page.locator('[data-scene-menu]:visible').first().click(); await page.click('[data-ss-hub="settings"]'); }
     await page.waitForSelector('#ssEmergencyRescue', { timeout: 5000 });
     await page.click('#ssEmergencyRescue');
     await wait(250);
@@ -196,8 +198,14 @@ const SCENARIOS = {
   check('P0-1 pc: town objective strip visible with quest text', t.quest.visible && t.quest.text.length > 5, t.quest.text);
   check('P0-1 m390: town objective strip visible', tm.quest.visible && tm.quest.text.length > 5);
   check('P0-2: logging gate named 벌목장 입구 → 잔빛숲', /벌목장/.test(t.loggingAction) && t.loggingSub === '벌목장 입구 → 잔빛숲', `${t.loggingAction} / ${t.loggingSub}`);
-  check('P0-5 pc: PC help text', /WASD/.test(t.help), t.help);
-  check('P0-5 m390: no PC keys in town help on touch', !/WASD/.test(tm.help) && /조이스틱/.test(tm.help), tm.help);
+  if (results['pc-town-base'].help) {
+    check('P0-5 pc: PC help text', /WASD/.test(t.help), t.help);
+    check('P0-5 m390: no PC keys in town help on touch', !/WASD/.test(tm.help) && /조이스틱/.test(tm.help), tm.help);
+  } else {
+    // v43+/v44 base dropped the town help line (controls help moved to ☰ 메뉴 › 조작 도움말): match the base
+    check('P0-5 pc: town help line identical to baseline (baseline has none)', t.help === results['pc-town-base'].help, JSON.stringify(t.help));
+    check('P0-5 m390: town help identical to baseline and no PC keys on touch', tm.help === results['m390-town-base'].help && !/WASD/.test(tm.help), JSON.stringify(tm.help));
+  }
   check('P0-5: fullmap opens and draws gate + player labels (pc, m390)', t.fullmapOpen && tm.fullmapOpen && ['광산 입구', '벌목장 입구', '농장 입구', '유적 입구', '나'].every(n => t.fullmapLabels.some(l => l.startsWith(n + '@')) && tm.fullmapLabels.some(l => l.startsWith(n + '@'))), `${t.fullmapLabels.length}/${tm.fullmapLabels.length} labels`);
   check('P0-5: kitchen counter adds no fullmap label', !t.fullmapLabels.some(l => l.startsWith('요리대')) && !tm.fullmapLabels.some(l => l.startsWith('요리대')));
   check('P0-6: rescue uses the in-game modal, no native dialog', t.rescue.modalHasRescue && !t.rescue.nativeDialog && tm.rescue.modalHasRescue && !tm.rescue.nativeDialog);
@@ -209,7 +217,7 @@ const SCENARIOS = {
   check('P0-4: mine apron shows the protected-floor guidance', mi.region === 'mine' && /보호/.test(mi.notice), mi.notice);
   check('mine: protected cells identical to baseline', JSON.stringify(mi.protectedCells) === JSON.stringify(results['pc-mine-base'].protectedCells), `${mi.protectedCells.length} cells: ${mi.protectedCells.join(',')}`);
   check('mine: first dig at X46 works', mi.firstDig.after.mined > mi.firstDig.before.mined, JSON.stringify(mi.firstDig));
-  check('fcb default build exposes no QA hooks', JSON.stringify(t.qaHooks) === JSON.stringify({ qaHooks: false, advance: 'undefined', setSceneMode: 'undefined' }) && JSON.stringify(tm.qaHooks) === JSON.stringify(t.qaHooks), JSON.stringify(t.qaHooks));
+  check('fcb default build exposes no QA hooks', JSON.stringify(t.qaHooks) === JSON.stringify({ qaHooks: false, advance: 'undefined', setSceneMode: 'undefined', sceneProbe: 'undefined', sceneFocus: 'undefined' }) && JSON.stringify(tm.qaHooks) === JSON.stringify(t.qaHooks), JSON.stringify(t.qaHooks));
   check('forest: arrival toast matches baseline', results['pc-forest-fcb'].arrivalToast === results['pc-forest-base'].arrivalToast, results['pc-forest-fcb'].arrivalToast);
   const fo = results['pc-forest-fcb'];
   check('P0-3: life button stays visible in mining mode next to a tree', fo.region === 'life_forest_01' && fo.lifeButton.visible && /생활 조작/.test(fo.lifeButton.text), JSON.stringify(fo.lifeButton));
