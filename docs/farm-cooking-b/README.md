@@ -20,7 +20,7 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 | 2 농장 루프 | 통과 92/92 | `qa/gate2.log` — PC 1280×800 + 모바일 390×844 (Gate 4 빌드 `bab291a8…`에서 재실행) |
 | 3 요리 | 통과 60/60 | `qa/gate3.log` — PC + 모바일 390 (Gate 4 빌드에서 재실행) |
 | 4 하이브리드 연출 | 통과 34/34 | `qa/gate4.log` — PC 3D lazy-load·회전·전환·폐기, GLB 차단/변조 시 2.5D 폴백, 모바일 390 2.5D·넘침 0 |
-| 5 회귀 | 시작 전 | — |
+| 5 회귀 | 통과 31/31 | `qa/gate5.log`, `qa/gate5-results.json` — v38 원본과 같은 시드로 같은 시나리오를 돌려 필드별 비교: P0-1~P0-6(+0b), 유적 걷기 진입·복귀(PC·모바일), 전체 지도 라벨 동일(요리대 라벨 추가 없음), 콘솔·페이지 에러 0, 실패 요청 0 |
 | 6 PR | 보류 | 모아의 Gate 1~3 독립 검증(Drive 번들) 전까지 푸시·PR 금지 |
 
 ## 쓴 수치 (알돌 조정용, 모두 `patch-farm-cooking.py` 한 곳에 있음)
@@ -57,6 +57,12 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 - `qa/gate1.log`: 기준선 SHA 대조.
 - `qa/bundle-aad9bc4/gate2.log`, `gate3.log`: Drive 번들 커밋 `aad9bc4`를 별도 작업 트리로 빌드(`7faa5b9b…`)해 다시 돌린 결과 (92/92, 60/60). 모아 독립 검증과 같은 빌드다. 처음 실행분 원본은 재실행 때 덮어써서 남아 있지 않다.
 - `qa/gate2.log`, `gate3.log`, `gate4.log`, `build.log`: Gate 4 빌드(`bab291a8…`) 기준.
+
+## 기존(v38) 화면 이슈 — 이번 변경과 무관, 미수정
+
+Gate 5에서 v38 원본과 위치까지 같게 재현된 것:
+1. 마을 좌상단 부제목(`#town25dSub`)이 퀘스트 띠(`#t25Quest`)와 겹침 (PC·모바일).
+2. 농장에서 농장 이동 패드 '이동'과 마을·유적용 조이스틱(`#ruinsWalkPad`) '이동'이 동시에 보여 글자가 두 번 보임.
 
 ## 세이브 영향
 
