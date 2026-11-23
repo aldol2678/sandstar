@@ -51,6 +51,13 @@ node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b/fcb-main.mjs 8739   # �
 | 2.5D 폴백 | GLB 실패(네트워크·SHA 불일치·파싱), 터치 기기(`pointer:coarse`), 폭 600px 미만, 동작 줄이기 설정, `deviceMemory<4`, CPU 4코어 미만이면 2.5D만 사용. 요리는 장면과 무관하게 항상 가능 |
 | 크기 | HTML +108KB(코드 + 2.5D 스틸), 워커 모듈 26,384,859B (v38 대비 +1,445,554B, GLB base64 포함) |
 
+## QA 로그 위치
+
+- 레포 `.gitignore`의 `*.log` 규칙 때문에 처음 두 커밋(`f5f31a3`, `aad9bc4` = Drive 번들)에는 게이트 로그 파일이 빠져 있었다. `git add -f`로 추적을 추가했다.
+- `qa/gate1.log`: 기준선 SHA 대조.
+- `qa/bundle-aad9bc4/gate2.log`, `gate3.log`: Drive 번들 커밋 `aad9bc4`를 별도 작업 트리로 빌드(`7faa5b9b…`)해 다시 돌린 결과 (92/92, 60/60). 모아 독립 검증과 같은 빌드다. 처음 실행분 원본은 재실행 때 덮어써서 남아 있지 않다.
+- `qa/gate2.log`, `gate3.log`, `gate4.log`, `build.log`: Gate 4 빌드(`bab291a8…`) 기준.
+
 ## 세이브 영향
 
 - 세이브 키는 `sandstar-p1-world-v1:official-m25d` 그대로입니다. `livingP0`에 필드만 추가했습니다: 밭별 `stage`·`wateredAt`, `energy`, `counts`(작물별 수확·요리별 제작·납품 품목별 수량).

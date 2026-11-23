@@ -1,0 +1,41 @@
+# build: fcb-main.mjs sha256 bab291a8c1c0999e2fb49ab085dc585d02fbc48fde5a400737925dfa25b8f104 (gate 4 build, commit 58c3868)
+== Gate 4 pc 2026-11-23T03:13:28.453Z http://127.0.0.1:8739/
+manifest {"wheat":{"url":"/fcb/glb/wheat-crop-c073-dbd41325.glb","sha256":"dbd41325a2c9255e6872a1238059282281e925cef60067a0e888837b76fd0ee2","bytes":423652,"source":"wheat-crop-c073.glb"},"potato":{"url":"/fcb/glb/potato-crop-c047-e68aa60f.glb","sha256":"e68aa60fc2024ab3280515d4f2391c08b6ccad675a3643fa1bf7344c947176ec","bytes":338748,"source":"potato-crop-c047.glb"},"carrot":{"url":"/fcb/glb/carrot-crop-carrot-86444601.glb","sha256":"8644460182d09e84bc39aea3bd7eadf03c7f1a8ae9ac35d2672018342edde061","bytes":257908,"source":"carrot-crop-carrot.glb"}}
+PASS pc: no GLB request before the kitchen opens (lazy)
+PASS pc: 2.5D stills shown in the scene (hero + 4 shelf items) — {"heroVisible":false,"heroLoaded":true,"shelf":[true,true,true,true],"tag":"밀 · 3D","note":"3D 미리보기 · 끌어서 돌려 보세요"}
+PASS pc: 3D highlight active — {"mode":"3d","reason":"","focus":"wheat","frames":2,"teardowns":0,"lastTeardown":"","fetched":["wheat","potato","carrot"],"has3d":true,"models":["wheat","potato","carrot"]}
+PASS pc: exactly the 3 ingredient GLBs fetched, all 200 — [["wheat-crop-c073-dbd41325.glb",200],["potato-crop-c047-e68aa60f.glb",200],["carrot-crop-carrot-86444601.glb",200]] total 1020308B
+PASS pc: 3D model rendered (opaque pixels, context alive) — {"w":112,"h":112,"opaque":435,"hash":"890a9862","yaw":0.8303981633974483,"focus":"wheat","contextLost":false}
+PASS pc: 3D model rotates over time — 0.83->1.40
+PASS pc: shelf → potato shown in 3D — 감자 · 3D opaque 2770
+PASS pc: shelf → carrot shown in 3D — 당근 · 3D opaque 1240
+PASS pc: wheat/potato/carrot renders differ — {"wheat":"31374cc6","potato":"2c4989bd","carrot":"89725270"}
+PASS pc: fish uses the P5 2D sprite (no fish GLB) — 물고기 · 2D
+PASS pc: cook bread with scene open -> bread +1, scene still 3D, focus wheat, no refetch — {"bread":1,"mode":"3d","focus":"wheat","glb":3}
+PASS pc: cook stew (fish sprite + potato) -> stew +1, focus potato in 3D
+PASS pc: closing the kitchen disposes the 3D renderer — {"mode":"off","canvases":0,"teardowns":1,"last":"closed"}
+PASS pc: no frames rendered after close
+PASS pc: reopening the kitchen brings 3D back
+PASS pc: no page/console errors, no failed requests
+== Gate 4 pc fallback: GLB blocked
+PASS pc blocked: the injected failure reached the GLB fetch — wheat-crop-c073-dbd41325.glb
+PASS pc blocked: falls back to 2.5D with a reason — glb-failed: Failed to fetch
+PASS pc blocked: 2.5D stills visible — 밀 · 2.5D
+PASS pc blocked: cooking still works without 3D
+PASS pc blocked: no errors other than the injected GLB failure
+== Gate 4 pc fallback: GLB corrupted
+PASS pc corrupted: the injected failure reached the GLB fetch — wheat-crop-c073-dbd41325.glb
+PASS pc corrupted: falls back to 2.5D with a reason — glb-failed: sha wheat
+PASS pc corrupted: 2.5D stills visible — 밀 · 2.5D
+PASS pc corrupted: cooking still works without 3D
+PASS pc corrupted: no errors other than the injected GLB failure
+== Gate 4 m390
+PASS m390: mobile stays on 2.5D (no GLB download) — {"mode":"2.5d","reason":"mobile","glb":0}
+PASS m390: 2.5D stills shown — 밀 · 2.5D
+PASS m390: shelf switches the 2.5D hero — 당근 · 2.5D
+PASS m390: kitchen scene has no horizontal overflow — {"scrollW":390,"dialogOverflow":0,"vw":390,"bad":[],"wrapped":[],"pcKeys":false}
+PASS m390: shelf labels stay on one line
+PASS m390: no PC key hints
+PASS m390: cooking works on mobile
+PASS m390: no page/console errors, no failed requests
+== Gate 4 total: 34 pass, 0 fail

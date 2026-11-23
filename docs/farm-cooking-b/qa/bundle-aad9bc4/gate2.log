@@ -1,0 +1,100 @@
+# build: bundle commit aad9bc4, fcb-main.mjs sha256 7faa5b9b920db6eec238bf41ef3f99e39632e48bb15eb12fcd17ceacfba391fc (re-run 2026-11-23T03:17:05Z)
+== Gate 2 pc 2026-11-23T03:16:08.837Z http://127.0.0.1:8740/
+PASS pc: enter farm_01 from village gate ("🌾 농장으로 이동")
+PASS pc: 9 P3 crop sprites decoded
+stageSeconds {"wheat":30,"potato":40,"carrot":35} energy {"max":100,"regenSeconds":12,"plant":4,"water":2,"harvest":4}
+PASS pc wheat: walk next to plot:34
+PASS pc wheat: plant (button "🌱 밀 심기") — {"plantedAt":1.0240999999999305,"watered":false,"crop":"wheat","stage":1,"wateredAt":null}
+PASS pc wheat: dry plot stays at stage 1 after 90s
+PASS pc wheat: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS pc wheat: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS pc wheat: still stage 1 at 29s
+PASS pc wheat: stage 2 after 30s watered, soil dry again
+PASS pc wheat: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS pc wheat: still stage 2 at 29s
+PASS pc wheat: stage 3 after 30s watered, soil dry again
+PASS pc wheat: 3 stage renders differ — 79c681ae/575378d8/853b715d
+PASS pc wheat: harvest (button "🌾 수확하기") -> +3 wheat, +1 seed, plot empty, counted — bag wheat 0->3, harvested 1
+PASS pc wheat: HUD shows crop count — 🧺 밀 3 · 감자 0 · 당근 0
+PASS pc potato: walk next to plot:37
+PASS pc potato: plant (button "🌱 감자 심기") — {"plantedAt":151.84400000000002,"watered":false,"crop":"potato","stage":1,"wateredAt":null}
+PASS pc potato: dry plot stays at stage 1 after 120s
+PASS pc potato: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS pc potato: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS pc potato: still stage 1 at 39s
+PASS pc potato: stage 2 after 40s watered, soil dry again
+PASS pc potato: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS pc potato: still stage 2 at 39s
+PASS pc potato: stage 3 after 40s watered, soil dry again
+PASS pc potato: 3 stage renders differ — 1b4dcd3/de1e5d1e/ca8ec960
+PASS pc potato: harvest (button "🌾 수확하기") -> +3 potato, +1 seed, plot empty, counted — bag potato 0->3, harvested 1
+PASS pc potato: HUD shows crop count — 🧺 밀 3 · 감자 3 · 당근 0
+PASS pc carrot: walk next to plot:40
+PASS pc carrot: plant (button "🌱 당근 심기") — {"plantedAt":352.61400000000003,"watered":false,"crop":"carrot","stage":1,"wateredAt":null}
+PASS pc carrot: dry plot stays at stage 1 after 105s
+PASS pc carrot: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS pc carrot: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS pc carrot: still stage 1 at 34s
+PASS pc carrot: stage 2 after 35s watered, soil dry again
+PASS pc carrot: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS pc carrot: still stage 2 at 34s
+PASS pc carrot: stage 3 after 35s watered, soil dry again
+PASS pc carrot: 3 stage renders differ — 8e109185/791dde9b/b07aa8cd
+PASS pc carrot: harvest (button "🌾 수확하기") -> +3 carrot, +1 seed, plot empty, counted — bag carrot 0->3, harvested 1
+PASS pc carrot: HUD shows crop count — 🧺 밀 3 · 감자 3 · 당근 3
+pc: energy after 3 cycles (with regen during skipped time) 96
+PASS pc: reload + continue keeps bag/counts/plots — {"bag":{"seed":6,"crop":0,"seed_wheat":2,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":3,"potato":3,"carrot":3,"river_fish":0,"perch":0,"carp":0,"bread":0,"soup":0,"stew":0},"counts":{"harvested":{"wheat":1,"potato":1,"carrot":1,"crop":0},"cooked":{"bread":0,"soup":0,"stew":0},"delivered":{}},"plots":{"plot:34":{"crop":"wheat","stage":2,"watered":true},"plot:37":{"crop":null,"stage":0,"watered":false},"plot:40":{"crop":null,"stage":0,"watered":false}}}
+PASS pc: continue resumes in farm_01
+PASS pc: wheat/potato/carrot all in bag after reload — {"w":3,"p":3,"c":3}
+PASS pc: no page/console errors, no failed requests
+== Gate 2 m390 2026-11-23T03:16:16.480Z http://127.0.0.1:8740/
+PASS m390: enter farm_01 from village gate ("🌾 농장으로 이동")
+PASS m390: 9 P3 crop sprites decoded
+stageSeconds {"wheat":30,"potato":40,"carrot":35} energy {"max":100,"regenSeconds":12,"plant":4,"water":2,"harvest":4}
+PASS m390 wheat: walk next to plot:34
+PASS m390 wheat: plant (button "🌱 밀 심기") — {"plantedAt":1.0229999999999306,"watered":false,"crop":"wheat","stage":1,"wateredAt":null}
+PASS m390 wheat: dry plot stays at stage 1 after 90s
+PASS m390 wheat: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS m390 wheat: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS m390 wheat: still stage 1 at 29s
+PASS m390 wheat: stage 2 after 30s watered, soil dry again
+PASS m390 wheat: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS m390 wheat: still stage 2 at 29s
+PASS m390 wheat: stage 3 after 30s watered, soil dry again
+PASS m390 wheat: 3 stage renders differ — 2ae3b10d/9e726391/c2601343
+PASS m390 wheat: harvest (button "🌾 수확하기") -> +3 wheat, +1 seed, plot empty, counted — bag wheat 0->3, harvested 1
+PASS m390 wheat: HUD shows crop count — 🧺 밀 3 · 감자 0 · 당근 0
+PASS m390 potato: walk next to plot:37
+PASS m390 potato: plant (button "🌱 감자 심기") — {"plantedAt":151.82629999999992,"watered":false,"crop":"potato","stage":1,"wateredAt":null}
+PASS m390 potato: dry plot stays at stage 1 after 120s
+PASS m390 potato: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS m390 potato: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS m390 potato: still stage 1 at 39s
+PASS m390 potato: stage 2 after 40s watered, soil dry again
+PASS m390 potato: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS m390 potato: still stage 2 at 39s
+PASS m390 potato: stage 3 after 40s watered, soil dry again
+PASS m390 potato: 3 stage renders differ — 1314e37f/62c646d0/1620d7e5
+PASS m390 potato: harvest (button "🌾 수확하기") -> +3 potato, +1 seed, plot empty, counted — bag potato 0->3, harvested 1
+PASS m390 potato: HUD shows crop count — 🧺 밀 3 · 감자 3 · 당근 0
+PASS m390 carrot: walk next to plot:40
+PASS m390 carrot: plant (button "🌱 당근 심기") — {"plantedAt":352.59629999999987,"watered":false,"crop":"carrot","stage":1,"wateredAt":null}
+PASS m390 carrot: dry plot stays at stage 1 after 105s
+PASS m390 carrot: early harvest refused — 물을 주어야 자라요 (1/3단계)
+PASS m390 carrot: water at stage 1 (button "💧 물 주기 (1/3단계)")
+PASS m390 carrot: still stage 1 at 34s
+PASS m390 carrot: stage 2 after 35s watered, soil dry again
+PASS m390 carrot: water at stage 2 (button "💧 물 주기 (2/3단계)")
+PASS m390 carrot: still stage 2 at 34s
+PASS m390 carrot: stage 3 after 35s watered, soil dry again
+PASS m390 carrot: 3 stage renders differ — f6419d0c/aedaa702/ecf75144
+PASS m390 carrot: harvest (button "🌾 수확하기") -> +3 carrot, +1 seed, plot empty, counted — bag carrot 0->3, harvested 1
+PASS m390 carrot: HUD shows crop count — 🧺 밀 3 · 감자 3 · 당근 3
+m390: energy after 3 cycles (with regen during skipped time) 96
+PASS m390: farm HUD no horizontal overflow at 390 — {"scrollW":390,"vw":390,"bad":[],"pcKeys":false}
+PASS m390: no PC key hints visible on mobile farm
+PASS m390: reload + continue keeps bag/counts/plots — {"bag":{"seed":6,"crop":0,"seed_wheat":2,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":3,"potato":3,"carrot":3,"river_fish":0,"perch":0,"carp":0,"bread":0,"soup":0,"stew":0},"counts":{"harvested":{"wheat":1,"potato":1,"carrot":1,"crop":0},"cooked":{"bread":0,"soup":0,"stew":0},"delivered":{}},"plots":{"plot:34":{"crop":"wheat","stage":2,"watered":true},"plot:37":{"crop":null,"stage":0,"watered":false},"plot:40":{"crop":null,"stage":0,"watered":false}}}
+PASS m390: continue resumes in farm_01
+PASS m390: wheat/potato/carrot all in bag after reload — {"w":3,"p":3,"c":3}
+PASS m390: no page/console errors, no failed requests
+== Gate 2 total: 92 pass, 0 fail
