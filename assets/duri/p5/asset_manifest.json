@@ -1,0 +1,595 @@
+{
+  "pack_name": "SANDSTAR P5 — 물고기 3종 + 요리 3종",
+  "version": "1.0.0-p5-fish-food",
+  "creator": "두리 (Duri)",
+  "generation_engine": "PixelForge Duri Direct RGBA Pipeline (reference identity color + 6색 부속 팔레트)",
+  "target_game": "흙별 (sandstar.aldol.app)",
+  "delivery_date": "2026-11-21",
+  "pack_id": "P5_FISH_FOOD_6",
+  "order_ref": {
+    "channel": "C0C8ZPRPQBD",
+    "thread_ts": "1795239818.647159",
+    "order_ts": "1795253201.206689",
+    "ordered_by": "모아 (MOA)"
+  },
+  "reference": {
+    "file": "SANDSTAR_P5_FISH_FOOD_REFERENCE.png",
+    "source": "Drive 1W6EyvW4pqTnpazvt0wdQfhCX5aplhweN"
+  },
+  "spec": {
+    "cell": [
+      32,
+      32
+    ],
+    "format": "PNG RGBA8888",
+    "background": "transparent — 네 모서리 알파 0",
+    "alpha": "only 0 or 255 (반투명 0px)",
+    "full_bleed": false,
+    "in_game_scale": "32px 원본 → 27px 인게임 렌더 (NEAREST)",
+    "palette": {
+      "soil": "#66998c",
+      "road": "#b5b5a0",
+      "wood": "#90674f",
+      "roof": "#487b76",
+      "gold": "#e8cc80",
+      "teal": "#4f9c9c",
+      "rfish_out": "#3d5568",
+      "rfish_bk": "#6f9ab6",
+      "rfish_bk2": "#4e7b99",
+      "rfish_sv": "#c3d2d8",
+      "rfish_hi": "#eef5f6",
+      "rfish_fin": "#a5c3d4",
+      "perch_out": "#2a3020",
+      "perch_bk": "#8e9a45",
+      "perch_lt": "#b6bf68",
+      "perch_bar": "#23281a",
+      "perch_bl": "#cfd48e",
+      "perch_fin": "#c9a63f",
+      "perch_fin2": "#97782c",
+      "koi_out": "#5d4030",
+      "koi_wh": "#f4ede1",
+      "koi_sh": "#d9cab9",
+      "koi_or": "#ec7a30",
+      "koi_rd": "#c23a2b",
+      "koi_fin": "#f2a462",
+      "koi_fin2": "#c96e35",
+      "brd_out": "#5c381a",
+      "brd_hi": "#f3d79b",
+      "brd": "#dda961",
+      "brd_sh": "#b87c3c",
+      "brd_dk": "#8a5626",
+      "soup_org": "#e0742a",
+      "soup_lt": "#f2a04e",
+      "soup_hi": "#f9cd8d",
+      "soup_dk": "#b0521a",
+      "car_dk": "#bf4d16",
+      "car_lt": "#ef9349",
+      "herb_gr": "#5b8f3c",
+      "herb_lt": "#8bb95c",
+      "stew_br": "#6b4123",
+      "stew_lt": "#8d5a30",
+      "stew_dk": "#442813",
+      "fish_sk": "#b7c6cc",
+      "fish_skhi": "#e4edf0",
+      "fish_fl": "#f2cbb0",
+      "fish_fl2": "#dfa88a",
+      "pot_lt": "#f6e3a8",
+      "pot": "#e2c473",
+      "pot_sh": "#b9974a",
+      "steam": "#e7e0d1",
+      "steam_sh": "#c8c3b2"
+    },
+    "palette_groups": {
+      "base_6": {
+        "soil": "#66998c",
+        "road": "#b5b5a0",
+        "wood": "#90674f",
+        "roof": "#487b76",
+        "gold": "#e8cc80",
+        "teal": "#4f9c9c"
+      },
+      "fish_food_identity": {
+        "rfish_out": "#3d5568",
+        "rfish_bk": "#6f9ab6",
+        "rfish_bk2": "#4e7b99",
+        "rfish_sv": "#c3d2d8",
+        "rfish_hi": "#eef5f6",
+        "rfish_fin": "#a5c3d4",
+        "perch_out": "#2a3020",
+        "perch_bk": "#8e9a45",
+        "perch_lt": "#b6bf68",
+        "perch_bar": "#23281a",
+        "perch_bl": "#cfd48e",
+        "perch_fin": "#c9a63f",
+        "perch_fin2": "#97782c",
+        "koi_out": "#5d4030",
+        "koi_wh": "#f4ede1",
+        "koi_sh": "#d9cab9",
+        "koi_or": "#ec7a30",
+        "koi_rd": "#c23a2b",
+        "koi_fin": "#f2a462",
+        "koi_fin2": "#c96e35",
+        "brd_out": "#5c381a",
+        "brd_hi": "#f3d79b",
+        "brd": "#dda961",
+        "brd_sh": "#b87c3c",
+        "brd_dk": "#8a5626",
+        "soup_org": "#e0742a",
+        "soup_lt": "#f2a04e",
+        "soup_hi": "#f9cd8d",
+        "soup_dk": "#b0521a",
+        "car_dk": "#bf4d16",
+        "car_lt": "#ef9349",
+        "herb_gr": "#5b8f3c",
+        "herb_lt": "#8bb95c",
+        "stew_br": "#6b4123",
+        "stew_lt": "#8d5a30",
+        "stew_dk": "#442813",
+        "fish_sk": "#b7c6cc",
+        "fish_skhi": "#e4edf0",
+        "fish_fl": "#f2cbb0",
+        "fish_fl2": "#dfa88a",
+        "pot_lt": "#f6e3a8",
+        "pot": "#e2c473",
+        "pot_sh": "#b9974a",
+        "steam": "#e7e0d1",
+        "steam_sh": "#c8c3b2"
+      }
+    },
+    "palette_rule": "물고기·음식 몸체·정체성 색은 레퍼런스 일러스트 기준 값 그대로. 그릇(사발)·숟가락·밀 이삭·테두리는 흙별 6색 안에서만 조합. P2 정정 팔레트 규칙과 같은 방식.",
+    "outline": "스프라이트마다 재질 고유의 1px 어두운 테두리",
+    "excluded": [
+      "3D 소품",
+      "요리 애니메이션 프레임",
+      "P6 이후 발주분"
+    ]
+  },
+  "meta": {
+    "width": 32,
+    "height": 32,
+    "format": "RGBA8888",
+    "scale": "1.0",
+    "total_sprites": 6,
+    "colors_used_union": 47
+  },
+  "sprites": [
+    {
+      "id": "river_fish",
+      "name": "은빛 피라미",
+      "name_en": "river_fish",
+      "type": "food_fish_icon",
+      "file": "river_fish.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "2d080101cd4223be4777c5f2cd319f3cc157b2c3320ae45b3a291d2cfeb5a885",
+      "opaque_pixels": 201,
+      "bbox": [
+        2,
+        9,
+        27,
+        22
+      ],
+      "colors_used": {
+        "rfish_out": 72,
+        "rfish_sv": 28,
+        "rfish_hi": 27,
+        "rfish_fin": 26,
+        "rfish_bk2": 24,
+        "rfish_bk": 24
+      },
+      "identity_colors": [
+        "rfish_bk",
+        "rfish_bk2",
+        "rfish_sv",
+        "rfish_hi",
+        "rfish_fin"
+      ],
+      "identity_hex": {
+        "rfish_bk": "#6f9ab6",
+        "rfish_bk2": "#4e7b99",
+        "rfish_sv": "#c3d2d8",
+        "rfish_hi": "#eef5f6",
+        "rfish_fin": "#a5c3d4"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "가는 체형 — 옅은 파랑 등 + 은빛 배, V자 꼬리"
+    },
+    {
+      "id": "perch",
+      "name": "강농어",
+      "name_en": "perch",
+      "type": "food_fish_icon",
+      "file": "perch.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "d7bd3c1a1770176d4aaafa75306ba9cdbfa014223e40fad8adcc00c10e13c9ad",
+      "opaque_pixels": 301,
+      "bbox": [
+        2,
+        8,
+        27,
+        27
+      ],
+      "colors_used": {
+        "perch_out": 99,
+        "perch_bar": 45,
+        "perch_bl": 44,
+        "perch_bk": 42,
+        "perch_fin": 28,
+        "perch_fin2": 23,
+        "perch_lt": 20
+      },
+      "identity_colors": [
+        "perch_bk",
+        "perch_lt",
+        "perch_bar",
+        "perch_bl",
+        "perch_fin"
+      ],
+      "identity_hex": {
+        "perch_bk": "#8e9a45",
+        "perch_lt": "#b6bf68",
+        "perch_bar": "#23281a",
+        "perch_bl": "#cfd48e",
+        "perch_fin": "#c9a63f"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "통통한 체형 — 녹황 바탕 + 검은 세로 줄무늬 3줄 + 뾰족한 등지느러미"
+    },
+    {
+      "id": "carp",
+      "name": "비단잉어",
+      "name_en": "carp",
+      "type": "food_fish_icon",
+      "file": "carp.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "cd303472b4d8cf9b1e76391dbd7af38d61115d3ded7f798fcc89f18710a7b7de",
+      "opaque_pixels": 275,
+      "bbox": [
+        2,
+        7,
+        27,
+        25
+      ],
+      "colors_used": {
+        "koi_wh": 87,
+        "koi_out": 85,
+        "koi_sh": 35,
+        "koi_fin": 33,
+        "koi_or": 16,
+        "koi_rd": 15,
+        "koi_fin2": 4
+      },
+      "identity_colors": [
+        "koi_wh",
+        "koi_or",
+        "koi_rd",
+        "koi_fin",
+        "koi_sh"
+      ],
+      "identity_hex": {
+        "koi_wh": "#f4ede1",
+        "koi_or": "#ec7a30",
+        "koi_rd": "#c23a2b",
+        "koi_fin": "#f2a462",
+        "koi_sh": "#d9cab9"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "도톰한 체형 — 흰 바탕 + 주황·빨강 얼룩 + 주황 지느러미"
+    },
+    {
+      "id": "bread",
+      "name": "갓 구운 빵",
+      "name_en": "bread",
+      "type": "food_fish_icon",
+      "file": "bread.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "683b13093068a369bbdc7c188556d569f2d99844b48eb786189e6d9e530b278e",
+      "opaque_pixels": 353,
+      "bbox": [
+        2,
+        8,
+        30,
+        29
+      ],
+      "colors_used": {
+        "brd": 106,
+        "brd_sh": 76,
+        "brd_out": 56,
+        "brd_hi": 52,
+        "gold": 27,
+        "wood": 24,
+        "brd_dk": 12
+      },
+      "identity_colors": [
+        "brd",
+        "brd_hi",
+        "brd_sh",
+        "brd_dk",
+        "gold"
+      ],
+      "identity_hex": {
+        "brd": "#dda961",
+        "brd_hi": "#f3d79b",
+        "brd_sh": "#b87c3c",
+        "brd_dk": "#8a5626",
+        "gold": "#e8cc80"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "황금빛 둥근 빵(칼집 3줄) + 옆에 밀 이삭 2줄기"
+    },
+    {
+      "id": "soup",
+      "name": "당근 수프",
+      "name_en": "soup",
+      "type": "food_fish_icon",
+      "file": "soup.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "70611f7207e778709b789dfd82f130b4f0d98deb7588fe631c891adda7c142e3",
+      "opaque_pixels": 363,
+      "bbox": [
+        3,
+        6,
+        29,
+        25
+      ],
+      "colors_used": {
+        "wood": 98,
+        "road": 88,
+        "gold": 84,
+        "soup_org": 46,
+        "soup_dk": 20,
+        "car_dk": 11,
+        "soup_lt": 6,
+        "herb_gr": 5,
+        "soup_hi": 3,
+        "herb_lt": 2
+      },
+      "identity_colors": [
+        "soup_org",
+        "soup_lt",
+        "soup_dk",
+        "car_dk",
+        "car_lt",
+        "herb_gr"
+      ],
+      "identity_hex": {
+        "soup_org": "#e0742a",
+        "soup_lt": "#f2a04e",
+        "soup_dk": "#b0521a",
+        "car_dk": "#bf4d16",
+        "car_lt": "#ef9349",
+        "herb_gr": "#5b8f3c"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "도자기 사발 + 주황 수프 + 당근 조각 3 + 파슬리 + 나무 숟가락"
+    },
+    {
+      "id": "stew",
+      "name": "생선 스튜",
+      "name_en": "stew",
+      "type": "food_fish_icon",
+      "file": "stew.png",
+      "size": [
+        32,
+        32
+      ],
+      "sha256": "a8f46fe26bd0b644e68523ae363c84f6b7515ccfa5cfa85686d2c6cc9557e8a6",
+      "opaque_pixels": 367,
+      "bbox": [
+        3,
+        3,
+        28,
+        25
+      ],
+      "colors_used": {
+        "road": 88,
+        "wood": 80,
+        "gold": 73,
+        "stew_br": 29,
+        "stew_dk": 21,
+        "steam": 16,
+        "fish_fl": 13,
+        "fish_sk": 11,
+        "pot_sh": 8,
+        "fish_fl2": 7,
+        "pot": 7,
+        "pot_lt": 7,
+        "steam_sh": 4,
+        "stew_lt": 2,
+        "fish_skhi": 1
+      },
+      "identity_colors": [
+        "stew_br",
+        "stew_lt",
+        "stew_dk",
+        "fish_fl",
+        "fish_sk",
+        "pot",
+        "steam"
+      ],
+      "identity_hex": {
+        "stew_br": "#6b4123",
+        "stew_lt": "#8d5a30",
+        "stew_dk": "#442813",
+        "fish_fl": "#f2cbb0",
+        "fish_sk": "#b7c6cc",
+        "pot": "#e2c473",
+        "steam": "#e7e0d1"
+      },
+      "full_bleed": false,
+      "background": "transparent (alpha 0)",
+      "alpha_values": [
+        0,
+        255
+      ],
+      "placement": "inventory / 도감 아이콘 — 27px 인게임 렌더",
+      "motif": "같은 사발 + 진한 갈색 국물 + 생선 토막(은빛 껍질) + 감자 큐브 + 김"
+    }
+  ],
+  "frames": {
+    "river_fish": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "perch": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "carp": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "bread": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "soup": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "stew": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    }
+  }
+}
