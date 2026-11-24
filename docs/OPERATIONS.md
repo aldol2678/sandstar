@@ -11,7 +11,8 @@
 ## 실행·배포 경계
 
 - GitHub push, Issue, PR 생성·병합만으로 Cloudflare Worker 또는 도메인이 업데이트되지 않음.
-- CI/CD, GitHub Actions, 자동 Cloudflare 배포를 설정하지 않음. 필요한 검증은 기존 수동/로컬 검사와 배포 후 readback 우선.
+- GitHub Actions의 `sandstar-ci`는 관련 경로가 바뀐 `main` 대상 PR과 `main` push에서 실행하며 수동 실행도 지원한다. 빌드 재현성과 Node 검사, 로컬 프리뷰의 Gate 2~5, QA 훅 없는 PC·모바일 실시간 플레이 흐름을 검증한다.
+- CI에는 배포 단계나 Cloudflare 자격증명이 없다. 운영 배포에는 알돌의 별도 수동 승인이 필요하다.
 - 실제 운영 배포는 승인된 범위에서 별도 수행하고 배포 ID, Worker 버전, URL, healthz, 롤백 후보를 기록.
 - 운영 사이트의 저장 키와 `localStorage`를 임의 변경·삭제하거나 호환성을 추정하지 않음. 이전 저장 읽기 fallback 유지 여부 확인.
 - 배포 전 PC와 Android 실기기: 이동·채굴·로프, 월드 전환, 음악, 가로/세로, 멀티터치, 기존 세이브 복원을 검증.
