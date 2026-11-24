@@ -20,7 +20,7 @@ def once(old, new):
 
 once("</head>", """<style id="farm-input-fix-20261124">
 /* Farm owns its own controls; suppress the legacy movement HUD only in this world. */
-#app.farm-world-active #controls:not(:has(#farmDpad)){display:none!important;pointer-events:none!important}
+#app.farm-world-active #controls,#app.farm-world-active #town25dRoot,#app.farm-world-active #ruinsWalkPad,#app.farm-world-active #archPad{display:none!important;pointer-events:none!important}
 #farmWorldCanvas{touch-action:none}
 </style></head>""")
 once("function farmWorldClearInput(){farmMoveKeys.clear();farmJoystick={x:0,y:0};farmPointer=null;}",
@@ -28,7 +28,8 @@ once("function farmWorldClearInput(){farmMoveKeys.clear();farmJoystick={x:0,y:0}
 function farmWorldClearInput(){farmMoveKeys.clear();farmJoystick={x:0,y:0};farmPointer=null;farmTapTarget=null;}""")
 once("function farmWorldMoveDelta(){", "function farmWorldMoveDelta(dt){")
 once(" dx+=farmJoystick.x;dy+=farmJoystick.y;let n=Math.hypot(dx,dy);return n>1?{x:dx/n,y:dy/n}:{x:dx,y:dy};",
-""" if(farmMoveKeys.size||farmPointer!==null){farmTapTarget=null;}
+""" if(typeof ssScenePanelOpen==='function'&&ssScenePanelOpen()){farmWorldClearInput();return {x:0,y:0};}
+ if(farmMoveKeys.size||farmPointer!==null){farmTapTarget=null;}
  dx+=farmJoystick.x;dy+=farmJoystick.y;let n=Math.hypot(dx,dy);
  if(n>0)return n>1?{x:dx/n,y:dy/n}:{x:dx,y:dy};
  if(!farmTapTarget)return {x:0,y:0};
@@ -54,7 +55,7 @@ once(" farmDrawPlayer(c,farmPlayer.x*t,farmPlayer.y*t);",
 # Replace the one existing canvas handler, not add a competing listener.
 pattern = r"farmCanvas\.addEventListener\('pointerdown',e=>\{[\s\S]*?\n\}\);\n(?=// Joystick uses pointer ownership)"
 replacement = """farmCanvas.addEventListener('pointerdown',e=>{
- if(!farmWorldActive||m25bBusy||farmPointer!==null||farmMoveKeys.size||$('overlay')?.classList.contains('open'))return;
+ if(!farmWorldActive||m25bBusy||farmPointer!==null||farmMoveKeys.size||$('overlay')?.classList.contains('open')||(typeof ssScenePanelOpen==='function'&&ssScenePanelOpen()))return;
  if(!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
  e.preventDefault();
  const r=farmCanvas.getBoundingClientRect();if(!r.width||!r.height)return;
