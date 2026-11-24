@@ -1,0 +1,144 @@
+name: sandstar-ci
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - 'release/**'
+      - 'assets/**'
+      - 'recovered/m25d-ui1-region-bgm-qa/parts/**'
+      - 'workers/title-bridge.js'
+      - 'docs/source-manifest.json'
+      - '.github/workflows/sandstar-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - 'release/**'
+      - 'assets/**'
+      - 'recovered/m25d-ui1-region-bgm-qa/parts/**'
+      - 'workers/title-bridge.js'
+      - 'docs/source-manifest.json'
+      - '.github/workflows/sandstar-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandstar-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (repro + node checks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build default candidate (twice, determinism check)
+        run: |
+          bash tools/farm-cooking-b/build.sh dist/farm-cooking-b-v44-a
+          bash tools/farm-cooking-b/build.sh dist/farm-cooking-b-v44-b
+          sha256sum dist/farm-cooking-b-v44-a/fcb-main.mjs dist/farm-cooking-b-v44-b/fcb-main.mjs
+          cmp dist/farm-cooking-b-v44-a/fcb-main.mjs dist/farm-cooking-b-v44-b/fcb-main.mjs
+          echo "candidate SHA: $(sha256sum dist/farm-cooking-b-v44-a/fcb-main.mjs | cut -d' ' -f1)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build QA candidate
+        run: bash tools/farm-cooking-b/build.sh --qa dist/farm-cooking-b-v44-qa
+      - name: Node-only checks (no browser)
+        run: |
+          node --test tools/mining-pickaxe-trace/qa.mjs
+          node tools/verify-import.mjs
+
+  gates:
+    name: gates 2-5 (playwright)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NODE_PATH: /tmp/ci-qa/node_modules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build candidate + QA candidate
+        run: |
+          bash tools/farm-cooking-b/build.sh dist/farm-cooking-b-v44
+          bash tools/farm-cooking-b/build.sh --qa dist/farm-cooking-b-v44-qa
+      - name: Install Playwright + Chromium
+        run: |
+          mkdir -p /tmp/ci-qa && cd /tmp/ci-qa && npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Start local preview servers
+        run: |
+          node tools/farm-cooking-b/serve.mjs release/v44/main.mjs 8738 > /tmp/serve-base.log 2>&1 &
+          node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v44/fcb-main.mjs 8739 --assets dist/farm-cooking-b-v44/assets > /tmp/serve-fcb.log 2>&1 &
+          node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v44-qa/fcb-main.mjs 8761 --assets dist/farm-cooking-b-v44-qa/assets > /tmp/serve-qa.log 2>&1 &
+          for port in 8738 8739 8761; do
+            for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:${port}/" -o /dev/null && break || sleep 2; done
+            curl -fsS "http://127.0.0.1:${port}/" -o /dev/null || { echo "server on ${port} did not come up"; exit 1; }
+          done
+      - name: Gate 2-4 (QA build, PC + mobile)
+        run: |
+          mkdir -p qa-out/gate2 qa-out/gate3 qa-out/gate4
+          node tools/farm-cooking-b/qa/gate2-farm.cjs http://127.0.0.1:8761/ qa-out/gate2
+          node tools/farm-cooking-b/qa/gate3-cooking.cjs http://127.0.0.1:8761/ qa-out/gate3
+          FCB_MODULE=dist/farm-cooking-b-v44-qa/fcb-main.mjs node tools/farm-cooking-b/qa/gate4-scene.cjs http://127.0.0.1:8761/ qa-out/gate4
+      - name: Gate 5 (regression, baseline vs candidate)
+        run: |
+          mkdir -p qa-out/gate5
+          node tools/farm-cooking-b/qa/gate5-regression.cjs http://127.0.0.1:8738/ http://127.0.0.1:8739/ qa-out/gate5
+      - name: Upload gate logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandstar-gate-logs
+          path: qa-out/
+          retention-days: 7
+
+  nohook-flow:
+    name: no-hook flow (real time)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NODE_PATH: /tmp/ci-qa/node_modules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build candidate
+        run: bash tools/farm-cooking-b/build.sh dist/farm-cooking-b-v44
+      - name: Install Playwright + Chromium
+        run: |
+          mkdir -p /tmp/ci-qa && cd /tmp/ci-qa && npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Start candidate preview server
+        run: |
+          node tools/farm-cooking-b/serve.mjs dist/farm-cooking-b-v44/fcb-main.mjs 8752 --assets dist/farm-cooking-b-v44/assets > /tmp/serve-fcb.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:8752/" -o /dev/null && break || sleep 2; done
+          curl -fsS "http://127.0.0.1:8752/" -o /dev/null || { echo "server on 8752 did not come up"; exit 1; }
+      - name: No-hook flow (PC + mobile)
+        run: |
+          mkdir -p qa-out/nohook
+          node tools/farm-cooking-b/qa/nohook-flow.cjs http://127.0.0.1:8752/ qa-out/nohook pc
+          node tools/farm-cooking-b/qa/nohook-flow.cjs http://127.0.0.1:8752/ qa-out/nohook m390
+      - name: Upload no-hook logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandstar-nohook-logs
+          path: qa-out/
+          retention-days: 7
