@@ -1,0 +1,424 @@
+{
+ "pc-town-base": {
+  "qaHooks": null,
+  "quest": {
+   "visible": true,
+   "text": "광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."
+  },
+  "help": "WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동",
+  "loggingAction": "🪓 벌목장으로 이동",
+  "loggingSub": "벌목장 입구 → 잔빛숲",
+  "mineAction": "⛏ 광산으로 이동",
+  "farmAction": "🌾 농장으로 이동",
+  "fullmapOpen": true,
+  "fullmapLabels": [
+   "갱이@91,336",
+   "광부 오두막@84,230",
+   "광산 입구@56,366",
+   "나@266,289",
+   "낚시터 입구@488,163",
+   "농장 입구@37,163",
+   "마루@175,124",
+   "마을 게시판@266,347",
+   "바람장터@140,93",
+   "벌목장 입구@476,366",
+   "별샘 우물@266,143",
+   "상가주택@448,230",
+   "서온@469,48",
+   "솔아@41,126",
+   "여울@490,84",
+   "연못@490,121",
+   "유적 입구@495,22",
+   "이장댁@266,28",
+   "작업 대장간@392,93",
+   "토박@392,160",
+   "하린@445,391"
+  ],
+  "rescue": {
+   "nativeDialog": false,
+   "modalHasRescue": true
+  },
+  "problems": []
+ },
+ "pc-town-fcb": {
+  "qaHooks": {
+   "qaHooks": false,
+   "advance": "undefined",
+   "setSceneMode": "undefined"
+  },
+  "quest": {
+   "visible": true,
+   "text": "광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."
+  },
+  "help": "WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동",
+  "loggingAction": "🪓 벌목장으로 이동",
+  "loggingSub": "벌목장 입구 → 잔빛숲",
+  "mineAction": "⛏ 광산으로 이동",
+  "farmAction": "🌾 농장으로 이동",
+  "fullmapOpen": true,
+  "fullmapLabels": [
+   "갱이@91,336",
+   "광부 오두막@84,230",
+   "광산 입구@56,366",
+   "나@266,289",
+   "낚시터 입구@488,163",
+   "농장 입구@37,163",
+   "마루@175,124",
+   "마을 게시판@266,347",
+   "바람장터@140,93",
+   "벌목장 입구@476,366",
+   "별샘 우물@266,143",
+   "상가주택@448,230",
+   "서온@469,48",
+   "솔아@41,126",
+   "여울@490,84",
+   "연못@490,121",
+   "유적 입구@495,22",
+   "이장댁@266,28",
+   "작업 대장간@392,93",
+   "토박@392,160",
+   "하린@445,391"
+  ],
+  "rescue": {
+   "nativeDialog": false,
+   "modalHasRescue": true
+  },
+  "problems": []
+ },
+ "pc-ruins-base": {
+  "entered": true,
+  "renderer": "three",
+  "returned": true,
+  "problems": []
+ },
+ "pc-ruins-fcb": {
+  "entered": true,
+  "renderer": "three",
+  "returned": true,
+  "problems": []
+ },
+ "pc-mine-base": {
+  "gate": "⛏ 광산으로 이동",
+  "region": "mine",
+  "tapped": {
+   "x": 44,
+   "y": 78,
+   "tile": "grass"
+  },
+  "notice": "승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.",
+  "protectedCells": [
+   31,
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   54,
+   55,
+   56
+  ],
+  "firstDig": {
+   "before": {
+    "mined": 0,
+    "tile": "dirt"
+   },
+   "after": {
+    "mined": 1,
+    "tile": null
+   }
+  },
+  "problems": []
+ },
+ "pc-mine-fcb": {
+  "gate": "⛏ 광산으로 이동",
+  "region": "mine",
+  "tapped": {
+   "x": 44,
+   "y": 78,
+   "tile": "grass"
+  },
+  "notice": "승강장과 출입구 바닥은 보호돼요. 동쪽 X46부터 캘 수 있어요.",
+  "protectedCells": [
+   31,
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   54,
+   55,
+   56
+  ],
+  "firstDig": {
+   "before": {
+    "mined": 0,
+    "tile": "dirt"
+   },
+   "after": {
+    "mined": 1,
+    "tile": null
+   }
+  },
+  "problems": []
+ },
+ "pc-forest-base": {
+  "gate": "🪓 벌목장으로 이동",
+  "arrivalToast": "새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.",
+  "region": "life_forest_01",
+  "mode": "mining",
+  "lifeButton": {
+   "visible": true,
+   "text": "🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"
+  },
+  "problems": []
+ },
+ "pc-forest-fcb": {
+  "gate": "🪓 벌목장으로 이동",
+  "arrivalToast": "새 지역 발견 · 잔빛숲 · 턱은 이동하면서 점프해 넘으세요.",
+  "region": "life_forest_01",
+  "mode": "mining",
+  "lifeButton": {
+   "visible": true,
+   "text": "🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"
+  },
+  "problems": []
+ },
+ "m390-town-base": {
+  "qaHooks": null,
+  "quest": {
+   "visible": true,
+   "text": "광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."
+  },
+  "help": "조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동",
+  "loggingAction": "🪓 벌목장으로 이동",
+  "loggingSub": "벌목장 입구 → 잔빛숲",
+  "mineAction": "⛏ 광산으로 이동",
+  "farmAction": "🌾 농장으로 이동",
+  "fullmapOpen": true,
+  "fullmapLabels": [
+   "갱이@58,211",
+   "광부 오두막@53,147",
+   "광산 입구@36,234",
+   "나@169,185",
+   "낚시터 입구@299,104",
+   "농장 입구@33,104",
+   "마루@111,84",
+   "마을 게시판@169,222",
+   "바람장터@89,60",
+   "벌목장 입구@299,234",
+   "별샘 우물@169,92",
+   "상가주택@285,147",
+   "솔아@26,77",
+   "여울@311,50",
+   "연못@311,78",
+   "유적 입구@305,20",
+   "이장댁@169,19",
+   "작업 대장간@249,60",
+   "하린@282,264"
+  ],
+  "rescue": {
+   "nativeDialog": false,
+   "modalHasRescue": true
+  },
+  "overflow": 0,
+  "problems": []
+ },
+ "m390-town-fcb": {
+  "qaHooks": {
+   "qaHooks": false,
+   "advance": "undefined",
+   "setSceneMode": "undefined"
+  },
+  "quest": {
+   "visible": true,
+   "text": "광산 X46에서 한 번 채굴한 뒤 X55 광맥을 조사하세요."
+  },
+  "help": "조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동",
+  "loggingAction": "🪓 벌목장으로 이동",
+  "loggingSub": "벌목장 입구 → 잔빛숲",
+  "mineAction": "⛏ 광산으로 이동",
+  "farmAction": "🌾 농장으로 이동",
+  "fullmapOpen": true,
+  "fullmapLabels": [
+   "갱이@58,211",
+   "광부 오두막@53,147",
+   "광산 입구@36,234",
+   "나@169,185",
+   "낚시터 입구@299,104",
+   "농장 입구@33,104",
+   "마루@111,84",
+   "마을 게시판@169,222",
+   "바람장터@89,60",
+   "벌목장 입구@299,234",
+   "별샘 우물@169,92",
+   "상가주택@285,147",
+   "솔아@26,77",
+   "여울@311,50",
+   "연못@311,78",
+   "유적 입구@305,20",
+   "이장댁@169,19",
+   "작업 대장간@249,60",
+   "하린@282,264"
+  ],
+  "rescue": {
+   "nativeDialog": false,
+   "modalHasRescue": true
+  },
+  "overflow": 0,
+  "problems": []
+ },
+ "m390-ruins-base": {
+  "entered": true,
+  "renderer": "three",
+  "returned": true,
+  "problems": []
+ },
+ "m390-ruins-fcb": {
+  "entered": true,
+  "renderer": "three",
+  "returned": true,
+  "problems": []
+ },
+ "oldSave": {
+  "fixture": {
+   "mined": 1,
+   "coins": 77,
+   "plots": {
+    "plot:34": {
+     "plantedAt": 190,
+     "watered": true,
+     "crop": "wheat"
+    },
+    "plot:37": {
+     "plantedAt": 0,
+     "watered": true,
+     "crop": "carrot"
+    },
+    "plot:40": {
+     "plantedAt": null,
+     "watered": false,
+     "crop": null
+    }
+   }
+  },
+  "loaded": {
+   "base": {
+    "title": {
+     "title": false,
+     "paused": false,
+     "hasSave": true,
+     "worldSeed": 777001,
+     "worldMined": 1,
+     "worldCoins": 77
+    },
+    "region": "mine",
+    "bag": {
+     "seed": 6,
+     "crop": 0,
+     "seed_wheat": 2,
+     "seed_potato": 3,
+     "seed_carrot": 2,
+     "sapling": 0,
+     "wheat": 0,
+     "potato": 0,
+     "carrot": 4,
+     "river_fish": 0,
+     "perch": 0,
+     "carp": 0,
+     "bread": 0,
+     "soup": 0,
+     "stew": 0
+    },
+    "plots": {
+     "plot:34": {
+      "plantedAt": 190,
+      "watered": true,
+      "crop": "wheat"
+     },
+     "plot:37": {
+      "plantedAt": 0,
+      "watered": true,
+      "crop": "carrot"
+     },
+     "plot:40": {
+      "plantedAt": null,
+      "watered": false,
+      "crop": null
+     }
+    },
+    "problems": []
+   },
+   "fcb": {
+    "title": {
+     "title": false,
+     "paused": false,
+     "hasSave": true,
+     "worldSeed": 777001,
+     "worldMined": 1,
+     "worldCoins": 77
+    },
+    "region": "mine",
+    "bag": {
+     "seed": 6,
+     "crop": 0,
+     "seed_wheat": 2,
+     "seed_potato": 3,
+     "seed_carrot": 2,
+     "sapling": 0,
+     "wheat": 0,
+     "potato": 0,
+     "carrot": 4,
+     "river_fish": 0,
+     "perch": 0,
+     "carp": 0,
+     "bread": 0,
+     "soup": 0,
+     "stew": 0
+    },
+    "plots": {
+     "plot:34": {
+      "plantedAt": 190,
+      "watered": true,
+      "crop": "wheat",
+      "stage": 1,
+      "wateredAt": 200
+     },
+     "plot:37": {
+      "plantedAt": 0,
+      "watered": false,
+      "crop": "carrot",
+      "stage": 3,
+      "wateredAt": null
+     },
+     "plot:40": {
+      "plantedAt": null,
+      "watered": false,
+      "crop": null,
+      "stage": 0,
+      "wateredAt": null
+     }
+    },
+    "energy": 100,
+    "problems": []
+   }
+  }
+ }
+}

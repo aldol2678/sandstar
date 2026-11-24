@@ -1,0 +1,45 @@
+# baseline: release/v38/main.mjs sha256 78b4503a... (served 8738) vs fcb-main.mjs sha256 bab291a8... (served 8739)
+-- pc-town-v38: {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"21 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"problems":[]}
+-- pc-town-fcb: {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"21 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"problems":[]}
+-- pc-ruins-v38: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- pc-ruins-fcb: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- pc-mine-v38: {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"이 바닥은 승강장 보호 구역이에요 · 동쪽 X68 이후(또는 서쪽 X18 이전) 흙벽에서 아래로 캘 수 있어요","problems":[]}
+-- pc-mine-fcb: {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"이 바닥은 승강장 보호 구역이에요 · 동쪽 X68 이후(또는 서쪽 X18 이전) 흙벽에서 아래로 캘 수 있어요","problems":[]}
+-- pc-forest-v38: {"gate":"🪓 벌목장으로 이동","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"},"problems":[]}
+-- pc-forest-fcb: {"gate":"🪓 벌목장으로 이동","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"},"problems":[]}
+-- m390-town-v38: {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"19 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"overflow":0,"problems":[]}
+-- m390-town-fcb: {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":"19 labels","rescue":{"nativeDialog":false,"modalHasRescue":true},"overflow":0,"problems":[]}
+-- m390-ruins-v38: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+-- m390-ruins-fcb: {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS pc-town: fcb == v38 (all fields) — {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":["갱이@91,336","광부 오두막@84,230","광산 입구@56,366
+PASS pc-town: fcb no page/console errors, no failed requests
+PASS pc-town: v38 baseline also clean (reference)
+PASS pc-ruins: fcb == v38 (all fields) — {"entered":true,"renderer":"three","returned":true}
+PASS pc-ruins: fcb no page/console errors, no failed requests
+PASS pc-ruins: v38 baseline also clean (reference)
+PASS pc-mine: fcb == v38 (all fields) — {"gate":"⛏ 광산으로 이동","region":"mine","tapped":{"x":44,"y":78,"tile":"grass"},"notice":"이 바닥은 승강장 보호 구역이에요 · 동쪽 X68 이후(또는 서쪽 X18 이전) 흙벽에서 아래로 캘 수 있어요"}
+PASS pc-mine: fcb no page/console errors, no failed requests
+PASS pc-mine: v38 baseline also clean (reference)
+PASS pc-forest: fcb == v38 (all fields) — {"gate":"🪓 벌목장으로 이동","region":"life_forest_01","mode":"mining","lifeButton":{"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"}}
+PASS pc-forest: fcb no page/console errors, no failed requests
+PASS pc-forest: v38 baseline also clean (reference)
+PASS m390-town: fcb == v38 (all fields) — {"quest":{"visible":true,"text":"마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요."},"help":"조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동","loggingAction":"🪓 벌목장으로 이동","loggingSub":"벌목장 입구 → 잔빛숲","mineAction":"⛏ 광산으로 이동","farmAction":"🌾 농장으로 이동","fullmapOpen":true,"fullmapLabels":["갱이@58,211","광부 오두막@53,147","광산 입구@36,
+PASS m390-town: fcb no page/console errors, no failed requests
+PASS m390-town: v38 baseline also clean (reference)
+PASS m390-ruins: fcb == v38 (all fields) — {"entered":true,"renderer":"three","returned":true}
+PASS m390-ruins: fcb no page/console errors, no failed requests
+PASS m390-ruins: v38 baseline also clean (reference)
+PASS P0-1 pc: town objective strip visible with quest text — 마을 광산 입구 X40으로 내려가 X55의 빛나는 광맥을 조사하세요.
+PASS P0-1 m390: town objective strip visible
+PASS P0-2: logging gate named 벌목장 입구 → 잔빛숲 — 🪓 벌목장으로 이동 / 벌목장 입구 → 잔빛숲
+PASS P0-5 pc: PC help text — WASD 이동 · E 이용 · 미니맵을 눌러 자동 이동
+PASS P0-5 m390: no PC keys in town help on touch — 조이스틱 이동 · E 버튼 이용 · 미니맵을 눌러 자동 이동
+PASS P0-5: fullmap opens and draws gate + player labels (pc, m390) — 21/19 labels
+PASS P0-5: kitchen counter adds no fullmap label
+PASS P0-6: rescue uses the in-game modal, no native dialog
+PASS m390: town has no horizontal overflow — 0
+PASS Phase 1 pc: walk into ruins and back out — {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS Phase 1 m390: walk into ruins and back out — {"entered":true,"renderer":"three","returned":true,"problems":[]}
+PASS P0-4: mine apron shows the protected-floor guidance — 이 바닥은 승강장 보호 구역이에요 · 동쪽 X68 이후(또는 서쪽 X18 이전) 흙벽에서 아래로 캘 수 있어요
+PASS P0-3: life button stays visible in mining mode next to a tree — {"visible":true,"text":"🪓 벌목은 생활 조작에서 · ↩ 생활 조작으로 바꾸기"}
+== Gate 5 total: 31 pass, 0 fail

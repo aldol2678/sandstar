@@ -1,0 +1,26 @@
+/home/user/sandstar/release/v38/main.mjs: OK
+/home/user/sandstar/release/v41/main.mjs: OK
+html bytes 24665744 sha 20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b
+script blocks 4 after "\";\nconst OG_IMAGE_B64=\"/9j/4AAQSkZJRgABA"
+base: v41 20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b qa hooks: False
+fcb html bytes: 24749680 sha256: 6033b23c982c366ff72573d7de63793a3582efc858b3d90a4a0b041a084b8037 delta: 83936
+worker bytes: 25146494 sha256: a22da7f26ad99349ce60cc8ffc52e433b467cb57df4f32c03c452ef3e027793c
+worker bytes: 26507300 sha256: 3b36af90b2bb9525b574f4d2c49132d4f943139db1592fd27c31ed1e37d683ff glb routes: 3
+inline script blocks syntax OK: 3
+base: v41 · qa hooks: off
+7da5888cd96d8b99b624e06d59a5492b29b3b67b442bc421f5e72ebc6a4ba5c3  /home/user/sandstar/dist/farm-cooking-b-v41/base-main.mjs
+6033b23c982c366ff72573d7de63793a3582efc858b3d90a4a0b041a084b8037  /home/user/sandstar/dist/farm-cooking-b-v41/fcb-index.html
+3b36af90b2bb9525b574f4d2c49132d4f943139db1592fd27c31ed1e37d683ff  /home/user/sandstar/dist/farm-cooking-b-v41/fcb-main.mjs
+/home/user/sandstar/release/v38/main.mjs: OK
+/home/user/sandstar/release/v41/main.mjs: OK
+html bytes 24665744 sha 20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b
+script blocks 4 after "\";\nconst OG_IMAGE_B64=\"/9j/4AAQSkZJRgABA"
+base: v41 20034576c26e5f6e660895defd27ffb80dd1f226844a96ad321fb4dbf5a0ef5b qa hooks: True
+fcb html bytes: 24749994 sha256: 27aede2feb0d2fa19c1b86591d6bc76b3310dbaa78745f40c0f93e4aa0c8536b delta: 84250
+worker bytes: 25146809 sha256: 7e713d7c43e188ca24061287a8137ecfb04d4bd593e30d88a9b649c40b12088b
+worker bytes: 26507615 sha256: 70541b827b3ddbaf51b3e841d097065faf9fd120a03bd6b6111d68639852531a glb routes: 3
+inline script blocks syntax OK: 3
+base: v41 · qa hooks: --qa
+7da5888cd96d8b99b624e06d59a5492b29b3b67b442bc421f5e72ebc6a4ba5c3  /home/user/sandstar/dist/farm-cooking-b-v41-qa/base-main.mjs
+27aede2feb0d2fa19c1b86591d6bc76b3310dbaa78745f40c0f93e4aa0c8536b  /home/user/sandstar/dist/farm-cooking-b-v41-qa/fcb-index.html
+70541b827b3ddbaf51b3e841d097065faf9fd120a03bd6b6111d68639852531a  /home/user/sandstar/dist/farm-cooking-b-v41-qa/fcb-main.mjs

@@ -1,0 +1,5 @@
+worker bytes: 25024053 sha256: 73fbeebd07dde7735361a192300e9778ce0eac370e6cd9c104f8cef08531c944
+worker bytes: 26384859 sha256: bab291a8c1c0999e2fb49ab085dc585d02fbc48fde5a400737925dfa25b8f104 glb routes: 3
+inline script blocks syntax OK: 3
+77c590f1fbe0ce1e35ce9e6e136983cfe8f4bfa64f0247a1aa958c2e7380102a  /home/user/sandstar/dist/farm-cooking-b/fcb-index.html
+bab291a8c1c0999e2fb49ab085dc585d02fbc48fde5a400737925dfa25b8f104  /home/user/sandstar/dist/farm-cooking-b/fcb-main.mjs

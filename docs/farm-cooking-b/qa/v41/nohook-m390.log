@@ -1,0 +1,31 @@
+# build: tools/farm-cooking-b/build.sh (default, no QA hooks) -> fcb-main.mjs sha256 3b36af90b2bb9525b574f4d2c49132d4f943139db1592fd27c31ed1e37d683ff
+PASS m390: default build: no QA hooks (no time skip available) — {"qaHooks":false,"advance":"undefined","setSceneMode":"undefined"}
+PASS m390: walk to the farm gate
+PASS m390: enter farm_01 through the gate button — 🌾 농장으로 이동
+PASS m390: wheat: walk next to plot:34
+PASS m390: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":0.9389999999999945,"watered":true,"crop":"wheat","stage":1,"wateredAt":1.039099999999995}
+PASS m390: potato: walk next to plot:37
+PASS m390: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.2223999999999948,"watered":true,"crop":"potato","stage":1,"wateredAt":1.322399999999995}
+PASS m390: carrot: walk next to plot:40
+PASS m390: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.538999999999995,"watered":true,"crop":"carrot","stage":1,"wateredAt":1.638999999999995}
+PASS m390: wheat: grew 1 → 2 → 3 on the game clock — [1,2,3]
+PASS m390: potato: grew 1 → 2 → 3 on the game clock — [1,2,3]
+PASS m390: carrot: grew 1 → 2 → 3 on the game clock — [1,2,3]
+real time from first plant to all ripe: 82 s
+PASS m390: wheat: harvest → +3 wheat, plot empty — 🌾 수확하기 · 0→3
+PASS m390: potato: harvest → +3 potato, plot empty — 🌾 수확하기 · 0→3
+PASS m390: carrot: harvest → +3 carrot, plot empty — 🌾 수확하기 · 0→3
+PASS m390: energy was spent on the loop (plant 4 · water 2 · harvest 4) and regenerates — 100.0 → 70.8 after 82 s
+PASS m390: walk to the farm exit
+PASS m390: walk to the village kitchen counter
+PASS m390: kitchen opens from the action button — 🍳 요리대 이용
+PASS m390: fish stew blocked with a visible reason (no fish) — 재료 부족 · 물고기 1개 더 필요 (보유 0/1)
+PASS m390: cook bread: wheat -2, bread +1 — wheat 3→1
+PASS m390: cook soup: carrot -2, soup +1 — carrot 3→1
+PASS m390: eat bread → energy +25 (cap 100), bread -1 — 70.9 → 95.9
+PASS m390: kitchen fits 390 (no horizontal overflow) — {"scrollW":390,"vw":390}
+PASS m390: after reload: soup / wheat / potato / carrot counts kept — ["soup 1→1","bread 0→0","wheat 1→1","potato 3→3","carrot 1→1"]
+PASS m390: after reload: cook / harvest counters kept — {"harvested":{"wheat":1,"potato":1,"carrot":1,"crop":0},"cooked":{"bread":1,"soup":1,"stew":0},"delivered":{}}
+PASS m390: no page/console errors, no failed requests
+walk town hook -16.6,-2 · farm hook 18,17.2 · farm hook 24,17.2 · farm hook 30,17.2 · farm hook 18,17.2 · farm hook 30,17.2 · farm hook 24,17.2 · farm hook 18,17.2 · farm hook 24,17.2 · farm hook 30,17.2 · farm hook 4.6,16.5 · town hook -3.4,-4.8
+== no-hook flow m390 total: 27 pass, 0 fail

@@ -1,0 +1,5 @@
+# 2026-11-23T07:55:15Z node v22.23.5, 4 CPU — 로컬 대용 측정 (Cloudflare 수치 아님)
+v41 {"bytes":25062108,"runs":21,"importMsMedian":915.1,"importMsMin":793.2,"importMsMax":1092.4,"firstFetchMsMedian":115,"status":200}
+fcb {"bytes":26507300,"runs":21,"importMsMedian":902.1,"importMsMin":806.1,"importMsMax":1247.1,"firstFetchMsMedian":113.2,"status":200}
+ratio fcb/v41: import 0.986 · bytes 1.058
+exit 0

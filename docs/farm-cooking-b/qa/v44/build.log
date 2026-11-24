@@ -1,0 +1,32 @@
+/home/user/sandstar/release/v38/main.mjs: OK
+/home/user/sandstar/release/v44/main.mjs: OK
+html bytes 24671072 sha 3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6
+script blocks 4 after "\";\nconst OG_IMAGE_B64=\"/9j/4AAQSkZJRgABA"
+base: v44 3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6 qa hooks: False
+fcb html bytes: 24755078 sha256: 85adaed7b6804b3474fc980c8ec96f7080efdc02e814f20d45f619667e954433 delta: 84006
+worker bytes: 25152066 sha256: 2c2161739d80b985e8eb0a8831396dd4ec1d7b71626d9b2cddcff0defbfa4bc1
+asset fcb/glb/wheat-crop-c073-dbd41325.glb 423652B sha256 dbd41325a2c9255e6872a1238059282281e925cef60067a0e888837b76fd0ee2
+asset fcb/glb/potato-crop-c047-e68aa60f.glb 338748B sha256 e68aa60fc2024ab3280515d4f2391c08b6ccad675a3643fa1bf7344c947176ec
+asset fcb/glb/carrot-crop-carrot-86444601.glb 257908B sha256 8644460182d09e84bc39aea3bd7eadf03c7f1a8ae9ac35d2672018342edde061
+static assets: 3 files, 1020308 bytes
+inline script blocks syntax OK: 3
+base: v44 · qa hooks: off · glb: static
+0951ddf75d732f4d4f2a9ed4c60751db4d497f29ecb2c1a9ce5e62c155ecd4c3  /home/user/sandstar/dist/farm-cooking-b-v44/base-main.mjs
+85adaed7b6804b3474fc980c8ec96f7080efdc02e814f20d45f619667e954433  /home/user/sandstar/dist/farm-cooking-b-v44/fcb-index.html
+2c2161739d80b985e8eb0a8831396dd4ec1d7b71626d9b2cddcff0defbfa4bc1  /home/user/sandstar/dist/farm-cooking-b-v44/fcb-main.mjs
+/home/user/sandstar/release/v38/main.mjs: OK
+/home/user/sandstar/release/v44/main.mjs: OK
+html bytes 24671072 sha 3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6
+script blocks 4 after "\";\nconst OG_IMAGE_B64=\"/9j/4AAQSkZJRgABA"
+base: v44 3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6 qa hooks: True
+fcb html bytes: 24755478 sha256: 56345fa1c6c48e17a565c74156ed97a6ca687ace39a9bc2c642850e949f8cbf8 delta: 84406
+worker bytes: 25152467 sha256: 2909f64759da3b44000ddb75629514649b6ae303f48aab6493d4784e096ee9fb
+asset fcb/glb/wheat-crop-c073-dbd41325.glb 423652B sha256 dbd41325a2c9255e6872a1238059282281e925cef60067a0e888837b76fd0ee2
+asset fcb/glb/potato-crop-c047-e68aa60f.glb 338748B sha256 e68aa60fc2024ab3280515d4f2391c08b6ccad675a3643fa1bf7344c947176ec
+asset fcb/glb/carrot-crop-carrot-86444601.glb 257908B sha256 8644460182d09e84bc39aea3bd7eadf03c7f1a8ae9ac35d2672018342edde061
+static assets: 3 files, 1020308 bytes
+inline script blocks syntax OK: 3
+base: v44 · qa hooks: --qa · glb: static
+0951ddf75d732f4d4f2a9ed4c60751db4d497f29ecb2c1a9ce5e62c155ecd4c3  /home/user/sandstar/dist/farm-cooking-b-v44-qa/base-main.mjs
+56345fa1c6c48e17a565c74156ed97a6ca687ace39a9bc2c642850e949f8cbf8  /home/user/sandstar/dist/farm-cooking-b-v44-qa/fcb-index.html
+2909f64759da3b44000ddb75629514649b6ae303f48aab6493d4784e096ee9fb  /home/user/sandstar/dist/farm-cooking-b-v44-qa/fcb-main.mjs
