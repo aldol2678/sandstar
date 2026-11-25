@@ -2,6 +2,62 @@
 from pathlib import Path
 import sys
 
+def add_land(replace):
+    defs = """const FARM_LAND = Object.freeze([
+ {id:'farm:west-field', x:24, y:24, name:'남쪽 서편 밭', price:60},
+ {id:'farm:east-field', x:30, y:24, name:'남쪽 동편 밭', price:120}
+]);
+function farmLandById(id){return FARM_LAND.find(lot=>lot.id===id);}
+function emptyLivingPlot(){return {plantedAt:null,watered:false,crop:null,stage:0,wateredAt:null};}
+"""
+    replace("function freshLivingP0(){", defs + "function freshLivingP0(){")
+    replace("plots[`plot:${x}`]={plantedAt:null,watered:false,crop:null,stage:0,wateredAt:null};",
+            "plots[`plot:${x}`]=emptyLivingPlot();")
+    # The presence of an allowlisted plot record represents ownership. Old saves still get three beds.
+    replace(" if(raw.plots&&typeof raw.plots==='object')for", """ if(raw.plots&&typeof raw.plots==='object'){
+  for(const lot of FARM_LAND){
+   const saved=raw.plots[lot.id];
+   if(saved&&typeof saved==='object'&&!Array.isArray(saved)&&livingOwn(saved,'plantedAt'))
+    state.plots[lot.id]=emptyLivingPlot();
+  }
+ }
+ if(raw.plots&&typeof raw.plots==='object')for""")
+    replace("{id:'plot:40',x:30,y:15}]);", "{id:'plot:40',x:30,y:15},...FARM_LAND]);")
+    replace("if(target==='farm:cart')return FARM_FOREST_GATE_X;", """const lot=farmLandById(target);
+ if(lot)return lot.x;
+ if(target==='farm:cart')return FARM_FOREST_GATE_X;""")
+    replace(" let award=0,message='',kind=cmd.type;", """ const lot=farmLandById(cmd.target);
+ if(lot&&context.worldId!==FARM_WORLD_ID)return bad('도래 농장에서 이용해 주세요');
+ let award=0,message='',kind=cmd.type;""")
+    replace("  case 'farm.basket':{", """  case 'farm.buyPlot':{
+   if(!lot)return bad('구매할 수 있는 밭이 아니에요');
+   if(livingOwn(state.plots,lot.id))return bad('이미 보유한 밭이에요');
+   if(context.coins<lot.price)return bad('골드가 '+(lot.price-context.coins)+'C 부족해요');
+   award=-lot.price;
+   state.plots[lot.id]=emptyLivingPlot();
+   message=lot.name+' 구매 완료 · 씨앗을 심어 보세요';break;}
+  case 'farm.basket':{""")
+    replace("if(tx===null||(target==='farm:cart'", """if(farmLandById(target)&&(!farmWorldActive||farmWorldNearPlot()?.id!==target))return false;
+ if(tx===null||(target==='farm:cart'""")
+    replace("if(!plot)return '🌾 경작 준비 중';", """if(!plot&&near.price){
+  const gap=near.price-game.coins;
+  return gap>0?`밭 ${near.price}C · ${gap}C 부족`:`밭 구매 ${near.price}C · 보유 ${game.coins}C`;
+ }
+ if(!plot)return '🌾 경작 준비 중';""")
+    replace("function farmWorldAction(){", "function farmWorldAction(buy=false){")
+    replace("const plot=game.livingP0.plots[near.id];\n if(plot.plantedAt===null)", """const plot=game.livingP0.plots[near.id];
+ if(!plot&&near.price){
+  if(buy===true)return farmWorldCommand('farm.buyPlot',near.id);
+  farmWorldToast(near.name+' · 구매 버튼에서 '+near.price+'C로 개간');return false;
+ }
+ if(plot.plantedAt===null)""")
+    replace(".addEventListener('click',farmWorldAction);", ".addEventListener('click',()=>farmWorldAction(true));")
+    replace("if(['e',' '].includes(k)&&!e.repeat)farmWorldAction();", "if(['e',' '].includes(k)&&!e.repeat)farmWorldAction(true);")
+    replace(" farmDrawBed(c,px,py,w,h,plot);", """ if(!plot&&o.price){farmDrawLandForSale(c,px,py,w,h,o);return;}
+ farmDrawBed(c,px,py,w,h,plot);""")
+    replace("farmDrawSign(c,23,21,'✦ 별맥 토양')", "farmDrawSign(c,23,20,'↓ 밭 분양')")
+    replace("'동쪽 밭 · 길가 장터 수레'", "'동쪽 밭 · 남쪽 분양지'")
+
 
 def patch(html):
     def replace(old, new):
@@ -52,6 +108,7 @@ def patch(html):
     replace("const num=o.id.split(':')[1],lab=", "const lab=")
     replace("`밭 ${num} · ${plot.crop", "`${plot.crop")
     replace("?' 💧':' 마름'", "?' · 자라는 중':' · 물 주기'")
+    add_land(replace)
     return html
 
 

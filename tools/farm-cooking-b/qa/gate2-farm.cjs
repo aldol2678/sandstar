@@ -129,6 +129,8 @@ const LIVING_NAME = { wheat: '밀', potato: '감자', carrot: '당근' };
     check(`${tag}: no page/console errors, no failed requests`, problems.length === 0, problems.slice(0, 5).join(' | '));
     if (process.argv.includes('--cart')) {
       await require('../../farm-market/check-cart.cjs').checkCart(page);
+      await require('../../farm-market/check-land.cjs').checkLand(page, mobile);
+      check(tag + ': plot expansion, harvest and persistence', true);
       check(tag + ': basket sale, rollback, reload and missing crops', true);
     }
     await browser.close();

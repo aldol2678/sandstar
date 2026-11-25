@@ -173,3 +173,27 @@ function farmDrawBuilding(c, x, y, tilesWide, tilesHigh, label, color) {
   c.fillStyle = '#fff1cf'; c.fillText(label, w / 2, -26);
   c.restore();
 }
+
+function farmDrawLandForSale(c, x, y, w, h, lot) {
+  c.save();
+  const nearby = farmWorldNearPlot()?.id === lot.id;
+  c.fillStyle = '#869a68';
+  c.fillRect(x, y, w, h);
+  c.strokeStyle = nearby ? '#fff0bd' : '#d6c79b';
+  c.lineWidth = nearby ? 3 : 2;
+  c.setLineDash([6, 4]);
+  c.strokeRect(x, y, w, h);
+  for (const dx of [x, x + w - 4]) {
+    for (const dy of [y, y + h - 4]) {
+      c.fillStyle = '#845b3c'; c.fillRect(dx, dy - 5, 4, 12);
+      c.fillStyle = '#e4bf85'; c.fillRect(dx, dy - 5, 4, 3);
+    }
+  }
+  const cx = x + w / 2, cy = y + h / 2;
+  c.fillStyle = '#73543b'; c.fillRect(cx - 3, cy - 3, 6, 24);
+  c.fillStyle = '#523e32'; c.fillRect(cx - 42, cy - 22, 84, 32);
+  c.fillStyle = '#fff0cd'; c.font = 'bold 11px system-ui'; c.textAlign = 'center';
+  c.fillText(lot.name, cx, cy - 8);
+  c.fillStyle = '#ffda7d'; c.fillText(lot.price + 'C', cx, cy + 5);
+  c.restore();
+}
