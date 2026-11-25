@@ -53,6 +53,9 @@ esac
 
 node "$root/tools/phase0-v38/extract-html.mjs" "$out/base-main.mjs" "$out/base-index.html"
 python3 "$root/tools/farm-cooking-b/patch-farm-cooking.py" "$out" $qa
+if [ "$base" = v44 ]; then
+  python3 "$root/tools/mining-onboarding/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
+fi
 python3 "$root/tools/farm-cooking-b/rebuild-worker.py" "$out/base-main.mjs" "$out/fcb-index.html" "$out/fcb-main.mjs"
 case "$glb" in
   static) python3 "$root/tools/farm-cooking-b/stage-static-assets.py" "$root/assets/glb" "$out/assets"

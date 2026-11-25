@@ -185,11 +185,20 @@ const SCENARIOS = {
       }
     }
   }
+  // Only the v44 build applies tools/mining-onboarding/patch.py.
+  const baseline = await fetch(baseUrl);
+  if (!baseline.ok) throw new Error(`Baseline returned ${baseline.status}`);
+  const baseHash = require('node:crypto').createHash('sha256').update(Buffer.from(await baseline.arrayBuffer())).digest('hex');
+  const forestAction = baseHash === '3caaa6c39a31bea902459ed5f49963f1256fac674d4522df9309ef955a89a8a6'
+    ? '잔빛숲으로 이동' : '🪓 벌목장으로 이동';
   const pairs = [...new Set(Object.keys(results).map(k => k.replace(/-(base|fcb)$/, '')))];
   for (const key of pairs) {
     const a = results[`${key}-base`], b = results[`${key}-fcb`];
     const strip = o => { const c = { ...o }; delete c.problems; delete c.qaHooks; delete c.fcbOnly; return c; };
-    check(`${key}: fcb == base (all fields except qaHooks/fcbOnly)`, JSON.stringify(strip(a)) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
+    const expected = strip(a);
+    if (key.endsWith('-town')) expected.loggingAction = forestAction;
+    if (key.endsWith('-forest')) expected.gate = forestAction;
+    check(`${key}: matches expected baseline and forest destination`, JSON.stringify(expected) === JSON.stringify(strip(b)), JSON.stringify(strip(b)).slice(0, 300));
     check(`${key}: fcb no page/console errors, no failed requests`, b.problems.length === 0, b.problems.slice(0, 3).join(' | '));
     check(`${key}: baseline also clean (reference)`, a.problems.length === 0, a.problems.slice(0, 3).join(' | '));
   }
@@ -197,7 +206,7 @@ const SCENARIOS = {
   const t = results['pc-town-fcb'], tm = results['m390-town-fcb'];
   check('P0-1 pc: town objective strip visible with quest text', t.quest.visible && t.quest.text.length > 5, t.quest.text);
   check('P0-1 m390: town objective strip visible', tm.quest.visible && tm.quest.text.length > 5);
-  check('P0-2: logging gate named 벌목장 입구 → 잔빛숲', /벌목장/.test(t.loggingAction) && t.loggingSub === '벌목장 입구 → 잔빛숲', `${t.loggingAction} / ${t.loggingSub}`);
+  check('P0-2: logging gate named 벌목장 입구 → 잔빛숲', t.loggingAction === forestAction && t.loggingSub === '벌목장 입구 → 잔빛숲', `${t.loggingAction} / ${t.loggingSub}`);
   if (results['pc-town-base'].help) {
     check('P0-5 pc: PC help text', /WASD/.test(t.help), t.help);
     check('P0-5 m390: no PC keys in town help on touch', !/WASD/.test(tm.help) && /조이스틱/.test(tm.help), tm.help);
