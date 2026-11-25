@@ -90,7 +90,7 @@ jobs:
       - name: Gate 2-4 (QA build, PC + mobile)
         run: |
           mkdir -p qa-out/gate2 qa-out/gate3 qa-out/gate4
-          node tools/farm-cooking-b/qa/gate2-farm.cjs http://127.0.0.1:8761/ qa-out/gate2
+          node tools/farm-cooking-b/qa/gate2-farm.cjs http://127.0.0.1:8761/ qa-out/gate2 --cart
           node tools/farm-cooking-b/qa/gate3-cooking.cjs http://127.0.0.1:8761/ qa-out/gate3
           FCB_MODULE=dist/farm-cooking-b-v44-qa/fcb-main.mjs node tools/farm-cooking-b/qa/gate4-scene.cjs http://127.0.0.1:8761/ qa-out/gate4
       - name: Gate 5 (regression, baseline vs candidate)
