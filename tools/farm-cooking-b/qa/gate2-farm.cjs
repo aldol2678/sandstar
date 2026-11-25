@@ -127,6 +127,10 @@ const LIVING_NAME = { wheat: '밀', potato: '감자', carrot: '당근' };
     check(`${tag}: wheat/potato/carrot all in bag after reload`, after.bag.wheat >= 3 && after.bag.potato >= 3 && after.bag.carrot >= 3, JSON.stringify({ w: after.bag.wheat, p: after.bag.potato, c: after.bag.carrot }));
     await page.screenshot({ path: path.join(out, `${tag}-after-reload.png`) });
     check(`${tag}: no page/console errors, no failed requests`, problems.length === 0, problems.slice(0, 5).join(' | '));
+    if (process.argv.includes('--cart')) {
+      await require('../../farm-market/check-cart.cjs').checkCart(page);
+      check(tag + ': basket sale, rollback, reload and missing crops', true);
+    }
     await browser.close();
   }
   log(lines, `== Gate 2 total: ${pass} pass, ${fail} fail`);
