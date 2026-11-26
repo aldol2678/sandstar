@@ -112,14 +112,13 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   await standAt(82.5);
   if (mobile) await page.tap('#m1ActionBtn'); else await page.keyboard.press('e');
   await wait(500);
-  const wood = await page.evaluate(() => window.__sandstarTitleP0?.state?.().inv?.wood ?? null);
-  await standAt(57.5);
+    await standAt(57.5);
   // PC: walk the last stretch with the real arrow key; mobile: position hook
   if (!mobile) { await page.keyboard.down('ArrowRight'); for (let i = 0; i < 40; i++) { await wait(60); if (await page.evaluate(() => window.__sandstarM17.get().nearby === 'pond')) break; } await page.keyboard.up('ArrowRight'); await wait(200); }
   else await standAt(63.5);
   const m17 = await page.evaluate(() => window.__sandstarM17.get());
   const label = await page.evaluate(() => (document.getElementById('m1ActionBtn')?.textContent || '').trim());
-  check('riverbank is an action spot again (nearby=pond, label)', m17.nearby === 'pond' && /낚싯대 준비|강변 낚시/.test(label), `${m17.nearby} · ${label} · wood=${wood}`);
+  check('riverbank is an action spot again (nearby=pond, label)', m17.nearby === 'pond' && /낚싯대 준비|강변 낚시/.test(label), `${m17.nearby} · ${label}`);
   await shot('world-riverbank');
   check('open the riverbank view with E / action button', await openByAction());
   let s = await rs();
@@ -130,7 +129,7 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   s = await rs();
   const lv0 = await living();
   check('craft rod spends 3 wood once, card closes', lv0.rod === true && s.card === null, `rod=${lv0.rod}`);
-  const coins0 = await page.evaluate(() => window.__sandstarTitleP0?.state?.().coins ?? null);
+  const coins0 = await page.evaluate(() => window.__sandstarTitleP0.state().worldCoins);
 
   // ===== spots: A/B/C change the water, not a species lock
   const spotFish = {};
@@ -168,9 +167,9 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
     if (r.ok) { await shot(`result-${species}`); await press('#riverCard button[data-river="again"]'); await wait(250); }
   }
   const lv1 = await living();
-  const coins1 = await page.evaluate(() => window.__sandstarTitleP0?.state?.().coins ?? null);
+  const coins1 = await page.evaluate(() => window.__sandstarTitleP0.state().worldCoins);
   check('bag +1 each, dex 3/3, fished 3, best sizes saved', lv1.bag.river_fish === 1 && lv1.bag.perch === 1 && lv1.bag.carp === 1 && lv1.fishDex.length === 3 && lv1.stats.fished === 3 && Object.values(lv1.river.best).every(v => v > 0), JSON.stringify({ bag: lv1.bag, dex: lv1.fishDex, best: lv1.river.best }));
-  check('catching does not pay coins (sale happens at the market)', coins0 === coins1, `${coins0} → ${coins1}`);
+  check('catching does not pay coins (sale happens at the market)', Number.isFinite(coins0) && coins0 === coins1, `${coins0} → ${coins1}`);
 
   // ===== fight rules: no input never lands, holding through stalls, release keeps progress
   await press('#riverSpots button[data-spot="B"]'); await wait(250);
