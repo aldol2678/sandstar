@@ -2,11 +2,11 @@ PASS pc: default build: no QA hooks (no time skip, no scene probe/focus) — {"q
 PASS pc: walk to the farm gate
 PASS pc: enter farm_01 through the gate button — 🌾 농장으로 이동
 PASS pc: wheat: walk next to plot:34
-PASS pc: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":10.08950000000006,"watered":true,"crop":"wheat","stage":1,"wateredAt":10.139400000000059}
+PASS pc: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":30.005299999999863,"watered":true,"crop":"wheat","stage":1,"wateredAt":30.055199999999857}
 PASS pc: potato: walk next to plot:37
-PASS pc: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":11.839400000000033,"watered":true,"crop":"potato","stage":1,"wateredAt":11.889400000000032}
+PASS pc: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":31.738499999999767,"watered":true,"crop":"potato","stage":1,"wateredAt":31.788499999999765}
 PASS pc: carrot: walk next to plot:40
-PASS pc: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":13.52270000000001,"watered":true,"crop":"carrot","stage":1,"wateredAt":13.55590000000001}
+PASS pc: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":33.43839999999984,"watered":true,"crop":"carrot","stage":1,"wateredAt":33.48839999999984}
 PASS pc: wheat: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS pc: potato: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS pc: carrot: grew 1 → 2 → 3 on the game clock — [1,2,3]
@@ -26,5 +26,5 @@ PASS pc: eat bread → energy +25 (cap 100), bread -1 — 73.0 → 98.0
 PASS pc: after reload: soup / wheat / potato / carrot counts kept — ["soup 1→1","bread 0→0","wheat 1→1","potato 3→3","carrot 1→1"]
 PASS pc: after reload: cook / harvest counters kept — {"harvested":{"wheat":1,"potato":1,"carrot":1,"crop":0},"cooked":{"bread":1,"soup":1,"stew":0},"delivered":{}}
 PASS pc: no page/console errors, no failed requests
-walk town keys -16.6,-2 in 14 steps · farm keys 18,17.2 in 9 steps · farm keys 24,17.2 in 4 steps · farm keys 30,17.2 in 4 steps · farm keys 18,17.2 in 7 steps · farm keys 30,17.2 in 7 steps · farm keys 24,17.2 in 3 steps · farm keys 18,17.2 in 4 steps · farm keys 24,17.2 in 3 steps · farm keys 30,17.2 in 4 steps · farm keys 4.6,16.5 in 20 steps · town keys -3.4,-4.8 in 24 steps
+walk town keys -16.6,-2 in 59 steps · farm keys 18,17.2 in 9 steps · farm keys 24,17.2 in 4 steps · farm keys 30,17.2 in 4 steps · farm keys 18,17.2 in 7 steps · farm keys 30,17.2 in 7 steps · farm keys 24,17.2 in 3 steps · farm keys 18,17.2 in 4 steps · farm keys 24,17.2 in 3 steps · farm keys 30,17.2 in 4 steps · farm keys 4.6,16.5 in 16 steps · town keys -3.4,-4.8 in 27 steps
 == no-hook flow pc total: 26 pass, 0 fail

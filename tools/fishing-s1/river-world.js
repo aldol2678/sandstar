@@ -2,18 +2,20 @@
 // Same subworld contract as the farm: save-then-enter with rollback, m25b loading cover, walk to the
 // exit to return, continue-after-reload restores the world. The spots A/B/C are physical places;
 // standing at one opens the existing fishing view locked to that spot.
-// The renderer below is a temporary top-down Canvas2D view. World state, spot geometry, movement,
-// transitions and saves do not depend on it, so the 3D engine (still to be chosen) replaces only
-// fishingWorldDraw/Resize and the camera.
+// Rendering follows the ruins engine: three.js (r160, already inlined as window.THREE) with an
+// orbit camera (drag / Q·R to rotate) and camera-relative movement; if three or WebGL is unavailable
+// or the context is lost, the top-down Canvas2D view is the fallback. World state, spot geometry,
+// transitions and saves are renderer-independent (map x → three X, map y → three Z).
 var FISH_WORLD_ID='fishing_01',FW_W=30,FW_H=22,FW_TILE=32;
-var FW_GATE={x:2.6,y:11},FW_SPAWN={x:4.6,y:11};
+var FW_GATE={x:2.6,y:11},FW_SPAWN={x:6.4,y:11};
 var FW_SPOTS=Object.freeze({
  A:{x:12.6,y:15.2,face:'right',label:'A 완만한 강가'},
  B:{x:19.2,y:8,face:'right',label:'B 깊은 소'},
  C:{x:22.6,y:19.6,face:'up',label:'C 좁은 물살'}
 });
 var fishingWorldActive=false,fwPlayer={x:4.6,y:11,face:'down'},fwKeys=new Set(),fwJoy={x:0,y:0},fwPointer=null;
-var fwFrame=0,fwToastUntil=0,fwLastEnter=0,fwCanvasW=0,fwCanvasH=0,fwDpr=1,fwHudTimer=0,fwWalkPhase=0;
+var FW_VIEW={yaw:-1.2,pitch:.72},fwYaw=FW_VIEW.yaw,fwPitch=FW_VIEW.pitch,fwDrag=null,fw3=null,fwRenderer='uninitialized',fwGl=document.getElementById('fishWorldGl'),fwFrameMs=[],fwLastFrameAt=0;
+var fwTickAt=0,fwFrame=0,fwToastUntil=0,fwLastEnter=0,fwCanvasW=0,fwCanvasH=0,fwDpr=1,fwHudTimer=0,fwWalkPhase=0;
 var fwRoot=document.getElementById('fishWorldRoot'),fwCanvas=document.getElementById('fishWorldCanvas'),fwCtx=fwCanvas?fwCanvas.getContext('2d',{alpha:false}):null;
 function fwWater(x,y){
  if(x>14&&x<28.6&&y>2.2&&y<19){
@@ -54,7 +56,7 @@ function fishingWorldActivate(){
  fishingWorldActive=true;fwRoot.hidden=false;t25Root.hidden=true;$('app').classList.add('fish-world-active');
  fishingWorldClearInput();ssM15ResetHeldInputs();releaseRope();
  const s=fishingWorldInitState();fwPlayer.x=s.position.x;fwPlayer.y=s.position.y;
- fishingWorldResize();fishingWorldRefreshHud();fishingWorldDraw();
+ fwTickAt=0;fishingWorldInitRenderer();fishingWorldResize();fishingWorldRefreshHud();fishingWorldDraw();
  void ssBgmSwitchRegion(TOWN_WORLD_ID);
 }
 function fishingWorldDeactivate(){
@@ -71,6 +73,7 @@ function fishingWorldEnterCore(){
   if(prev)game.fishingWorldV1=prev;else delete game.fishingWorldV1;
   flash('낚시터 저장에 실패했어요. 진입하지 않았습니다.');return false;
  }
+ fwYaw=FW_VIEW.yaw;fwPitch=FW_VIEW.pitch;
  fishingWorldActivate();fwLastEnter=performance.now();fishingWorldToast('도래 낚시터에 도착했어요. 물가의 자리 A·B·C로 걸어가 보세요.');return true;
 }
 function fishingWorldExitCore(){
@@ -119,7 +122,7 @@ function fishingWorldRefreshHud(){
  const w=game.livingP0,bag=w.bag,info=document.getElementById('fishWorldBag');
  if(info)info.textContent=`🐟 ${bag.river_fish}·${bag.perch}·${bag.carp} · 도감 ${w.fishDex.length}/3`;
  const a=w.river?.attempt,g=document.getElementById('fishWorldGuide');
- if(g)g.textContent=a?`걸려 있는 ${LIVING_FISH[a.fish].name} · 자리 ${a.spot}로 가서 이어하세요`:'자리 A 수초 강가 · B 선착장 끝 · C 바위 물살 · 🚪 서쪽 출구';
+ if(g)g.textContent=a?`걸려 있는 ${LIVING_FISH[a.fish].name} · 자리 ${a.spot}로 가서 이어하세요`:'자리 A 수초 강가 · B 선착장 끝 · C 바위 물살 · 🚪 서쪽 출구'+(fwRenderer==='three'?' · 화면을 끌면 시점 회전':'');
 }
 function fishingWorldAction(){
  if(!fishingWorldActive||m25bBusy)return false;
@@ -133,37 +136,65 @@ function fishingWorldAction(){
  return ssRiverOpen(spot);
 }
 function fishingWorldResize(){
- if(!fwCanvas)return;const r=fwCanvas.getBoundingClientRect();fwCanvasW=r.width;fwCanvasH=r.height;
- fwDpr=Math.min(devicePixelRatio||1,2);fwCanvas.width=Math.max(1,Math.round(r.width*fwDpr));fwCanvas.height=Math.max(1,Math.round(r.height*fwDpr));fwCtx.imageSmoothingEnabled=false;
+ if(!fwCanvas)return;const r=fwRoot.getBoundingClientRect();fwCanvasW=r.width||innerWidth;fwCanvasH=r.height||innerHeight;
+ fwDpr=Math.min(devicePixelRatio||1,2);
+ if(fwRenderer==='three'&&fw3){fw3.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));fw3.renderer.setSize(fwCanvasW,fwCanvasH,false);return;}
+ fwCanvas.width=Math.max(1,Math.round(fwCanvasW*fwDpr));fwCanvas.height=Math.max(1,Math.round(fwCanvasH*fwDpr));fwCtx.imageSmoothingEnabled=false;
+}
+function fishingWorldReadyCheck(){
+ if(!fishingWorldActive||fwRoot.hidden)return false;
+ fishingWorldResize();fishingWorldDraw();
+ if(fwRenderer==='three')return !!(fw3&&fw3.ready)&&!fwGl.hidden&&fwGl.width>1&&fwGl.height>1;
+ return fwCanvas.width>1&&fwCanvas.height>1&&fwCanvasW>1&&fwCanvasH>1;
 }
 function fishingWorldMove(){
  if(m25bBusy)return {x:0,y:0};
  let dx=(fwKeys.has('d')||fwKeys.has('arrowright')?1:0)-(fwKeys.has('a')||fwKeys.has('arrowleft')?1:0);
  let dy=(fwKeys.has('s')||fwKeys.has('arrowdown')?1:0)-(fwKeys.has('w')||fwKeys.has('arrowup')?1:0);
- dx+=fwJoy.x;dy+=fwJoy.y;const n=Math.hypot(dx,dy);return n>1?{x:dx/n,y:dy/n}:{x:dx,y:dy};
+ dx+=fwJoy.x;dy+=fwJoy.y;const n=Math.hypot(dx,dy);if(n>1){dx/=n;dy/=n;}
+ if(fwRenderer!=='three')return {x:dx,y:dy};
+ // Same ground basis as the ruins: right=(cos yaw, -sin yaw), forward=(-sin yaw, -cos yaw).
+ const f=-dy,cy=Math.cos(fwYaw),sy=Math.sin(fwYaw);
+ return {x:dx*cy-f*sy,y:-dx*sy-f*cy};
 }
 function fishingWorldTick(dt){
  if(!game||ssIsTitle())return;
  if(m25bBusy){fishingWorldDraw();return;}
  if(fwToastUntil&&performance.now()>fwToastUntil){document.getElementById('fishWorldToast').classList.remove('show');fwToastUntil=0;}
  fwFrame++;
+ // The main loop caps dt at 45ms; a 3D frame on a slow device can be longer, so this world keeps
+ // its own real elapsed time (≤0.25s) for walking and the shared clock.
+ const nowT=performance.now();dt=fwTickAt?Math.min(.25,Math.max(0,(nowT-fwTickAt)/1000)):dt;fwTickAt=nowT;
  const riverOpen=typeof ssRiverIsOpen!=='undefined'&&ssRiverIsOpen,panel=ssScenePanelOpen();
  if(!riverOpen&&!panel){
-  const v=fishingWorldMove(),step=Math.min(.05,dt)*4.6;
-  for(const axis of ['x','y']){
-   const d=v[axis]*step;if(!d)continue;const next={...fwPlayer,[axis]:fwPlayer[axis]+d},r=.3;
-   if(![[-r,-r],[r,-r],[-r,r],[r,r]].some(([ox,oy])=>fishingWorldBlocked(next.x+ox,next.y+oy)))fwPlayer[axis]+=d;
+  const v=fishingWorldMove();
+  // up to 0.25s per frame in 0.05s steps: slow frames keep real-time walking speed without tunnelling
+  for(let left=Math.min(.25,dt);left>1e-4;left-=.05){const step=Math.min(.05,left)*4.6;
+   for(const axis of ['x','y']){
+    const d=v[axis]*step;if(!d)continue;const next={...fwPlayer,[axis]:fwPlayer[axis]+d},r=.3;
+    if(![[-r,-r],[r,-r],[-r,r],[r,r]].some(([ox,oy])=>fishingWorldBlocked(next.x+ox,next.y+oy)))fwPlayer[axis]+=d;
+   }
   }
-  if(Math.abs(v.x)+Math.abs(v.y)>.1){fwPlayer.face=Math.abs(v.x)>Math.abs(v.y)?(v.x>0?'right':'left'):(v.y>0?'down':'up');fwWalkPhase=(fwWalkPhase+dt*1.6)%1;}else fwWalkPhase=0;
+  if(Math.abs(v.x)+Math.abs(v.y)>.1){
+   // facing in screen terms: project world motion onto the camera's right/forward axes
+   let sx=v.x,sf=-v.y;if(fwRenderer==='three'){const cy=Math.cos(fwYaw),sy=Math.sin(fwYaw);sx=v.x*cy-v.y*sy;sf=-v.x*sy-v.y*cy;}
+   fwPlayer.face=Math.abs(sx)>Math.abs(sf)?(sx>0?'right':'left'):(sf>0?'up':'down');fwWalkPhase=(fwWalkPhase+dt*1.6)%1;
+  }else fwWalkPhase=0;
   // Shared life clock: this world's own loop advances it while no fishing view or menu is open
   // (the fishing view advances it itself while active), so it never runs twice.
   livingWorldTick(Math.max(0,dt));
  }
  fwHudTimer+=dt;if(fwHudTimer>.25){fwHudTimer=0;fishingWorldRefreshHud();}
  if(fwFrame%270===0&&!riverOpen){game.fishingWorldV1.position={x:fwPlayer.x,y:fwPlayer.y};saveGame(true);}
- fishingWorldDraw();
+ if(!riverOpen)fishingWorldDraw(); // the fishing view covers the screen: skip world frames meanwhile
 }
 function fishingWorldDraw(){
+ if(!fishingWorldActive)return;
+ const now=performance.now();if(fwLastFrameAt){fwFrameMs.push(now-fwLastFrameAt);if(fwFrameMs.length>90)fwFrameMs.shift();}fwLastFrameAt=now;
+ if(fwRenderer==='three'&&fw3&&fw3.ready){fw3Render();return;}
+ fishingWorldDraw2D();
+}
+function fishingWorldDraw2D(){
  if(!fwCtx||!fishingWorldActive)return;
  const c=fwCtx,W=fwCanvasW,H=fwCanvasH,S=W<520?28:FW_TILE;
  c.setTransform(fwDpr,0,0,fwDpr,0,0);
@@ -206,6 +237,108 @@ function fishingWorldDraw(){
  if(img){const fr=fwWalkPhase?Math.floor(fwWalkPhase*8)%8:0;c.drawImage(img,fr*256,0,256,256,px-h/2,py-h*.94,h,h);}
  else{c.fillStyle='#237f83';c.fillRect(px-7,py-22,14,22);}
 }
+// ---------- three.js fishing ground (primitives only, no GLB/base64 additions) ----------
+function fishingWorldInitRenderer(){
+ if(fwRenderer!=='uninitialized')return;
+ fwRenderer=fw3Create()?'three':'cpu';
+ fwGl.hidden=fwRenderer!=='three';fwCanvas.hidden=fwRenderer==='three';
+ if(fwRenderer==='three'){
+  fwGl.addEventListener('webglcontextlost',e=>{e.preventDefault();fwRenderer='cpu';if(fw3)fw3.ready=false;fwGl.hidden=true;fwCanvas.hidden=false;fishingWorldResize();fishingWorldDraw();});
+  fw3Build();
+ }
+}
+function fw3Create(){
+ if(!window.THREE||!fwGl)return false;
+ try{
+  const T=window.THREE;
+  const renderer=new T.WebGLRenderer({canvas:fwGl,antialias:false,powerPreference:'low-power'});
+  renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.outputColorSpace=T.SRGBColorSpace;
+  const scene=new T.Scene();scene.background=new T.Color(0xbfe3dc);scene.fog=new T.Fog(0xbfe3dc,26,70);
+  const camera=new T.PerspectiveCamera(50,1,.1,140);
+  scene.add(new T.HemisphereLight(0xe8f6ff,0x48704f,1.15));
+  const sun=new T.DirectionalLight(0xfff0d0,1.35);sun.position.set(-8,16,6);scene.add(sun);
+  fw3={ready:false,renderer,scene,camera,player:null,blob:null,rings:{},labels:{},fish:[],flow:[],water:null,sheets:{},t:0};
+  return true;
+ }catch(e){console.warn('fishing three.js unavailable:',e);fw3=null;return false;}
+}
+function fw3Mat(color,opts={}){return new window.THREE.MeshStandardMaterial({color,roughness:.88,metalness:0,flatShading:true,...opts});}
+function fw3Box(w,h,d,color,x,y,z){const T=window.THREE,m=new T.Mesh(new T.BoxGeometry(w,h,d),fw3Mat(color));m.position.set(x,y,z);fw3.scene.add(m);return m;}
+function fw3Plane(x0,z0,x1,z1,y,color,opts){const T=window.THREE,m=new T.Mesh(new T.PlaneGeometry(x1-x0,z1-z0),fw3Mat(color,opts));m.rotation.x=-Math.PI/2;m.position.set((x0+x1)/2,y,(z0+z1)/2);fw3.scene.add(m);return m;}
+function fw3Label(text,color){
+ const T=window.THREE,c=document.createElement('canvas');c.width=512;c.height=112;const g=c.getContext('2d');
+ g.font='900 52px system-ui,sans-serif';const w=Math.min(500,g.measureText(text).width+56);
+ g.fillStyle='#183e42e6';g.beginPath();g.roundRect((512-w)/2,10,w,90,24);g.fill();g.strokeStyle='#fff0b8';g.lineWidth=4;g.stroke();
+ g.fillStyle=color||'#fff0bb';g.textAlign='center';g.textBaseline='middle';g.fillText(text,256,57);
+ const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
+ const sp=new T.Sprite(new T.SpriteMaterial({map:tex,depthTest:false,transparent:true}));sp.scale.set(3.4,.75,1);sp.renderOrder=10;fw3.scene.add(sp);
+ sp.userData.canvas=c;sp.userData.text=text;return sp;
+}
+function fw3Sheet(dir){
+ const T=window.THREE;if(fw3.sheets[dir])return fw3.sheets[dir];
+ const img=walkSheets[dir]||walkSpriteImage,tex=new T.Texture(img);
+ tex.colorSpace=T.SRGBColorSpace;tex.magFilter=T.NearestFilter;tex.minFilter=T.LinearFilter;tex.generateMipmaps=false;
+ tex.repeat.set(1/8,1);if(img.complete&&img.naturalWidth)tex.needsUpdate=true;else img.addEventListener('load',()=>{tex.needsUpdate=true;},{once:true});
+ return fw3.sheets[dir]=tex;
+}
+function fw3Build(){
+ const T=window.THREE,st=fw3;
+ // ground around the lake basin (lake rect x14..28.6, z2.2..19), basin walls and bed
+ const G=0x7cb286,SAND=0xd8c690;
+ fw3Plane(-20,-18,14,40,0,G);fw3Plane(28.6,-18,50,40,0,G);fw3Plane(14,-18,28.6,2.2,0,G);fw3Plane(14,19,28.6,40,0,G);
+ fw3Plane(14,2.2,15.2,5,0,G);fw3Plane(14,17,15.2,19,0,G);
+ fw3Plane(13.3,2.2,14,19,.005,SAND);fw3Plane(28.6,2.2,29.3,19,.005,SAND);fw3Plane(14,1.5,28.6,2.2,.005,SAND);fw3Plane(14,19,28.6,19.7,.005,SAND);
+ fw3Plane(14,2.2,28.6,19,-1.1,0x2f5f5a);
+ for(const [w,d,x,z] of [[14.6,.1,21.3,2.2],[14.6,.1,21.3,19],[.1,16.8,14,10.6],[.1,16.8,28.6,10.6]])fw3Box(w,1.1,d,0xa38f62,x,-.55,z);
+ st.water=fw3Plane(14,2.2,28.6,19,-.12,0x3d93a8,{transparent:true,opacity:.82,roughness:.25,metalness:.05,flatShading:false});
+ // B: dock with posts
+ fw3Box(6.5,.14,1.3,0x9b7448,16.65,.2,8);for(let x=13.8;x<=19.8;x+=1.5)for(const z of [7.45,8.55])fw3Box(.16,1.2,.16,0x6a4d31,x,-.42,z);
+ // A: reeds
+ for(let i=0;i<22;i++){const r=fw3Box(.07,.9+((i*37)%5)/10,.07,0x3e7a46,14.15+(i%6)*.2,.35,13.4+Math.floor(i/6)*.95+((i*13)%4)/10);r.rotation.z=(((i*7)%5)-2)*.06;}
+ // C: rocks + current streaks
+ for(const [x,z,r,y] of [[24.2,20,.62,.2],[21.2,18.3,.45,0],[24.6,17.6,.42,0],[22.6,17.2,.35,-.05]]){const m=new T.Mesh(new T.IcosahedronGeometry(r,0),fw3Mat(0x8a8a7d));m.position.set(x,y,z);m.scale.y=.7;st.scene.add(m);}
+ for(let i=0;i<7;i++){const m=fw3Box(.7,.02,.05,0xe8fbff,20.5+i*.6,-.1,17.4+(i%4)*.3);m.material.transparent=true;m.material.opacity=.7;st.flow.push(m);}
+ // trees
+ for(const [x,z] of [[6,4],[9,3.2],[4,18],[8,19.4],[10.5,6.5],[-2,8],[0,15],[31,6],[32,14],[18,-2],[24,-1.5],[20,22],[27,22.5]]){
+  fw3Box(.3,1.3,.3,0x5a3f28,x,.65,z);const f=new T.Mesh(new T.IcosahedronGeometry(1,0),fw3Mat(0x3f7a4f));f.position.set(x,1.9,z);st.scene.add(f);
+ }
+ // gate to town
+ fw3Box(.25,2.4,.25,0x6a4d31,FW_GATE.x,1.2,9.7);fw3Box(.25,2.4,.25,0x6a4d31,FW_GATE.x,1.2,12.3);fw3Box(.3,.25,3,0x6a4d31,FW_GATE.x,2.35,11);
+ st.labels.gate=fw3Label('🚪 마을');st.labels.gate.position.set(FW_GATE.x,3.1,11);
+ // spot rings + labels
+ for(const [id,sp] of Object.entries(FW_SPOTS)){
+  const ring=new T.Mesh(new T.TorusGeometry(.85,.07,6,36),fw3Mat(0xfff0b8,{emissive:0xffd27a,emissiveIntensity:.5,flatShading:false}));
+  ring.rotation.x=-Math.PI/2;ring.position.set(sp.x,fw3Floor(sp.x,sp.y)+.04,sp.y);st.scene.add(ring);st.rings[id]=ring;
+  const lab=fw3Label(sp.label);lab.position.set(sp.x,fw3Floor(sp.x,sp.y)+3.1,sp.y);st.labels[id]=lab;
+ }
+ // fish shadows under the surface (decoration; the fishing view decides real fish)
+ for(let i=0;i<6;i++){const m=new T.Mesh(new T.CircleGeometry(.5,14),new T.MeshBasicMaterial({color:0x0e2a33,transparent:true,opacity:.45,depthWrite:false}));m.rotation.x=-Math.PI/2;m.scale.set(1+i*.25,.45+i*.08,1);m.position.y=-.5;st.scene.add(m);st.fish.push({m,cx:17+((i*2.3)%10),cz:4+i*2.4,r:1.2+i*.4,sp:.25+i*.05,ph:i});}
+ // player: walk-sheet billboard + blob shadow
+ const sprite=new T.Sprite(new T.SpriteMaterial({map:fw3Sheet('front'),transparent:true,alphaTest:.2}));sprite.center.set(.5,.06);sprite.scale.set(2.1,2.1,1);st.scene.add(sprite);st.player=sprite;
+ const blob=new T.Mesh(new T.CircleGeometry(.42,16),new T.MeshBasicMaterial({color:0x1d393d,transparent:true,opacity:.35,depthWrite:false}));blob.rotation.x=-Math.PI/2;st.scene.add(blob);st.blob=blob;
+ st.ready=true;
+}
+function fw3Floor(x,y){return fwDock(x,y)?.27:0;}
+function fw3Render(){
+ const st=fw3,T=window.THREE;if(!st||!st.ready)return;
+ const W=fwCanvasW,H=fwCanvasH;if(!W||!H)return;
+ st.t+=1/60;const t=st.t;
+ const floor=fw3Floor(fwPlayer.x,fwPlayer.y),target=[fwPlayer.x,1+floor,fwPlayer.y];
+ const radius=W<H?15:12,eye=[target[0]+Math.sin(fwYaw)*Math.cos(fwPitch)*radius,target[1]+Math.sin(fwPitch)*radius,target[2]+Math.cos(fwYaw)*Math.cos(fwPitch)*radius];
+ st.camera.aspect=W/H;st.camera.fov=W<H?58:48;st.camera.position.set(...eye);st.camera.lookAt(...target);st.camera.updateProjectionMatrix();
+ // player sprite frame + facing
+ const dir=fwPlayer.face==='down'?'front':fwPlayer.face==='up'?'back':fwPlayer.face,tex=fw3Sheet(dir);
+ if(st.player.material.map!==tex){st.player.material.map=tex;st.player.material.needsUpdate=true;}
+ tex.offset.x=(fwWalkPhase?Math.floor(fwWalkPhase*8)%8:0)/8;
+ st.player.position.set(fwPlayer.x,floor,fwPlayer.y);st.blob.position.set(fwPlayer.x,floor+.02,fwPlayer.y);
+ // spot rings pulse, near spot highlighted, hooked spot tinted
+ const near=fishingWorldNearSpot(),att=game?.livingP0?.river?.attempt;
+ for(const [id,ring] of Object.entries(st.rings)){const on=id===near,k=1+(on?.12:.05)*Math.sin(t*4);ring.scale.set(k,k,k);ring.material.emissiveIntensity=on?1.1:.45;ring.material.color.set(att&&att.spot===id?0xffb48a:0xfff0b8);
+  const lab=st.labels[id],txt=FW_SPOTS[id].label+(att&&att.spot===id?' · 걸림':'');if(lab.userData.text!==txt){st.scene.remove(lab);const nl=fw3Label(txt,att&&att.spot===id?'#ffb48a':null);nl.position.copy(lab.position);st.labels[id]=nl;}}
+ for(const f of st.fish){const a=t*f.sp+f.ph;f.m.position.x=f.cx+Math.cos(a)*f.r;f.m.position.z=f.cz+Math.sin(a*1.3)*f.r*.6;f.m.rotation.z=-a;}
+ for(const m of st.flow){m.position.x+=.03;if(m.position.x>25)m.position.x=20.5;}
+ st.water.position.y=-.12+Math.sin(t*1.2)*.015;
+ st.renderer.render(st.scene,st.camera);
+}
 // input
 (function fishingWorldWire(){
  if(!fwRoot)return;
@@ -215,13 +348,20 @@ function fishingWorldDraw(){
  pad.addEventListener('pointermove',e=>{if(fwPointer===e.pointerId){e.preventDefault();setJoy(e);}});
  for(const type of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(type,e=>{if(fwPointer===e.pointerId){fwPointer=null;fwJoy={x:0,y:0};}});
  document.getElementById('fishWorldAction').addEventListener('click',e=>{e.stopPropagation();fishingWorldAction();});
+ const drag0=e=>{if(!fishingWorldActive||fwDrag||m25bBusy||fwRenderer!=='three')return;e.preventDefault();fwDrag={id:e.pointerId,x:e.clientX,y:e.clientY};try{fwGl.setPointerCapture(e.pointerId)}catch(_){}};
+ const drag1=e=>{if(!fwDrag||fwDrag.id!==e.pointerId)return;e.preventDefault();fwYaw-=(e.clientX-fwDrag.x)*.007;fwPitch=Math.max(.38,Math.min(1.05,fwPitch-(e.clientY-fwDrag.y)*.003));fwDrag.x=e.clientX;fwDrag.y=e.clientY;};
+ const drag2=e=>{if(fwDrag?.id===e.pointerId)fwDrag=null;};
+ fwGl.addEventListener('pointerdown',drag0);fwGl.addEventListener('pointermove',drag1);for(const ev of ['pointerup','pointercancel','lostpointercapture'])fwGl.addEventListener(ev,drag2);
+ document.getElementById('fishViewReset').addEventListener('click',e=>{e.stopPropagation();fwYaw=FW_VIEW.yaw;fwPitch=FW_VIEW.pitch;});
  window.addEventListener('keydown',e=>{
   if(!fishingWorldActive||m25bBusy||ssIsTitle()||ssScenePanelOpen()||(typeof ssRiverIsOpen!=='undefined'&&ssRiverIsOpen))return;
   if(e.key===' '&&e.target.closest?.('.scene-nav'))return;
-  const k=e.key.toLowerCase();if(!['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape'].includes(k))return;
+  const k=e.key.toLowerCase();if(!['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape','q','r'].includes(k))return;
   e.preventDefault();e.stopImmediatePropagation();
   if(['e',' '].includes(k)){if(!e.repeat)fishingWorldAction();}
   else if(k==='escape'){if(!e.repeat)fishingWorldTryExit();}
+  else if(k==='q'){fwYaw-=.32;}
+  else if(k==='r'){fwYaw+=.32;}
   else fwKeys.add(k);
  },true);
  window.addEventListener('keyup',e=>{if(!fishingWorldActive)return;const k=e.key.toLowerCase();fwKeys.delete(k);if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
@@ -229,7 +369,8 @@ function fishingWorldDraw(){
  window.addEventListener('resize',()=>{if(fishingWorldActive){fishingWorldResize();fishingWorldDraw();}});
 })();
 window.__sandstarFishingWorld=Object.freeze({
- state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},nearSpot:fishingWorldNearSpot(),nearGate:fishingWorldNearGate(),
+ state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,
+  frameMs:fwFrameMs.length?(()=>{const a=[...fwFrameMs].sort((x,y)=>x-y);return {median:+a[a.length>>1].toFixed(1),p90:+a[Math.floor(a.length*.9)].toFixed(1),n:a.length};})():null,nearSpot:fishingWorldNearSpot(),nearGate:fishingWorldNearGate(),
   action:document.getElementById('fishWorldAction')?.textContent||'',saved:JSON.parse(JSON.stringify(game?.fishingWorldV1||null)),spots:FW_SPOTS,gate:FW_GATE}),
  testMove:(x,y)=>{if(!fishingWorldActive||fishingWorldBlocked(x,y))return false;fwPlayer.x=x;fwPlayer.y=y;game.fishingWorldV1.position={x,y};fishingWorldRefreshHud();fishingWorldDraw();return true;},
  enterFromTown:()=>t25EnterFishing(),exit:()=>fishingWorldTryExit(),act:()=>fishingWorldAction()

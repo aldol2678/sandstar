@@ -59,14 +59,17 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
     if (mobile) { const [x, y] = points[points.length - 1]; return page.evaluate(([x, y]) => window.__sandstarFishingWorld.testMove(x, y), [x, y]); }
     for (const [tx, ty] of points) {
       let ok = false;
-      for (let i = 0; i < 80; i++) {
+      for (let i = 0; i < 140; i++) {
         const p = (await fw()).player, dx = tx - p.x, dy = ty - p.y;
         if (Math.abs(dx) <= .3 && Math.abs(dy) <= .3) { ok = true; break; }
-        const keys = [];
-        if (Math.abs(dx) > .3) keys.push(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
-        if (Math.abs(dy) > .3) keys.push(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+        // the 3D camera rotates the stick/arrow basis: convert the wanted map delta to screen input
+        const st = await fw(); let ix = dx, iy = dy;
+        if (st.renderer === 'three') { const cy = Math.cos(st.yaw), sy = Math.sin(st.yaw); ix = dx * cy - dy * sy; iy = dx * sy + dy * cy; }
+        const m = Math.max(Math.abs(ix), Math.abs(iy)) || 1, keys = [];
+        if (Math.abs(ix) / m > .38) keys.push(ix > 0 ? 'ArrowRight' : 'ArrowLeft');
+        if (Math.abs(iy) / m > .38) keys.push(iy > 0 ? 'ArrowDown' : 'ArrowUp');
         for (const k of keys) await page.keyboard.down(k);
-        await wait(Math.max(30, Math.min(350, Math.max(Math.abs(dx), Math.abs(dy)) * 200)));
+        await wait(Math.max(30, Math.min(300, Math.hypot(dx, dy) * 160)));
         for (const k of keys) await page.keyboard.up(k);
       }
       if (!ok) return false;

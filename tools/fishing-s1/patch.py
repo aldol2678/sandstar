@@ -58,6 +58,8 @@ CSS = """<style id="river-s1-style">
 @media (min-width:700px){#riverOverlay{padding-left:max(12px,calc(50% - 300px));padding-right:max(12px,calc(50% - 300px))}}
 @media (orientation:landscape) and (max-height:500px){.river-stage{min-height:150px}.river-hint{min-height:1.4em}#riverHold{min-height:52px!important}}
 #fishWorldCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
+#fishWorldGl{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#fishWorldGl[hidden],#fishWorldCanvas[hidden]{display:none!important}
 #app.fish-world-active #ssHubBackdrop{z-index:92}#app.fish-world-active #ssHub{z-index:93}#app.fish-world-active #overlay{z-index:94}
 #app.ss-portal-transition #fishWorldRoot{pointer-events:none!important}
 </style>
@@ -78,9 +80,10 @@ MARKUP = """ <section id="riverOverlay" role="dialog" aria-modal="true" aria-lab
    <label><input id="riverAssist" type="checkbox"> 자동 걸기 보조 (기록·보상 동일)</label></details>
  </section>
  <section id="fishWorldRoot" class="farm-world fish-world" aria-label="도래 낚시터" hidden>
-  <canvas id="fishWorldCanvas" aria-label="걸어 다니는 낚시터 지형"></canvas>
+  <canvas id="fishWorldGl" aria-label="3D 도래 낚시터 · 화면을 끌면 시점이 돌아가요"></canvas>
+  <canvas id="fishWorldCanvas" aria-label="걸어 다니는 낚시터 지형 (대체 화면)" hidden></canvas>
   <div class="farm-world-hud">
-   <header class="farm-world-header"><div class="farm-heading"><strong>🎣 도래 낚시터</strong></div><div class="farm-stats"><span id="fishWorldBag" class="fcb-farm-chip">🐟 0·0·0</span><span class="scene-nav"><button type="button" data-scene-profile aria-label="광부 프로필 열기">프로필</button><button type="button" data-scene-menu aria-label="전체 메뉴 열기" aria-controls="ssHub" aria-expanded="false">☰ 메뉴</button></span></div></header>
+   <header class="farm-world-header"><div class="farm-heading"><strong>🎣 도래 낚시터</strong></div><div class="farm-stats"><span id="fishWorldBag" class="fcb-farm-chip">🐟 0·0·0</span><button id="fishViewReset" class="fcb-farm-bag" type="button">⟳ 시점</button><span class="scene-nav"><button type="button" data-scene-profile aria-label="광부 프로필 열기">프로필</button><button type="button" data-scene-menu aria-label="전체 메뉴 열기" aria-controls="ssHub" aria-expanded="false">☰ 메뉴</button></span></div></header>
    <div id="fishWorldGuide" class="farm-world-guide">자리 A 수초 강가 · B 선착장 끝 · C 바위 물살 · 🚪 서쪽 출구</div>
    <div class="farm-world-bottom">
     <div id="fishDpad" class="farm-dpad" aria-label="낚시터 이동 패드" role="group"><span class="farm-dpad-ring"></span><span class="farm-dpad-icon">✣</span><span class="farm-dpad-note">이동</span></div>
@@ -179,13 +182,13 @@ def patch(html):
     replace(" if(snapshot.townActive){\n  if(!town25dActive)t25Activate();",
             " if(snapshot.fishingActive){if(snapshot.fishingPosition)Object.assign(fwPlayer,snapshot.fishingPosition);if(!fishingWorldActive)fishingWorldActivate();else fishingWorldDraw();}\n else if(fishingWorldActive)fishingWorldDeactivate();\n if(snapshot.townActive){\n  if(!town25dActive)t25Activate();")
     replace(" if(worldId==='lumber_01'){\n  if(!lumberWorldActive",
-            " if(worldId==='fishing_01'){\n  if(!fishingWorldActive||fwRoot.hidden)return false;\n  fishingWorldResize();fishingWorldDraw();\n  return fwCanvas.width>1&&fwCanvas.height>1&&fwCanvasW>1&&fwCanvasH>1;\n }\n if(worldId==='lumber_01'){\n  if(!lumberWorldActive")
+            " if(worldId==='fishing_01')return fishingWorldReadyCheck();\n if(worldId==='lumber_01'){\n  if(!lumberWorldActive")
     replace("if(ssRegion!==worldId||farmWorldActive||archWorldActive||town25dActive||lumberWorldActive)return false;",
             "if(ssRegion!==worldId||farmWorldActive||archWorldActive||town25dActive||lumberWorldActive||fishingWorldActive)return false;")
     replace(" if(typeof archWorldClearInput==='function')archWorldClearInput();",
             " if(typeof archWorldClearInput==='function')archWorldClearInput();\n if(typeof fishingWorldClearInput==='function')fishingWorldClearInput();")
     replace("ready:worldId=>worldId==='farm_01'&&farmWorldActive?",
-            "ready:worldId=>worldId==='fishing_01'?(fishingWorldActive&&fwCanvas.width>1&&fwCanvas.height>1):worldId==='farm_01'&&farmWorldActive?")
+            "ready:worldId=>worldId==='fishing_01'?(fishingWorldActive&&(fwRenderer==='three'?!!(fw3&&fw3.ready):fwCanvas.width>1)):worldId==='farm_01'&&farmWorldActive?")
     replace("['mine','life_forest_01'].includes(worldId)&&!farmWorldActive&&",
             "['mine','life_forest_01'].includes(worldId)&&!farmWorldActive&&!fishingWorldActive&&")
     replace("worlds:['village_hub_01','mine','life_forest_01','farm_01','ruins_3d_01','lumber_01']\n});\n// M2.5-C",

@@ -2,11 +2,11 @@ PASS m390: default build: no QA hooks (no time skip, no scene probe/focus) — {
 PASS m390: walk to the farm gate
 PASS m390: enter farm_01 through the gate button — 🌾 농장으로 이동
 PASS m390: wheat: walk next to plot:34
-PASS m390: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":0.8450000000000003,"watered":true,"crop":"wheat","stage":1,"wateredAt":0.9283000000000006}
+PASS m390: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":0.8347000000000004,"watered":true,"crop":"wheat","stage":1,"wateredAt":0.9181000000000001}
 PASS m390: potato: walk next to plot:37
-PASS m390: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.0783000000000007,"watered":true,"crop":"potato","stage":1,"wateredAt":1.1450000000000005}
+PASS m390: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.0680999999999998,"watered":true,"crop":"potato","stage":1,"wateredAt":1.1347000000000003}
 PASS m390: carrot: walk next to plot:40
-PASS m390: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.3117000000000008,"watered":true,"crop":"carrot","stage":1,"wateredAt":1.3950000000000005}
+PASS m390: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.2847000000000002,"watered":true,"crop":"carrot","stage":1,"wateredAt":1.3514}
 PASS m390: wheat: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS m390: potato: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS m390: carrot: grew 1 → 2 → 3 on the game clock — [1,2,3]
