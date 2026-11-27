@@ -3,6 +3,9 @@
 // target selection → lure → bite → recovery-type tug (release is safe, only reeling advances).
 // Payouts go through applyLivingCommandPure (river.hook / river.catch); progress and release are
 // non-reward state written straight to livingP0.river and saved.
+// The 잔빛숲 bank (X61~68) was the first control test; the real place is the fishing ground fishing_01.
+// Flip to true only for local control comparisons.
+const RIVER_FOREST_BANK=false;
 const RIVER_SPOTS=Object.freeze({
  A:{name:'완만한 강가',short:'A 강가',x:60.4,bottom:.66,flow:.05,weights:{river_fish:58,perch:24,carp:18},bias:1.25,
     blocks:[[.2,.31]],desc:'약한 흐름과 수초. 작은 그림자가 자주 보여요.'},

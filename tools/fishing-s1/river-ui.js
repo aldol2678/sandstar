@@ -1,6 +1,6 @@
 // ---------- UI ----------
 let ssRiverIsOpen=false,ssRiverRaf=0,ssRiverLast=0,ssRiverSeq=0;
-const ssRiver={spot:'B',phase:'idle',fish:[],lure:null,hold:false,holdT:0,lastPullT:0,idleLureT:0,hint:'',hintUntil:0,
+const ssRiver={fixedSpot:'',spot:'B',phase:'idle',fish:[],lure:null,hold:false,holdT:0,lastPullT:0,idleLureT:0,hint:'',hintUntil:0,
  bite:null,fight:null,paused:false,ready:0,result:null,card:null,spawnT:0,t:0,W:360,H:300,dpr:1,pointerId:null,savedQuarter:0,lastMsg:''};
 function ssRiverEl(id){return document.getElementById(id);}
 function ssRiverState(){return game?.livingP0?.river||null;}
@@ -16,7 +16,7 @@ function ssRiverSpawn(initial){
  const y=species==='carp'?ssRiverRand(bot-ssRiver.H*.12,bot):species==='perch'?ssRiverRand(top+(bot-top)*.3,top+(bot-top)*.7):ssRiverRand(top,top+(bot-top)*.55);
  const x=initial?ssRiverRand(ssRiver.W*.3,ssRiver.W*.92):(Math.random()<.5?ssRiver.W*1.05:ssRiver.W*.35);
  ssRiver.fish.push({id:++ssRiverSeq,species,size,x,y,homeY:y,dir:Math.random()<.5?-1:1,speed:species==='river_fish'?34:species==='perch'?24:16,
-  interest:0,state:'roam',turnT:ssRiverRand(1.5,4),react:0,leaveT:0,patrol:[ssRiver.W*ssRiverRand(.3,.5),ssRiver.W*ssRiverRand(.7,.95)]});
+  interest:0,state:'roam',turnT:ssRiverRand(1.5,4),react:0,leaveT:0,stayT:ssRiverRand(22,40),patrol:[ssRiver.W*ssRiverRand(.3,.5),ssRiver.W*ssRiverRand(.7,.95)]});
 }
 function ssRiverResetWater(){
  ssRiver.fish=[];ssRiver.lure=null;ssRiver.bite=null;ssRiver.spawnT=0;ssRiver.idleLureT=0;
@@ -28,15 +28,24 @@ function ssRiverResize(){
  ssRiver.W=Math.max(240,r.width||360);ssRiver.H=Math.max(180,r.height||280);ssRiver.dpr=dpr;
  cv.width=Math.round(ssRiver.W*dpr);cv.height=Math.round(ssRiver.H*dpr);
 }
-function ssRiverOpen(){
- if(ssRiverIsOpen||!game||!game.livingP0||paused&&!ssRiverIsOpen&&$('overlay').classList.contains('open'))return false;
- const o=ssM17ObjectById('pond');if(!o||!ssM17NearObject(o)){flash('강변 낚시터에 조금 더 가까이 가세요');return false;}
+function ssRiverOpen(fixedSpot){
+ if(ssRiverIsOpen||!game||!game.livingP0||$('overlay').classList.contains('open'))return false;
+ let near='';
+ if(fishingWorldActive){
+  if(!livingOwn(RIVER_SPOTS,fixedSpot)||fishingWorldNearSpot()!==fixedSpot){fishingWorldToast('자리 표시 안으로 걸어가면 낚시할 수 있어요');return false;}
+  near=fixedSpot;
+ }else{
+  if(!RIVER_FOREST_BANK)return false;
+  const o=ssM17ObjectById('pond');if(!o||!ssM17NearObject(o)){flash('강변 낚시터에 조금 더 가까이 가세요');return false;}
+  near=Object.entries(RIVER_SPOTS).map(([k,v])=>[k,Math.abs(p.x-v.x)]).sort((a,b)=>a[1]-b[1])[0][0];
+ }
  game.livingP0=normalizeLivingP0(game.livingP0);
  ssM15ResetHeldInputs();releaseRope();paused=true;ssRiverIsOpen=true;
  const root=ssRiverEl('riverOverlay');root.hidden=false;$('app').classList.add('river-active');
- const near=Object.entries(RIVER_SPOTS).map(([k,v])=>[k,Math.abs(p.x-v.x)]).sort((a,b)=>a[1]-b[1])[0][0];
- const at=ssRiverState().attempt;ssRiver.spot=at?at.spot:near;
- ssRiver.phase='idle';ssRiver.result=null;ssRiver.card=null;ssRiver.paused=false;ssRiver.hold=false;ssRiver.fight=null;
+ const at=ssRiverState().attempt;
+ if(at&&fishingWorldActive&&at.spot!==near){paused=false;ssRiverIsOpen=false;root.hidden=true;$('app').classList.remove('river-active');fishingWorldToast(`걸려 있는 물고기는 자리 ${at.spot}에 있어요`);return false;}
+ ssRiver.fixedSpot=fishingWorldActive?near:'';ssRiver.spot=at?at.spot:near;
+ ssRiver.phase='idle';ssRiver.result=null;ssRiver.card=null;ssRiver.paused=false;ssRiver.hold=false;ssRiver.fight=null;ssRiver.hint='';ssRiver.hintUntil=0;
  ssRiverResize();ssRiverResetWater();
  if(at){ssRiverStartFight(at,true);}
  else if(game.livingP0.fishing){ssRiver.card='legacy';}
@@ -51,10 +60,12 @@ function ssRiverClose(){
  ssRiverIsOpen=false;cancelAnimationFrame(ssRiverRaf);
  ssRiverEl('riverOverlay').hidden=true;$('app').classList.remove('river-active');
  paused=ssIsTitle()||$('overlay').classList.contains('open')||!!ssM17PanelKind;
+ if(fishingWorldActive){fishingWorldClearInput();fishingWorldRefreshHud();}
  ssM15ResetHeldInputs();updHud();return true;
 }
 function ssRiverSetSpot(id){
  if(!livingOwn(RIVER_SPOTS,id)||ssRiver.phase==='fight'||ssRiver.phase==='bite')return;
+ if(ssRiver.fixedSpot&&id!==ssRiver.fixedSpot){ssRiverSay('다른 자리는 낚시터에서 걸어가서 골라요',2.4);return;}
  ssRiver.spot=id;ssRiver.phase='idle';ssRiverResetWater();ssRiverSay(RIVER_SPOTS[id].desc,3.5);ssRiverRender();
 }
 function ssRiverSay(text,sec=2.6){ssRiver.hint=text;ssRiver.hintUntil=ssRiver.t+sec;const el=ssRiverEl('riverHint');if(el)el.textContent=text;}
@@ -163,9 +174,17 @@ function ssRiverReleaseFish(){
  ssRiver.fight=null;ssRiver.phase='idle';ssRiver.card=null;ssRiver.paused=false;ssRiverSay('물고기를 놓아줬어요. 보상은 없어요');ssRiverRender();
 }
 function ssRiverContinue(){ssRiver.result=null;ssRiver.phase='idle';if(ssRiver.fish.length<2)ssRiverSpawn(false);ssRiverRender();}
+function ssRiverContext(){
+ if(fishingWorldActive){
+  if(!ssRiver.fixedSpot||fishingWorldNearSpot()!==ssRiver.fixedSpot)return null;
+  return {x:LIVING_SITES.pond,y:76,groundY:76}; // proximity already checked in fishing_01 coordinates
+ }
+ return {x:p.x,y:p.y,groundY:terrain(p.x)-1};
+}
 function ssRiverCommand(type,extra){
- const cmd={id:'river-'+type.slice(6)+'-'+(extra.attempt||Date.now()),type,target:'pond',...extra};
- const r=applyLivingCommandPure(game.livingP0,cmd,{x:p.x,y:p.y,groundY:terrain(p.x)-1,inv:game.inv,coins:game.coins,seed:game.seed});
+ const where=ssRiverContext();if(!where)return {ok:false,reason:'낚시 자리에서 벗어났어요'};
+ const cmd={id:'river-'+type.replace('.','-')+'-'+(extra.attempt||Date.now()),type,target:'pond',...extra};
+ const r=applyLivingCommandPure(game.livingP0,cmd,{...where,inv:game.inv,coins:game.coins,seed:game.seed});
  if(!r.ok)return r;
  const oldState=game.livingP0,oldInv=game.inv,oldCoins=game.coins;
  game.livingP0=r.state;game.inv=r.inv;game.coins=r.coins;
@@ -214,6 +233,8 @@ function ssRiverTickFish(dt){
    f.dir=dx>=0?1:-1;f.x+=dx/d*sp*dt;f.y+=dy/d*sp*dt*.8;
   }else{
    if(!L)f.interest=Math.max(0,f.interest-dt*.2);
+   // shadows drift on after a while so the spot's mix rotates without reopening the view
+   f.stayT-=dt;if(f.stayT<=0&&f.interest<.1){f.state='leave';f.dir=f.x>ssRiver.W*.6?1:-1;continue;}
    if(f.species==='perch'){if(f.x<f.patrol[0])f.dir=1;else if(f.x>f.patrol[1])f.dir=-1;}
    else{f.turnT-=dt;if(f.turnT<=0){f.turnT=ssRiverRand(1.5,4);f.dir*=-1;}}
    f.x+=f.dir*f.speed*.5*dt;f.y+=(f.homeY-f.y)*dt*.5+Math.sin(ssRiver.t*1.3+f.id)*dt*(f.species==='carp'?2:5);
@@ -333,8 +354,8 @@ function ssRiverDexHtml(){
 function ssRiverRender(){
  if(!ssRiverIsOpen)return;
  const w=game.livingP0,r=w.river,s=RIVER_SPOTS[ssRiver.spot];
- ssRiverEl('riverTitle').textContent='🎣 잔빛숲 강변 · '+s.short;
- for(const b of document.querySelectorAll('#riverSpots button')){const id=b.dataset.spot;b.classList.toggle('on',id===ssRiver.spot);b.disabled=ssRiver.phase==='fight'||ssRiver.phase==='bite'||!!ssRiver.card;}
+ ssRiverEl('riverTitle').textContent=(fishingWorldActive?'🎣 도래 낚시터 · ':'🎣 잔빛숲 강변 · ')+s.short;
+ for(const b of document.querySelectorAll('#riverSpots button')){const id=b.dataset.spot;b.classList.toggle('on',id===ssRiver.spot);b.disabled=ssRiver.phase==='fight'||ssRiver.phase==='bite'||!!ssRiver.card||(!!ssRiver.fixedSpot&&id!==ssRiver.fixedSpot);}
  ssRiverEl('riverBag').innerHTML=`도감 ${w.fishDex.length}/3 · 가방 피라미 ${w.bag.river_fish} · 강농어 ${w.bag.perch} · 비단잉어 ${w.bag.carp}`;
  const el=ssRiverEl('riverHint');if(el&&!ssRiver.hintUntil)el.textContent=ssRiverDefaultHint();
  const card=ssRiverEl('riverCard');let html='';
@@ -364,7 +385,7 @@ function ssRiverRender(){
 function ssRiverCardAction(act){
  const w=game.livingP0;
  if(act==='exit'||act==='close'){ssRiver.card=null;ssRiverClose();return;}
- if(act==='craft'){const r=livingAction('craft.rod','pond');if(r.ok){ssRiver.card=w.fishing?'legacy':null;ssRiverSay('나무 낚싯대를 만들었어요. 수면을 눌러 던져 보세요',3);}ssRiverRender();return;}
+ if(act==='craft'){const r=ssRiverCommand('craft.rod',{});if(!r.ok)ssRiverSay(r.reason||'제작하지 못했어요',2.6);if(r.ok){ssRiver.card=w.fishing?'legacy':null;ssRiverSay('나무 낚싯대를 만들었어요. 수면을 눌러 던져 보세요',3);}ssRiverRender();if(fishingWorldActive)fishingWorldRefreshHud();return;}
  if(act==='legacy'){const r=ssRiverCommand('river.hook',{legacy:true,item:game.livingP0.fishing?.id,size:(()=>{const id=game.livingP0.fishing?.id,[lo,hi]=RIVER_FISH_SIZE[id]||[60,120];return Math.round(ssRiverRand(lo,hi));})(),spot:ssRiver.spot,attempt:'r'+Date.now().toString(36)+(++ssRiverSeq)});
   if(!r.ok){ssRiverSay(r.reason||'이어하지 못했어요');ssRiver.card=null;ssRiverRender();return;}
   ssRiver.card=null;ssRiverStartFight(ssRiverState().attempt,false);return;}
@@ -407,7 +428,7 @@ function ssRiverCardAction(act){
 function ssRiverResetWaterKeep(){if(ssRiver.phase==='lure'||ssRiver.phase==='bite'){ssRiver.phase='idle';ssRiver.lure=null;ssRiver.bite=null;}ssRiverResetWater();ssRiverRender();}
 // World: draw the riverbank band (X61~68 is already protected from digging) with drifting shadows.
 function ssRiverDrawWorld(){
- if(ssRegion!=='life_forest_01'||!game)return;
+ if(!RIVER_FOREST_BANK||ssRegion!=='life_forest_01'||!game)return;
  const x0=Math.round(61*T-camera.x),x1=Math.round(69*T-camera.x),surf=Math.round((ssM1ForestTerrain(64)-1)*T-camera.y);
  if(x1<-60||x0>viewW+60)return;
  const lit=game.storyM1?.springRepaired;

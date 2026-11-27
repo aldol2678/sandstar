@@ -11,7 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 CSS = """<style id="river-s1-style">
-#riverOverlay{position:absolute;inset:0;z-index:19;display:flex;flex-direction:column;gap:6px;box-sizing:border-box;
+#riverOverlay{position:absolute;inset:0;z-index:91;display:flex;flex-direction:column;gap:6px;box-sizing:border-box;
  padding:calc(env(safe-area-inset-top) + 8px) 12px calc(env(safe-area-inset-bottom) + 10px);
  background:linear-gradient(180deg,#123540,#0c2530);color:#f4f5dd;font:600 13px/1.35 system-ui,sans-serif;overflow-y:auto;overscroll-behavior:contain;touch-action:manipulation}
 #riverOverlay[hidden]{display:none!important}
@@ -57,6 +57,9 @@ CSS = """<style id="river-s1-style">
 .river-dex small{color:#a6ccca}
 @media (min-width:700px){#riverOverlay{padding-left:max(12px,calc(50% - 300px));padding-right:max(12px,calc(50% - 300px))}}
 @media (orientation:landscape) and (max-height:500px){.river-stage{min-height:150px}.river-hint{min-height:1.4em}#riverHold{min-height:52px!important}}
+#fishWorldCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
+#app.fish-world-active #ssHubBackdrop{z-index:92}#app.fish-world-active #ssHub{z-index:93}#app.fish-world-active #overlay{z-index:94}
+#app.ss-portal-transition #fishWorldRoot{pointer-events:none!important}
 </style>
 """
 
@@ -74,6 +77,18 @@ MARKUP = """ <section id="riverOverlay" role="dialog" aria-modal="true" aria-lab
    <p>PC: 스페이스·F 감기 · 1/2/3 자리 · R 회수 · Esc 나가기</p>
    <label><input id="riverAssist" type="checkbox"> 자동 걸기 보조 (기록·보상 동일)</label></details>
  </section>
+ <section id="fishWorldRoot" class="farm-world fish-world" aria-label="도래 낚시터" hidden>
+  <canvas id="fishWorldCanvas" aria-label="걸어 다니는 낚시터 지형"></canvas>
+  <div class="farm-world-hud">
+   <header class="farm-world-header"><div class="farm-heading"><strong>🎣 도래 낚시터</strong></div><div class="farm-stats"><span id="fishWorldBag" class="fcb-farm-chip">🐟 0·0·0</span><span class="scene-nav"><button type="button" data-scene-profile aria-label="광부 프로필 열기">프로필</button><button type="button" data-scene-menu aria-label="전체 메뉴 열기" aria-controls="ssHub" aria-expanded="false">☰ 메뉴</button></span></div></header>
+   <div id="fishWorldGuide" class="farm-world-guide">자리 A 수초 강가 · B 선착장 끝 · C 바위 물살 · 🚪 서쪽 출구</div>
+   <div class="farm-world-bottom">
+    <div id="fishDpad" class="farm-dpad" aria-label="낚시터 이동 패드" role="group"><span class="farm-dpad-ring"></span><span class="farm-dpad-icon">✣</span><span class="farm-dpad-note">이동</span></div>
+    <div class="farm-bottom-right"><button id="fishWorldAction" class="farm-world-action" type="button">🎣 물가 자리로 걸어가세요</button></div>
+   </div>
+   <div id="fishWorldToast" class="farm-world-toast" role="status" aria-live="polite"></div>
+  </div>
+ </section>
 """
 
 
@@ -85,7 +100,7 @@ def patch(html):
         html = html.replace(old, new)
 
     core = (HERE / 'river-core.js').read_text(encoding='utf8')
-    ui = (HERE / 'river-ui.js').read_text(encoding='utf8')
+    ui = (HERE / 'river-ui.js').read_text(encoding='utf8') + (HERE / 'river-world.js').read_text(encoding='utf8')
     if '</script>' in core or '</script>' in ui:
         raise ValueError('script terminator inside fishing source')
 
@@ -109,7 +124,7 @@ def patch(html):
 
     # --- forest object: the riverbank becomes a real action spot again
     replace(" ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x}))\n]);",
-            " ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x})),\n Object.freeze({id:'pond',type:'pond',x:LIVING_SITES.pond})\n]);")
+            " ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x})),\n ...(RIVER_FOREST_BANK?[Object.freeze({id:'pond',type:'pond',x:LIVING_SITES.pond})]:[])\n]);")
     replace("function ssM17NearObject(o,range=3.15){\n",
             "function ssM17NearObject(o,range=3.15){\n if(o&&o.type==='pond')range=Math.max(range,4.8);\n")
     replace(" return w.fishing?'🎣 낚시 이어하기':w.rod?'🎣 낚시 시작':'🎣 낚싯대 준비';",
@@ -130,20 +145,55 @@ def patch(html):
     html = html[:j] + ui + html[j:]
 
     # --- living menu + town copy: point to the riverbank instead of "준비 중"
-    replace("✦ 별샘 X120 · 🎣 낚시터는 준비 중</div>", "✦ 별샘 X120 · 🎣 강변 낚시 X61~68</div>")
+    replace("✦ 별샘 X120 · 🎣 낚시터는 준비 중</div>", "✦ 별샘 X120 · 🎣 도래 낚시터(마을 낚시터 입구)</div>")
     start = html.index("  push('<h3>🎣 낚시</h3><p>마을 낚시터는 준비 중이에요. 낚싯대 재료는 원목 3개예요.</p>');")
     end_marker = "action('줄 풀기','pond.slacken','pond','',!near(64))}`));}\n"
     end = html.index(end_marker, start) + len(end_marker)
     if html.count(end_marker) != 1:
         raise ValueError('fish tab end marker not unique')
     html = html[:start] + (
-        "  push('<h3>🎣 잔빛숲 강변 낚시</h3><p>잔빛숲 강변 X61~68에서 낚시해요. 물가에서 E 또는 탭으로 시작하세요. 마을 낚시터는 아직 준비 중이에요.</p>');\n"
+        "  push('<h3>🎣 도래 낚시터</h3><p>마을 낚시터 입구로 들어가 물가의 자리 A·B·C에서 낚시해요. 낚싯대는 낚시 자리에서 원목 3개로 만들 수 있어요.</p>');\n"
         "  {const a=w.river?.attempt;push(row(a?`걸려 있는 ${LIVING_FISH[a.fish].name} · 발밑까지 ${a.progress}%`:w.fishing?`예전에 걸어 둔 ${LIVING_FISH[w.fishing.id].name}`:w.rod?'나무 낚싯대 보유':'나무 낚싯대 · 원목 3개 (강변에서 제작)',"
-        "`<small>${near(64)?'물가에서 E 또는 탭':'잔빛숲 X64로 이동'}</small>`));}\n"
+        "`<small>마을 낚시터 입구 → 자리 A·B·C</small>`));}\n"
         "  push(`<p>최고 크기: ${LIVING_FISH_ORDER.map(id=>LIVING_FISH[id].name+' '+(w.river?.best?.[id]?(w.river.best[id]/10).toFixed(1)+'cm':(w.fishDex.includes(id)?'크기 미기록':'-'))).join(' · ')}</p>`);\n"
     ) + html[end:]
-    replace("hint:'마을 낚시터 준비 중 · 낚싯대 재료는 원목 3개'", "hint:'마을 낚시터 준비 중 · 지금은 잔빛숲 강변(X64)에서 낚시할 수 있어요'")
-    replace("t25Notify('마을 낚시터 준비 중 · 낚싯대 재료는 원목 3개');", "t25Notify('마을 낚시터 준비 중 · 지금은 잔빛숲 강변(X64)에서 낚시할 수 있어요');")
+    replace("label:'🎣 낚시터 (준비 중)',hint:'마을 낚시터 준비 중 · 낚싯대 재료는 원목 3개'", "label:'🎣 낚시터로 이동',hint:'도래 낚시터 · 물가의 자리 A·B·C에서 낚시해요'")
+    replace("if(target.id==='fishing'){t25Notify('마을 낚시터 준비 중 · 낚싯대 재료는 원목 3개');return true;}", "if(target.id==='fishing'){void t25EnterFishing();return true;}")
+
+    # --- fishing_01 subworld: same loading/rollback/continue contract as farm_01
+    replace("if(farmWorldActive){farmWorldTick(dt);requestAnimationFrame(loop);return;}",
+            "if(fishingWorldActive){fishingWorldTick(dt);requestAnimationFrame(loop);return;}if(farmWorldActive){farmWorldTick(dt);requestAnimationFrame(loop);return;}")
+    replace("const should=ssRegion===T25_ID&&!farmWorldActive&&!archWorldActive&&!ssIsTitle();",
+            "const should=ssRegion===T25_ID&&!farmWorldActive&&!archWorldActive&&!fishingWorldActive&&!ssIsTitle();")
+    replace("else if(t25LastRegion==='ruins_3d_01')town25dPlayer={x:17,z:-11};",
+            "else if(t25LastRegion==='ruins_3d_01')town25dPlayer={x:17,z:-11};else if(t25LastRegion==='fishing_01')town25dPlayer={x:18,z:-0.6};")
+    replace("if(farmWorldActive&&game?.farmWorldV1)game.farmWorldV1.position={x:farmPlayer.x,y:farmPlayer.y};",
+            "if(farmWorldActive&&game?.farmWorldV1)game.farmWorldV1.position={x:farmPlayer.x,y:farmPlayer.y};if(fishingWorldActive&&game?.fishingWorldV1)game.fishingWorldV1.position={x:fwPlayer.x,y:fwPlayer.y};")
+    replace("farmWorldRestoreAfterContinue();lumberWorldRestoreAfterContinue();archWorldRestoreAfterContinue();",
+            "farmWorldRestoreAfterContinue();lumberWorldRestoreAfterContinue();archWorldRestoreAfterContinue();fishingWorldRestoreAfterContinue();")
+    replace("farm:copy(game.farmWorldV1),arch:", "farm:copy(game.farmWorldV1),fishing:copy(game.fishingWorldV1),arch:")
+    replace("  farmActive:farmWorldActive,archActive:archWorldActive,lumberActive:", "  farmActive:farmWorldActive,fishingActive:fishingWorldActive,archActive:archWorldActive,lumberActive:")
+    replace("farmPosition:{...farmPlayer},", "farmPosition:{...farmPlayer},fishingPosition:{...fwPlayer},")
+    replace(" if(snapshot.arch===undefined)delete game.archWorldV1;else game.archWorldV1=snapshot.arch;\n",
+            " if(snapshot.arch===undefined)delete game.archWorldV1;else game.archWorldV1=snapshot.arch;\n if(snapshot.fishing===undefined)delete game.fishingWorldV1;else game.fishingWorldV1=snapshot.fishing;\n")
+    replace(" if(snapshot.townActive){\n  if(!town25dActive)t25Activate();",
+            " if(snapshot.fishingActive){if(snapshot.fishingPosition)Object.assign(fwPlayer,snapshot.fishingPosition);if(!fishingWorldActive)fishingWorldActivate();else fishingWorldDraw();}\n else if(fishingWorldActive)fishingWorldDeactivate();\n if(snapshot.townActive){\n  if(!town25dActive)t25Activate();")
+    replace(" if(worldId==='lumber_01'){\n  if(!lumberWorldActive",
+            " if(worldId==='fishing_01'){\n  if(!fishingWorldActive||fwRoot.hidden)return false;\n  fishingWorldResize();fishingWorldDraw();\n  return fwCanvas.width>1&&fwCanvas.height>1&&fwCanvasW>1&&fwCanvasH>1;\n }\n if(worldId==='lumber_01'){\n  if(!lumberWorldActive")
+    replace("if(ssRegion!==worldId||farmWorldActive||archWorldActive||town25dActive||lumberWorldActive)return false;",
+            "if(ssRegion!==worldId||farmWorldActive||archWorldActive||town25dActive||lumberWorldActive||fishingWorldActive)return false;")
+    replace(" if(typeof archWorldClearInput==='function')archWorldClearInput();",
+            " if(typeof archWorldClearInput==='function')archWorldClearInput();\n if(typeof fishingWorldClearInput==='function')fishingWorldClearInput();")
+    replace("ready:worldId=>worldId==='farm_01'&&farmWorldActive?",
+            "ready:worldId=>worldId==='fishing_01'?(fishingWorldActive&&fwCanvas.width>1&&fwCanvas.height>1):worldId==='farm_01'&&farmWorldActive?")
+    replace("['mine','life_forest_01'].includes(worldId)&&!farmWorldActive&&",
+            "['mine','life_forest_01'].includes(worldId)&&!farmWorldActive&&!fishingWorldActive&&")
+    replace("worlds:['village_hub_01','mine','life_forest_01','farm_01','ruins_3d_01','lumber_01']\n});\n// M2.5-C",
+            "worlds:['village_hub_01','mine','life_forest_01','farm_01','ruins_3d_01','lumber_01','fishing_01']\n});\n// M2.5-C")
+    replace("repeat:'숲의 숨결을 다시 느껴요'}\n});",
+            "repeat:'숲의 숨결을 다시 느껴요'},\n fishing_01:{name:'도래 낚시터',subtitle:'물길을 읽는 조용한 시간',index:'07',first:'물가의 자리 A·B·C로 걸어가 보세요',repeat:'물고기 그림자가 다시 모였어요'}\n});")
+    replace("$('m25WorldIndex').textContent='WORLD '+meta.index+' / 06';", "$('m25WorldIndex').textContent='WORLD '+meta.index+' / 07';")
+    replace(" if(farmWorldActive)return '도래 농장';", " if(fishingWorldActive)return '도래 낚시터';\n if(farmWorldActive)return '도래 농장';")
     return html
 
 

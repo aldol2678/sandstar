@@ -1,7 +1,9 @@
-// Fishing S1 QA (local preview only): 잔빛숲 강변 one-bank vertical slice on the real default build.
-// Inputs are ordinary: keyboard E / action button to open, taps on the water canvas to cast, press-and-hold on
-// the big button to reel. __sandstarRiver.state() is read only (the bot reads fish positions/phases the way a
-// player reads the screen). Long walks use the base game's own __sandstarHUDM15.setTestPosition hook.
+// Fishing QA (local preview only): the dedicated fishing ground fishing_01 on the real default build.
+// Flow: new player → 잔빛숲 chop for wood → back to town → '낚시터 입구' gate → walk to spots A/B/C → fish →
+// walk to the exit → town. Inputs are ordinary: arrow keys / E on PC, the action button on mobile, taps on the
+// water canvas to cast, press-and-hold on the big button to reel. __sandstarRiver.state() and
+// __sandstarFishingWorld.state() are read only (the bot reads positions/phases the way a player reads the screen).
+// Long walks on mobile use the worlds' own position hooks (setTestPosition / testMove), as the farm QA does.
 // Usage: node river-flow.cjs <default-build-url> <outdir> <pc|m390>
 const fs = require('fs');
 const path = require('path');
@@ -19,6 +21,7 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
 (async () => {
   const { browser, page, problems } = await openGame({ url, mobile });
   const rs = () => page.evaluate(() => window.__sandstarRiver.state());
+  const fw = () => page.evaluate(() => window.__sandstarFishingWorld.state());
   const living = () => page.evaluate(() => window.__SANDSTAR_LIVING_P11__.getState());
   const shot = name => page.screenshot({ path: path.join(out, `${mode}-${name}.png`) });
   const press = sel => (mobile ? page.tap(sel) : page.click(sel));
@@ -31,13 +34,6 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
     const c = await page.locator('#riverCanvas').boundingBox();
     if (mobile) await page.touchscreen.tap(c.x + x, c.y + y); else await page.mouse.click(c.x + x, c.y + y);
   }
-  async function toForest() {
-    await page.evaluate(() => window.__sandstarTown25D.move(15, 11));
-    await wait(200);
-    await page.click('#town25dAction');
-    await travelDone(page, 'life_forest_01');
-    await wait(600);
-  }
   async function standAt(x) {
     await page.evaluate(x => { const y = window.__sandstarTownM22.surface(Math.floor(x)); window.__sandstarHUDM15.setTestPosition(x, y - 1); }, x);
     await wait(300);
@@ -46,11 +42,48 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
     const h = await page.evaluate(() => window.__sandstarHUDM15.get());
     if (h.manualMining) { await page.evaluate(() => window.__sandstarHUDM15.toggleTool()); await wait(250); }
   }
-  async function openByAction() {
-    if (mobile) await page.tap('#m1ActionBtn'); else await page.keyboard.press('e');
-    await wait(400);
-    return (await rs()).open;
+  async function forestAction() { if (mobile) await page.tap('#m1ActionBtn'); else await page.keyboard.press('e'); await wait(500); }
+  async function toForest() {
+    await page.evaluate(() => window.__sandstarTown25D.move(15, 11)); await wait(200);
+    await page.click('#town25dAction'); await travelDone(page, 'life_forest_01'); await wait(600);
   }
+  async function forestToTown() { await standAt(22.5); await forestAction(); await travelDone(page, 'village_hub_01'); await wait(500); }
+  async function townToFishing() {
+    await page.evaluate(() => window.__sandstarTown25D.move(18, -0.5)); await wait(250);
+    const label = (await page.textContent('#town25dAction')).trim();
+    await press('#town25dAction'); await travelDone(page, 'fishing_01'); await wait(500);
+    return label;
+  }
+  // PC walks with arrow keys along waypoints; mobile uses the world's own position hook.
+  async function walk(points) {
+    if (mobile) { const [x, y] = points[points.length - 1]; return page.evaluate(([x, y]) => window.__sandstarFishingWorld.testMove(x, y), [x, y]); }
+    for (const [tx, ty] of points) {
+      let ok = false;
+      for (let i = 0; i < 80; i++) {
+        const p = (await fw()).player, dx = tx - p.x, dy = ty - p.y;
+        if (Math.abs(dx) <= .3 && Math.abs(dy) <= .3) { ok = true; break; }
+        const keys = [];
+        if (Math.abs(dx) > .3) keys.push(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+        if (Math.abs(dy) > .3) keys.push(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+        for (const k of keys) await page.keyboard.down(k);
+        await wait(Math.max(30, Math.min(350, Math.max(Math.abs(dx), Math.abs(dy)) * 200)));
+        for (const k of keys) await page.keyboard.up(k);
+      }
+      if (!ok) return false;
+    }
+    return true;
+  }
+  const ROUTES = { A: [[8, 11], [8, 15.2], [12.6, 15.2]], B: [[12.4, 11], [12.4, 8], [19.2, 8]], C: [[12.6, 15.2], [12.6, 19.7], [22.6, 19.7]], gate: [[12.4, 11], [2.8, 11]] };
+  async function worldAction() { if (mobile) await page.tap('#fishWorldAction'); else await page.keyboard.press('e'); await wait(400); }
+  async function openSpot(id, route) {
+    const walked = await walk(route || ROUTES[id]);
+    const st = await fw();
+    if (st.nearSpot !== id) return { ok: false, walked, st };
+    const label = st.action;
+    await worldAction();
+    return { ok: (await rs()).open, label, walked };
+  }
+  async function closeView() { const st = await rs(); if (st.open) { await press('#riverExit'); await wait(300); } }
   // ----- one full fish: lure the chosen shadow with that species' pattern, hook, fight by phase
   async function catchOne(species, opts = {}) {
     let s = await rs();
@@ -104,79 +137,60 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
     return { ok: s.phase === 'result', result: s.result, phase: s.phase, card: s.card, saved: s.saved };
   }
 
-  // ===== world: new player → forest → chop for wood → riverbank
+  // ===== new player → forest wood → town → fishing ground
   await newWorld(page, '515151');
   await toForest();
-  check('arrive in 잔빛숲', (await page.evaluate(() => window.__sandstarM1.state().region)) === 'life_forest_01');
   await ensureLifeMode();
-  await standAt(82.5);
-  if (mobile) await page.tap('#m1ActionBtn'); else await page.keyboard.press('e');
-  await wait(500);
-    await standAt(57.5);
-  // PC: walk the last stretch with the real arrow key; mobile: position hook
-  if (!mobile) { await page.keyboard.down('ArrowRight'); for (let i = 0; i < 40; i++) { await wait(60); if (await page.evaluate(() => window.__sandstarM17.get().nearby === 'pond')) break; } await page.keyboard.up('ArrowRight'); await wait(200); }
-  else await standAt(63.5);
-  const m17 = await page.evaluate(() => window.__sandstarM17.get());
-  const label = await page.evaluate(() => (document.getElementById('m1ActionBtn')?.textContent || '').trim());
-  check('riverbank is an action spot again (nearby=pond, label)', m17.nearby === 'pond' && /낚싯대 준비|강변 낚시/.test(label), `${m17.nearby} · ${label}`);
-  await shot('world-riverbank');
-  check('open the riverbank view with E / action button', await openByAction());
+  await standAt(82.5); await forestAction();
+  const wood = await page.evaluate(() => window.__SANDSTAR_LIVING_P11__ && JSON.parse(localStorage.getItem(window.__SANDSTAR_LIVING_P11__.getSaveKey())).inv.wood);
+  check('chop in 잔빛숲 for rod wood', wood >= 3, `wood=${wood}`);
+  await forestToTown();
+  check('back in the town', (await page.evaluate(() => window.__sandstarM1.state().region)) === 'village_hub_01');
+  const gateLabel = await townToFishing();
+  let w = await fw();
+  check('town 낚시터 입구 opens the fishing ground (fishing_01)', /낚시터로 이동/.test(gateLabel) && w.active && w.worldId === 'fishing_01' && w.saved.activeWorldId === 'fishing_01', `${gateLabel} · ${JSON.stringify({ active: w.active, saved: w.saved })}`);
+  await shot('world-arrive');
+
+  // ===== spot A: rod, locked spot, weeds
+  let o = await openSpot('A');
+  check('walk to spot A and open the fishing view there', o.ok && /A 완만한 강가에서 낚시/.test(o.label), JSON.stringify(o));
   let s = await rs();
-  check('no rod → rod card (원목 3), no fishing yet', s.card === 'rod', JSON.stringify({ card: s.card }));
+  check('no rod → rod card, crafting works inside the fishing ground', s.card === 'rod', s.card);
   await shot('rod-card');
-  await press('#riverCard button[data-river="craft"]');
-  await wait(300);
+  await press('#riverCard button[data-river="craft"]'); await wait(300);
   s = await rs();
   const lv0 = await living();
-  check('craft rod spends 3 wood once, card closes', lv0.rod === true && s.card === null, `rod=${lv0.rod}`);
+  check('rod crafted once (3 wood), card closes', lv0.rod === true && s.card === null);
+  const locked = await page.evaluate(() => [...document.querySelectorAll('#riverSpots button')].map(b => b.dataset.spot + (b.disabled ? '-' : '+')).join(''));
+  check('view is locked to the spot you walked to (A on, B/C off)', s.spot === 'A' && locked === 'A+B-C-', locked);
   const coins0 = await page.evaluate(() => window.__sandstarTitleP0.state().worldCoins);
-
-  // ===== spots: A/B/C change the water, not a species lock
-  const spotFish = {};
-  for (const sp of ['A', 'C', 'B']) {
-    await press(`#riverSpots button[data-spot="${sp}"]`);
-    await wait(250);
-    s = await rs();
-    spotFish[sp] = s.fish.map(f => f.species[0] + Math.round(f.size / 10));
-    if (sp !== 'B') await shot(`spot-${sp}`);
-  }
-  check('spot buttons switch A/C/B and repopulate shadows', s.spot === 'B' && Object.values(spotFish).every(a => a.length >= 3), JSON.stringify(spotFish));
-  await shot('spot-B-idle');
-
-  // invalid zone: tap the A weeds → lands on the nearest valid water
-  await press('#riverSpots button[data-spot="A"]'); await wait(200);
-  s = await rs();
   await tapWater(s.W * .25, s.surface + 20); await wait(200);
   const sA = await rs();
-  check('cast into weeds snaps to nearest valid water (no cost)', sA.phase === 'lure' && sA.lure.x >= s.W * .31 - 12 && /수초·바위를 피해/.test(sA.hint), `lure x=${sA.lure && sA.lure.x.toFixed(1)} W=${s.W} · ${sA.hint}`);
+  check('cast into weeds snaps to nearest valid water (no cost)', sA.phase === 'lure' && sA.lure.x >= s.W * .31 - 12 && /수초·바위를 피해/.test(sA.hint), `lure x=${sA.lure && sA.lure.x.toFixed(1)} · ${sA.hint}`);
   await press('#riverRetrieve'); await wait(200);
-  check('retrieve returns to idle', (await rs()).phase === 'idle');
+  await shot('spot-A');
 
-  // ===== three species with their own patterns
-  const caught = {};
-  const plan = [['A', 'river_fish'], ['C', 'perch'], ['B', 'carp']];
-  for (const [sp, species] of plan) {
-    await press(`#riverSpots button[data-spot="${sp}"]`); await wait(250);
+  // ===== three species at their physical spots
+  const plan = [['A', 'river_fish', null], ['C', 'perch', ROUTES.C], ['B', 'carp', [[12.6, 15.2], [12.4, 11], [12.4, 8], [19.2, 8]]]];
+  for (const [sp, species, route] of plan) {
+    if (sp !== 'A') { await closeView(); o = await openSpot(sp, route); check(`walk to spot ${sp} and open`, o.ok && (await rs()).spot === sp, JSON.stringify(o).slice(0, 200)); if (sp === 'C') await shot('spot-C'); }
     let r = null;
     for (let tries = 0; tries < 4 && !(r && r.ok); tries++) {
-      if (r) { const cur = await rs(); if (cur.phase === 'lure') await press('#riverRetrieve'); await press(`#riverSpots button[data-spot="${sp}"]`); await wait(300); }
+      if (r) { const cur = await rs(); if (cur.phase === 'lure') await press('#riverRetrieve'); if (cur.phase === 'result') await press('#riverCard button[data-river="again"]'); await wait(300); }
       r = await catchOne(species, { shots: true });
     }
-    caught[species] = r;
-    check(`catch ${species} at ${sp} with its own pattern`, r.ok && r.result.fish === species, JSON.stringify(r).slice(0, 260));
+    check(`catch ${species} at ${sp} with its own pattern`, r.ok && r.result.fish === species, JSON.stringify(r).slice(0, 220));
     if (r.ok) { await shot(`result-${species}`); await press('#riverCard button[data-river="again"]'); await wait(250); }
   }
   const lv1 = await living();
   const coins1 = await page.evaluate(() => window.__sandstarTitleP0.state().worldCoins);
-  check('bag +1 each, dex 3/3, fished 3, best sizes saved', lv1.bag.river_fish === 1 && lv1.bag.perch === 1 && lv1.bag.carp === 1 && lv1.fishDex.length === 3 && lv1.stats.fished === 3 && Object.values(lv1.river.best).every(v => v > 0), JSON.stringify({ bag: lv1.bag, dex: lv1.fishDex, best: lv1.river.best }));
+  check('bag +1 each, dex 3/3, fished 3, best sizes and spot counts saved', lv1.bag.river_fish === 1 && lv1.bag.perch === 1 && lv1.bag.carp === 1 && lv1.fishDex.length === 3 && lv1.stats.fished === 3 && Object.values(lv1.river.best).every(v => v > 0) && lv1.river.spots.A >= 1 && lv1.river.spots.B >= 1 && lv1.river.spots.C >= 1, JSON.stringify({ bag: lv1.bag, best: lv1.river.best, spots: lv1.river.spots }));
   check('catching does not pay coins (sale happens at the market)', Number.isFinite(coins0) && coins0 === coins1, `${coins0} → ${coins1}`);
 
-  // ===== fight rules: no input never lands, holding through stalls, release keeps progress
-  await press('#riverSpots button[data-spot="B"]'); await wait(250);
+  // ===== fight rules (at B)
   let probe = {};
   const anySpecies = async () => { const st = await rs(); return (st.fish.find(f => f.species === 'river_fish') || st.fish[0]).species; };
-  const sp1 = await anySpecies();
-  const r1 = await catchOne(sp1, {
+  const r1 = await catchOne(await anySpecies(), {
     stopAt: 1, beforeFight: async () => {
       const a = (await rs()).fight.progress; await wait(5000); const b = (await rs()).fight.progress;
       probe.idle = { a, b };
@@ -188,46 +202,40 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
       probe.hold = { stalled, before, after }; probe.release = { relA, relB };
     }
   });
-  log(lines, 'probe fight', JSON.stringify(r1).slice(0, 300), JSON.stringify(probe));
   check('fight: 5s with no input → no progress', probe.idle && probe.idle.a === probe.idle.b, JSON.stringify(probe.idle));
   check('fight: holding nonstop ends in a stall with no progress', probe.hold && probe.hold.stalled && probe.hold.after === probe.hold.before, JSON.stringify(probe.hold));
   check('fight: releasing never lowers progress', probe.release && probe.release.relB >= probe.release.relA, JSON.stringify(probe.release));
 
-  // ===== mid-fight persistence: progress saved, reload restores the same fish paused
+  // ===== mid-fight persistence: reload restores the fishing ground and the same fish
   let s2 = await rs();
   if (s2.phase !== 'fight') check('mid-fight test reached a fight', false, JSON.stringify(r1).slice(0, 200));
   for (let i = 0; i < 400; i++) { const st = await rs(); if (st.fight.progress >= 30) break; const open = (st.fight.phase === 'gap' || st.fight.phase === 'loose') && !st.fight.stall; await holdBtn(open); await wait(60); }
   await holdBtn(false);
   s2 = await rs();
   const savedAttempt = s2.saved.attempt;
-  check('attempt saved with progress ≥25% before reload', savedAttempt && savedAttempt.progress >= 25, JSON.stringify(savedAttempt));
+  check('attempt saved with progress ≥25% before reload', savedAttempt && savedAttempt.progress >= 25 && savedAttempt.spot === 'B', JSON.stringify(savedAttempt));
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__sandstarTitleP0, null, { timeout: 60000 });
-  await continueWorld(page);
-  await wait(2500);
-  const region2 = await page.evaluate(() => window.__sandstarM1.state().region);
-  if (region2 !== 'life_forest_01') await toForest();
-  await ensureLifeMode();
-  await standAt(63.5);
-  const label2 = await page.evaluate(() => (document.getElementById('m1ActionBtn')?.textContent || '').trim());
-  check('after reload the bank offers "이어하기"', /이어하기/.test(label2), label2);
-  await openByAction();
+  await continueWorld(page); await wait(2500);
+  w = await fw();
+  check('continue restores the fishing ground, standing at spot B', w.active && w.nearSpot === 'B' && /이어서 낚시/.test(w.action), JSON.stringify({ active: w.active, near: w.nearSpot, action: w.action }));
+  await shot('world-resume');
+  const wrong = await openSpot('A', [[19.2, 8], [12.4, 8], [12.4, 11], [8, 11], [8, 15.2], [12.6, 15.2]]);
+  check('the hooked fish stays at its spot (A does not open it)', !wrong.ok, JSON.stringify(wrong).slice(0, 160));
+  o = await openSpot('B', [[8, 15.2], [8, 11], [12.4, 11], [12.4, 8], [19.2, 8]]);
   s2 = await rs();
-  check('reload restores the same hooked fish, paused with resume card', s2.card === 'resume' && s2.paused && s2.fight && s2.saved.attempt.id === savedAttempt.id && s2.saved.attempt.size === savedAttempt.size && s2.fight.progress >= savedAttempt.progress, JSON.stringify({ card: s2.card, fight: s2.fight, a: s2.saved.attempt }));
+  check('back at B: same fish restored paused with resume card', o.ok && s2.card === 'resume' && s2.paused && s2.saved.attempt.id === savedAttempt.id && s2.saved.attempt.size === savedAttempt.size && s2.fight.progress >= savedAttempt.progress, JSON.stringify({ o, card: s2.card, fight: s2.fight }).slice(0, 260));
   await shot('resume-card');
-  await press('#riverCard button[data-river="resume"]');
-  await wait(1100);
-  const dexBefore = (await living()).stats.fished;
+  await press('#riverCard button[data-river="resume"]'); await wait(1100);
+  const fishedBefore = (await living()).stats.fished;
   for (let i = 0; i < 800; i++) { const st = await rs(); if (st.phase !== 'fight') break; const open = (st.fight.phase === 'gap' || st.fight.phase === 'loose') && !st.fight.stall; await holdBtn(open); await wait(60); }
   await holdBtn(false); await wait(250);
-  const lv2 = await living();
-  s2 = await rs();
-  check('restored fish lands exactly once', s2.phase === 'result' && lv2.stats.fished === dexBefore + 1 && lv2.river.attempt === null && lv2.river.done.includes(savedAttempt.id), JSON.stringify({ phase: s2.phase, fished: lv2.stats.fished, done: lv2.river.done }));
-  // duplicate catch through the pure engine is rejected
-  const dup = await page.evaluate(id => { const L = window.__SANDSTAR_LIVING_P11__, st = L.getState(); st.river.attempt = null; return L.applyPure(st, { id: 'river-catch-' + id, type: 'river.catch', target: 'pond', attempt: id }, { x: 64, y: 77, groundY: 77, inv: {}, coins: 0 }); }, savedAttempt.id);
+  const lv2 = await living(); s2 = await rs();
+  check('restored fish lands exactly once', s2.phase === 'result' && lv2.stats.fished === fishedBefore + 1 && lv2.river.attempt === null && lv2.river.done.includes(savedAttempt.id), JSON.stringify({ phase: s2.phase, fished: lv2.stats.fished }));
+  const dup = await page.evaluate(id => { const L = window.__SANDSTAR_LIVING_P11__, st = L.getState(); st.river.attempt = null; return L.applyPure(st, { id: 'river-river-catch-' + id, type: 'river.catch', target: 'pond', attempt: id }, { x: 64, y: 77, groundY: 77, inv: {}, coins: 0 }); }, savedAttempt.id);
   check('replaying the same catch is rejected', dup.ok === false, dup.reason);
 
-  // ===== pause on hide, resume
+  // ===== pause on hide, layout, close
   await press('#riverCard button[data-river="again"]'); await wait(200);
   await tapWater((await rs()).W * .7, (await rs()).surface + 20); await wait(200);
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
@@ -237,32 +245,38 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   check('tab hide pauses the cast (pause card)', ps.paused && ps.card === 'pause', JSON.stringify({ paused: ps.paused, card: ps.card }));
   await press('#riverCard button[data-river="resume"]'); await wait(1000);
   check('resume continues after a short ready', !(await rs()).paused);
-
-  // ===== layout at 390: hold button and canvas fully on screen, no page scroll needed
   const layout = await page.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { vh: innerHeight, vw: innerWidth, hold: r('riverHold'), stage: r('riverCanvas'), exit: r('riverExit'), pause: r('riverPause') }; });
   const inView = b => b.top >= 0 && b.bottom <= layout.vh + 0.5 && b.left >= 0 && b.right <= layout.vw + 0.5;
-  check('layout: canvas + hold button + exit/pause inside the viewport, touch targets ≥44px', inView(layout.hold) && inView(layout.stage) && inView(layout.exit) && layout.hold.height >= 44 && layout.exit.height >= 44 && layout.pause.height >= 44, JSON.stringify({ vh: layout.vh, hold: [layout.hold.top, layout.hold.bottom], stage: [layout.stage.top, layout.stage.bottom] }));
-
-  // ===== close: world resumes, menu copy points to the riverbank
+  check('layout: canvas + hold button + exit/pause inside the viewport, touch targets ≥44px', inView(layout.hold) && inView(layout.stage) && inView(layout.exit) && layout.hold.height >= 44 && layout.exit.height >= 44 && layout.pause.height >= 44, JSON.stringify({ vh: layout.vh, hold: [layout.hold.top, layout.hold.bottom] }));
+  await press('#riverRetrieve').catch(() => {}); await wait(150);
   await press('#riverExit'); await wait(300);
-  const closed = await page.evaluate(() => ({ open: window.__sandstarRiver.isOpen(), paused: window.__sandstarM17.get().paused }));
-  check('exit closes the view and unpauses the world', !closed.open && !closed.paused, JSON.stringify(closed));
+  check('closing the view returns to the fishing ground', !(await page.evaluate(() => window.__sandstarRiver.isOpen())) && (await fw()).active);
+  const c0 = (await living()).clock; await wait(3000); const c1 = (await living()).clock;
+  check('life clock runs once in the fishing ground (≈3s per 3s)', c1 - c0 > 2.5 && c1 - c0 < 3.6, `+${(c1 - c0).toFixed(2)}s`);
+  const hud = await page.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { vh: innerHeight, vw: innerWidth, act: r('fishWorldAction'), pad: r('fishDpad') }; });
+  check('fishing ground HUD (action + move pad) inside the viewport', hud.act.bottom <= hud.vh && hud.act.right <= hud.vw && hud.pad.bottom <= hud.vh && hud.act.height >= 44, JSON.stringify({ vh: hud.vh, act: [hud.act.top, hud.act.bottom] }));
+
+  // ===== exit to town through the west gate
+  await walk([[19.2, 8], [12.4, 8], [12.4, 11], [2.8, 11]]);
+  w = await fw();
+  check('west gate offers the way back', w.nearGate && /마을로 돌아가기/.test(w.action), w.action);
+  await worldAction();
+  await travelDone(page, 'village_hub_01'); await wait(500);
+  const back = await page.evaluate(() => ({ region: window.__sandstarM1.state().region, town: window.__sandstarTown25D.state().position, fish: window.__sandstarFishingWorld.state() }));
+  check('exit lands in town by the fishing gate, saved as town', back.region === 'village_hub_01' && !back.fish.active && Math.hypot(back.town.x - 18, back.town.z + 0.6) < 1.5 && back.fish.saved.activeWorldId === 'village_hub_01', JSON.stringify({ region: back.region, town: back.town, saved: back.fish.saved }));
 
   // ===== legacy save: old in-progress m17 fishing + dex without sizes
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__sandstarTitleP0, null, { timeout: 60000 });
-  // edit the stored save on the title screen (the running game saves on unload)
   await page.evaluate(() => { const k = window.__SANDSTAR_LIVING_P11__.getSaveKey(), g = JSON.parse(localStorage.getItem(k)); delete g.livingP0.river; g.livingP0.fishing = { id: 'perch', progress: 40, tension: 30, round: 2 }; g.livingP0.fishDex = ['river_fish']; g.livingP0.bag.perch = 0; localStorage.setItem(k, JSON.stringify(g)); });
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__sandstarTitleP0, null, { timeout: 60000 });
   await continueWorld(page); await wait(2500);
-  if ((await page.evaluate(() => window.__sandstarM1.state().region)) !== 'life_forest_01') await toForest();
-  await ensureLifeMode(); await standAt(63.5);
-  await openByAction();
+  await townToFishing();
+  o = await openSpot('A');
   s = await rs();
-  check('legacy save: old hooked fish offered as "이어서 끌어올리기"', s.card === 'legacy', s.card + ' ' + JSON.stringify((await living()).fishing));
+  check('legacy save: old hooked fish offered as "이어서 끌어올리기"', o.ok && s.card === 'legacy', s.card + ' ' + JSON.stringify((await living()).fishing));
   check('legacy save: river state created fresh, old dex shown as 크기 미기록', s.saved && s.saved.best.river_fish === 0 && /크기 미기록/.test(await page.textContent('#riverDex')));
-  await shot('legacy-card');
   await press('#riverCard button[data-river="legacy"]'); await wait(300);
   s = await rs();
   check('legacy fish continues at its old progress', s.phase === 'fight' && s.fight.fish === 'perch' && s.fight.progress >= 40, JSON.stringify(s.fight));
