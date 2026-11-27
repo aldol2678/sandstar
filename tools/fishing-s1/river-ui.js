@@ -46,6 +46,8 @@ function ssRiverOpen(fixedSpot){
  if(at&&fishingWorldActive&&at.spot!==near){paused=false;ssRiverIsOpen=false;root.hidden=true;$('app').classList.remove('river-active');fishingWorldToast(`걸려 있는 물고기는 자리 ${at.spot}에 있어요`);return false;}
  ssRiver.fixedSpot=fishingWorldActive?near:'';ssRiver.spot=at?at.spot:near;
  ssRiver.phase='idle';ssRiver.result=null;ssRiver.card=null;ssRiver.paused=false;ssRiver.hold=false;ssRiver.fight=null;ssRiver.hint='';ssRiver.hintUntil=0;
+ ssRiverCastAt=-Infinity;ssRiverPoseName='';
+ if(ssRiver.spot==='A')for(const key of ssRiverArt)ssRiverLoadImage(key,ssRiverArtRoot);
  ssRiverResize();ssRiverResetWater();
  if(at){ssRiverStartFight(at,true);}
  else if(game.livingP0.fishing){ssRiver.card='legacy';}
@@ -81,6 +83,7 @@ function ssRiverCast(tx){
  if(ssRiver.phase==='lure'){ssRiverSay('먼저 회수하거나 찌를 지켜보세요');return;}
  if(ssRiver.phase!=='idle')return;
  const x=ssRiverValidX(tx);
+ ssRiverCastAt=ssRiver.t;
  ssRiver.lure={x,y:ssRiverSurface()+4,vy:0,drop:0};ssRiver.phase='lure';ssRiver.idleLureT=0;ssRiver.lastPullT=0;ssRiver.holdT=0;
  try{playSound('fish_cast');}catch(_){}
  ssRiverSay(Math.abs(x-tx)>6?'수초·바위를 피해 가까운 물에 떨어졌어요':'찌가 떨어졌어요. 그림자의 반응을 보세요',2.4);ssRiverRender();
@@ -285,6 +288,8 @@ function ssRiverDraw(){
  const cv=ssRiverEl('riverCanvas');if(!cv)return;const c=cv.getContext('2d'),W=ssRiver.W,H=ssRiver.H,s=RIVER_SPOTS[ssRiver.spot];
  c.setTransform(ssRiver.dpr,0,0,ssRiver.dpr,0,0);
  const surf=ssRiverSurface(),bot=ssRiverBottom(),bank=ssRiverBankX(),t=ssRiver.t;
+ const art=ssRiverAView();
+ if(art){c.translate(0,art.head);c.scale(1,art.sy);ssRiverPaintA(c,W,H,surf,bot,bank,t,-art.head/art.sy);}else{
  const sky=c.createLinearGradient(0,0,0,surf);sky.addColorStop(0,'#b9e3dc');sky.addColorStop(1,'#d9efd3');c.fillStyle=sky;c.fillRect(0,0,W,surf);
  const lit=game.storyM1?.springRepaired;
  const g=c.createLinearGradient(0,surf,0,H);g.addColorStop(0,lit?'#3f9fae':'#4a8b96');g.addColorStop(1,'#163d4a');c.fillStyle=g;c.fillRect(0,surf,W,H-surf);
@@ -293,22 +298,29 @@ function ssRiverDraw(){
  c.strokeStyle='#ffffff2e';c.lineWidth=1.5;
  for(let i=0;i<9;i++){const yy=surf+12+i*(bot-surf-20)/9,off=((t*s.flow*W*.9+i*53)%(W+80));c.beginPath();c.moveTo(W-off,yy);c.lineTo(W-off+18+s.flow*120,yy);c.stroke();}
  c.fillStyle='#ffffff55';for(let x=0;x<W;x+=22){c.fillRect((x+t*12)%W,surf-1+Math.sin(x+t*2)*1.5,10,2);}
+ }
  // blocked zones (weeds / rock)
  for(const [a,b] of s.blocks){const A=a*W,B=b*W;
-  if(ssRiver.spot==='A'){c.fillStyle='#3e7a46';for(let x=A;x<B;x+=7){c.fillRect(x,surf-10-Math.sin(x)*4,3,bot-surf+10);}}
+  if(art){const w=Math.min(48,Math.max(19,(B-A)*.72));for(let x=A;x<B;x+=w*.72)c.drawImage(ssRiverImage('prop-reeds'),x-w*.11,bot-w*.82,w,w*.87);}
+  else if(ssRiver.spot==='A'){c.fillStyle='#3e7a46';for(let x=A;x<B;x+=7){c.fillRect(x,surf-10-Math.sin(x)*4,3,bot-surf+10);}}
   else{c.fillStyle='#6f6f66';c.beginPath();c.moveTo(A,bot);c.lineTo(A+8,surf-14);c.lineTo(B-6,surf-18);c.lineTo(B,bot);c.fill();}
   if(ssRiver.phase==='idle'){c.save();c.strokeStyle='#ffd27a';c.lineWidth=1;c.setLineDash([4,4]);c.strokeRect(A,surf-22,B-A,18);c.restore();
    c.fillStyle='#ffd27a';c.font='bold 10px system-ui';c.textAlign='center';c.fillText('불가',(A+B)/2,surf-9);}
  }
  // bank + angler
+ let tipX=bank+16,tipY=surf-48;
+ if(art){[tipX,tipY]=ssRiverDrawAngler(c,surf,bank,t,art);}else{
  c.fillStyle='#6e9a52';c.fillRect(0,surf-6,bank,8);c.fillStyle='#7b5a3c';c.fillRect(0,surf+2,bank,H);
  c.fillStyle='#2b3b49';c.fillRect(bank-22,surf-34,10,28);c.fillStyle='#f1c99b';c.fillRect(bank-23,surf-44,12,11);
- const tipX=bank+16,tipY=surf-48;c.strokeStyle='#8a5b33';c.lineWidth=3;c.beginPath();c.moveTo(bank-12,surf-24);c.lineTo(tipX,tipY);c.stroke();
+ c.strokeStyle='#8a5b33';c.lineWidth=3;c.beginPath();c.moveTo(bank-12,surf-24);c.lineTo(tipX,tipY);c.stroke();
+ }
  // fish shadows
  const drawFish=(x,y,size,dir,species,alpha,glow,bend)=>{
   const len=12+size/450*58,h=len*(species==='carp'?.42:species==='perch'?.34:.28);
   c.save();c.translate(x,y);c.scale(dir,1);c.rotate(bend||0);c.globalAlpha=alpha;
   if(glow){c.strokeStyle='#fff3b0';c.lineWidth=2;c.beginPath();c.ellipse(0,0,len*.62,h*.9,0,0,Math.PI*2);c.stroke();}
+  if(art){const fps={river_fish:7,perch:8,carp:5}[species],frame=ssRiverMotion.matches?0:Math.floor(t*fps+x*.025)%6;
+   ssRiverSheet(c,species,(frame+6)%6,0,0,192,112,6,112,56,len/128);c.restore();return;}
   c.fillStyle=species==='carp'?'#10222a':'#132a33';c.beginPath();c.ellipse(0,0,len/2,h/2,0,0,Math.PI*2);c.fill();
   c.beginPath();c.moveTo(-len/2+2,0);c.lineTo(-len/2-len*.28,-h*.55);c.lineTo(-len/2-len*.28,h*.55);c.fill();c.restore();
  };
@@ -320,7 +332,8 @@ function ssRiverDraw(){
   const bx=L.x,by=surf+sink;
   c.strokeStyle='#f5f2e2aa';c.lineWidth=1;c.beginPath();c.moveTo(tipX,tipY);c.quadraticCurveTo((tipX+bx)/2,surf-30,bx,by-3);c.stroke();
   c.beginPath();c.moveTo(bx,by);c.lineTo(L.x,L.y);c.stroke();
-  c.fillStyle='#e84c3d';c.beginPath();c.arc(bx,by-2,5,Math.PI,0);c.fill();c.fillStyle='#fafafa';c.beginPath();c.arc(bx,by-2,5,0,Math.PI);c.fill();
+  if(art)c.drawImage(ssRiverImage('bobber-32'),bx-10,by-12,20,20);
+  else{c.fillStyle='#e84c3d';c.beginPath();c.arc(bx,by-2,5,Math.PI,0);c.fill();c.fillStyle='#fafafa';c.beginPath();c.arc(bx,by-2,5,0,Math.PI);c.fill();}
   c.fillStyle='#ffd27a';c.fillRect(L.x-2,L.y-2,4,4);
   if(ssRiver.phase==='bite'){c.strokeStyle='#fff3b0';c.lineWidth=2;const r=10+(ssRiver.bite.t*18)%16;c.beginPath();c.ellipse(bx,surf,r,r*.35,0,0,Math.PI*2);c.stroke();}
  }
@@ -399,7 +412,7 @@ function ssRiverCardAction(act){
  const root=ssRiverEl('riverOverlay');if(!root)return;
  const cv=ssRiverEl('riverCanvas'),hold=ssRiverEl('riverHold');
  cv.addEventListener('pointerdown',e=>{e.preventDefault();if(ssRiver.phase!=='idle'){if(ssRiver.phase==='bite')ssRiverHook();return;}
-  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,view=ssRiverAView(),screenY=e.clientY-r.top,y=view?(screenY-view.head)/view.sy:screenY;
   if(y<ssRiverSurface()-30||x<ssRiverBankX()){ssRiverSay('물 위를 눌러 던지세요');return;}ssRiverCast(x);});
  hold.addEventListener('pointerdown',e=>{e.preventDefault();if(ssRiver.pointerId!==null)return;ssRiver.pointerId=e.pointerId;try{hold.setPointerCapture(e.pointerId);}catch(_){}ssRiverPress();});
  const up=e=>{if(ssRiver.pointerId!==e.pointerId)return;ssRiver.pointerId=null;ssRiverRelease();};

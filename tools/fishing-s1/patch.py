@@ -5,6 +5,7 @@ target selection → lure → bite → recovery-type tug, result card, save comp
 
 Usage: patch.py <in.html> <out.html>
 """
+import json
 import sys
 from pathlib import Path
 
@@ -103,7 +104,11 @@ def patch(html):
         html = html.replace(old, new)
 
     core = (HERE / 'river-core.js').read_text(encoding='utf8')
-    ui = (HERE / 'river-ui.js').read_text(encoding='utf8') + (HERE / 'river-world.js').read_text(encoding='utf8')
+    poses = json.loads((HERE.parent.parent / "assets/fishing-a/angler-atlas.json").read_text(encoding="utf8"))
+    poses = {name: [p["fps"], p["loop"], [[*f["rect"][:2], *f["pivot"], *f["rod_tip"]] for f in p["frame_data"]]] for name, p in poses.items()}
+    art = "const ssRiverPoseSpec=" + json.dumps(poses, separators=(",", ":")) + ";\n"
+    art += (HERE / 'river-art.js').read_text(encoding='utf8')
+    ui = art + (HERE / 'river-ui.js').read_text(encoding='utf8') + (HERE / 'river-world.js').read_text(encoding='utf8')
     if '</script>' in core or '</script>' in ui:
         raise ValueError('script terminator inside fishing source')
 

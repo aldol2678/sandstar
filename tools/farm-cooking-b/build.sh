@@ -64,6 +64,9 @@ case "$glb" in
   inline) rm -rf "$out/assets"; python3 "$root/tools/farm-cooking-b/add-worker-assets.py" "$out/fcb-main.mjs" "$root/assets/glb";;
   *) echo "unknown --glb: $glb" >&2; exit 2;;
 esac
+if [ "$base" = v44 ]; then
+  python3 "$root/tools/fishing-s1/stage-art.py" "$root/assets/fishing-a" "$out/assets"
+fi
 node --check "$out/fcb-main.mjs"
 # Inline JavaScript syntax check: every <script> block of the patched HTML.
 node -e '
