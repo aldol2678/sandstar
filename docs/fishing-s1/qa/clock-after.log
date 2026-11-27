@@ -1,0 +1,7 @@
+after · town 2.5D idle: clock +4.02s over 4.00s real
+after · forest side-scroll, walking right: clock +4.02s over 4.02s real
+after · fishing open: true
+after · fishing view, active (idle, no card): clock +3.02s over 3.01s real
+after · after pause button: paused=true card=pause
+after · fishing view, paused card: clock +0.00s over 3.00s real
+after · forest after closing fishing: clock +3.00s over 3.00s real

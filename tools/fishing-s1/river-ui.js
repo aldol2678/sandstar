@@ -230,6 +230,10 @@ function ssRiverLoop(now){
  const dt=Math.min(.05,Math.max(0,(now-ssRiverLast)/1000));ssRiverLast=now;
  if(!ssRiver.paused&&!ssRiver.card){
   ssRiver.t+=dt;
+  // The side-scroll loop is paused while this view is open, so the shared life clock (crops,
+  // energy, tree regrowth, food buffs, NPC cooldowns) advances here instead: active time only,
+  // never while the pause/resume card is up, and never twice.
+  livingWorldTick(dt);
   if(ssRiver.ready>0){ssRiver.ready=Math.max(0,ssRiver.ready-dt);}
   else{
    if(ssRiver.phase==='lure'&&ssRiver.lure)ssRiverTickLure(dt);

@@ -3,22 +3,22 @@ PASS pc: riverbank is an action spot again (nearby=pond, label) — pond · 🎣
 PASS pc: open the riverbank view with E / action button
 PASS pc: no rod → rod card (원목 3), no fishing yet — {"card":"rod"}
 PASS pc: craft rod spends 3 wood once, card closes — rod=true
-PASS pc: spot buttons switch A/C/B and repopulate shadows — {"A":["r12","c22","r11"],"C":["c31","p25","p19"],"B":["r11","r11","c29"]}
-PASS pc: cast into weeds snaps to nearest valid water (no cost) — lure x=182.2 W=596 · 수초·바위를 피해 가까운 물에 떨어졌어요
+PASS pc: spot buttons switch A/C/B and repopulate shadows — {"A":["p17","p15","c34"],"C":["c38","p25","p16","p23"],"B":["r8","c25","r10"]}
+PASS pc: cast into weeds snaps to nearest valid water (no cost) — lure x=182.5 W=596 · 수초·바위를 피해 가까운 물에 떨어졌어요
 PASS pc: retrieve returns to idle
-PASS pc: catch river_fish at A with its own pattern — {"ok":true,"result":{"fish":"river_fish","size":75,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":75,"perch":0,"carp":0},"spots":{"A":1,"B":0,"C":0},"attempt":null,"done":["rmwx8n8xo27"],"assist":false}}
-PASS pc: catch perch at C with its own pattern — {"ok":true,"result":{"fish":"perch","size":213,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":75,"perch":213,"carp":0},"spots":{"A":1,"B":0,"C":1},"attempt":null,"done":["rmwx8n8xo27","rmwx8nnkx32"],"assist":false}}
-PASS pc: catch carp at B with its own pattern — {"ok":true,"result":{"fish":"carp","size":422,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":75,"perch":213,"carp":422},"spots":{"A":1,"B":1,"C":1},"attempt":null,"done":["rmwx8n8xo27","rmwx8nnkx32","rmwx8o3zo36"],"assist"
-PASS pc: bag +1 each, dex 3/3, fished 3, best sizes saved — {"bag":{"seed":6,"crop":0,"seed_wheat":3,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":0,"potato":0,"carrot":0,"river_fish":1,"perch":1,"carp":1,"bread":0,"soup":0,"stew":0},"dex":["river_fish","perch","carp"],"best":{"river_fish":75,"perch":213,"carp":422}}
+PASS pc: catch river_fish at A with its own pattern — {"ok":true,"result":{"fish":"river_fish","size":105,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":105,"perch":0,"carp":0},"spots":{"A":1,"B":0,"C":0},"attempt":null,"done":["rmwyficm220"],"assist":false}}
+PASS pc: catch perch at C with its own pattern — {"ok":true,"result":{"fish":"perch","size":232,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":105,"perch":232,"carp":0},"spots":{"A":1,"B":0,"C":1},"attempt":null,"done":["rmwyficm220","rmwyfimcd24"],"assist":false}}
+PASS pc: catch carp at B with its own pattern — {"ok":true,"result":{"fish":"carp","size":289,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":105,"perch":232,"carp":289},"spots":{"A":1,"B":1,"C":1},"attempt":null,"done":["rmwyficm220","rmwyfimcd24","rmwyfj4mc28"],"assist
+PASS pc: bag +1 each, dex 3/3, fished 3, best sizes saved — {"bag":{"seed":6,"crop":0,"seed_wheat":3,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":0,"potato":0,"carrot":0,"river_fish":1,"perch":1,"carp":1,"bread":0,"soup":0,"stew":0},"dex":["river_fish","perch","carp"],"best":{"river_fish":105,"perch":232,"carp":289}}
 PASS pc: catching does not pay coins (sale happens at the market) — 50 → 50
-probe fight {"ok":true,"stopped":true,"progress":13.49345238095226} {"idle":{"a":0,"b":0},"hold":{"stalled":true,"before":13.49345238095226,"after":13.49345238095226},"release":{"relA":13.49345238095226,"relB":13.49345238095226}}
+probe fight {"ok":true,"stopped":true,"progress":51.37916666666628} {"idle":{"a":0,"b":0},"hold":{"stalled":true,"before":51.37916666666628,"after":51.37916666666628},"release":{"relA":51.37916666666628,"relB":51.37916666666628}}
 PASS pc: fight: 5s with no input → no progress — {"a":0,"b":0}
-PASS pc: fight: holding nonstop ends in a stall with no progress — {"stalled":true,"before":13.49345238095226,"after":13.49345238095226}
-PASS pc: fight: releasing never lowers progress — {"relA":13.49345238095226,"relB":13.49345238095226}
-PASS pc: attempt saved with progress ≥25% before reload — {"id":"rmwx8omjn40","fish":"perch","spot":"B","size":228,"progress":25}
+PASS pc: fight: holding nonstop ends in a stall with no progress — {"stalled":true,"before":51.37916666666628,"after":51.37916666666628}
+PASS pc: fight: releasing never lowers progress — {"relA":51.37916666666628,"relB":51.37916666666628}
+PASS pc: attempt saved with progress ≥25% before reload — {"id":"rmwyfjgpd32","fish":"river_fish","spot":"B","size":105,"progress":50}
 PASS pc: after reload the bank offers "이어하기" — 🎣 강변 낚시 이어하기
-PASS pc: reload restores the same hooked fish, paused with resume card — {"card":"resume","fight":{"fish":"perch","progress":31,"strain":0,"stall":false,"phase":"gap"},"a":{"id":"rmwx8omjn40","fish":"perch","spot":"B","size":228,"progress":31}}
-PASS pc: restored fish lands exactly once — {"phase":"result","fished":4,"done":["rmwx8n8xo27","rmwx8nnkx32","rmwx8o3zo36","rmwx8omjn40"]}
+PASS pc: reload restores the same hooked fish, paused with resume card — {"card":"resume","fight":{"fish":"river_fish","progress":51,"strain":0,"stall":false,"phase":"gap"},"a":{"id":"rmwyfjgpd32","fish":"river_fish","spot":"B","size":105,"progress":51}}
+PASS pc: restored fish lands exactly once — {"phase":"result","fished":4,"done":["rmwyficm220","rmwyfimcd24","rmwyfj4mc28","rmwyfjgpd32"]}
 PASS pc: replaying the same catch is rejected — 이미 처리한 행동이에요
 PASS pc: tab hide pauses the cast (pause card) — {"paused":true,"card":"pause"}
 PASS pc: resume continues after a short ready

@@ -1,0 +1,4 @@
+{"name":"town canvas2d-isometric","medianMs":16.7,"p90Ms":16.7}
+{"name":"farm canvas2d-topdown","medianMs":16.7,"p90Ms":16.7}
+ruins state: {"active":true,"renderer":"three","worldId":"ruins_3d_01"}
+{"name":"ruins three/webgl","medianMs":566.7,"p90Ms":650}
