@@ -57,6 +57,9 @@ if [ "$base" = v44 ]; then
   python3 "$root/tools/mining-onboarding/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
   python3 "$root/tools/mining-rope/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
   python3 "$root/tools/mining-tools/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
+  voice_args=()
+  if [ "$glb" = inline ]; then voice_args+=(--inline-voices); fi
+  python3 -B "$root/tools/npc-affinity/patch.py" "$out/fcb-index.html" "$out/fcb-index.html" "${voice_args[@]}"
 fi
 python3 "$root/tools/farm-cooking-b/rebuild-worker.py" "$out/base-main.mjs" "$out/fcb-index.html" "$out/fcb-main.mjs"
 case "$glb" in
@@ -65,6 +68,9 @@ case "$glb" in
   inline) rm -rf "$out/assets"; python3 "$root/tools/farm-cooking-b/add-worker-assets.py" "$out/fcb-main.mjs" "$root/assets/glb";;
   *) echo "unknown --glb: $glb" >&2; exit 2;;
 esac
+if [ "$base" = v44 ] && [ "$glb" = static ]; then
+  python3 "$root/tools/npc-affinity/voice_assets.py" "$out/assets"
+fi
 node --check "$out/fcb-main.mjs"
 # Inline JavaScript syntax check: every <script> block of the patched HTML.
 node -e '

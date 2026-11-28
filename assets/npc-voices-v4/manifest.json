@@ -1,0 +1,787 @@
+{
+  "model_id": "eleven_v4",
+  "voices": {
+    "gaengi": {
+      "name": "Bongpal - Cheerful, Clear and Measured",
+      "id": "PLfpgtLkFW07fDYbUiRJ"
+    },
+    "tobak": {
+      "name": "Baek San - Ancient Wise Elder",
+      "id": "UUeYkdN1qaI7Ihjcb3zW"
+    },
+    "sola": {
+      "name": "Yeonhee - Lively, Friendly tone",
+      "id": "vhhJX7dyal9WlYW2UAsj"
+    },
+    "maru": {
+      "name": "Klamon - Bright, Warm, Clear & Friendly",
+      "id": "dnZGOA54w68T7vLLPFTp"
+    },
+    "seoon": {
+      "name": "Su - Casual",
+      "id": "fucCZkuDBeKO8ZpPNr6N"
+    },
+    "yeoul": {
+      "name": "Justin Roh - Calm, Balanced and Guttural",
+      "id": "gmRUMzXYROUiUpOrXA0z"
+    },
+    "harin": {
+      "name": "Bin - Measured and Serious",
+      "id": "jB1Cifc2UQbq1gR3wnb0"
+    }
+  },
+  "clips": [
+    {
+      "npc": "harin",
+      "key": "arrival",
+      "line": "저 빈집 문은 아직 열려. 경첩은 내가 봐 두거든.",
+      "generation_id": "01cmcOmiDW4el76aOu31",
+      "seconds": 4.08,
+      "sha256": "e089bf999a1de712abb454e87edd941068bae484ad7e3e5067c145a8becf6f4c"
+    },
+    {
+      "npc": "harin",
+      "key": "crystalSeen",
+      "line": "그 빛, 수로 이음매에서도 본 적 있어.",
+      "generation_id": "FhsheRr9CvmtM5IeA6qR",
+      "seconds": 3.44,
+      "sha256": "2814f31dcb33fa60606451addc88a8234800524b1f1c0ffee5f912974e49668c"
+    },
+    {
+      "npc": "harin",
+      "key": "forestVisited",
+      "line": "숲 난간 봤어? 여울이 짚는 쪽만 유난히 닳았어.",
+      "generation_id": "xiLr4ByfMl6CMlDWOHIl",
+      "seconds": 4.0,
+      "sha256": "dbf299c448de375058a23dbe0d1eb9b884e135e65609a360759d3c00b485bed4"
+    },
+    {
+      "npc": "harin",
+      "key": "springRepaired",
+      "line": "수문턱에 물금이 생겼어. 오늘 높이를 새겨 둘게.",
+      "generation_id": "msCFuYL93BIkQwiq3OHN",
+      "seconds": 4.08,
+      "sha256": "d31eaef00f6bc10e2e7c59f1beeb69a6dbe1e2b77f6bc8f7f562f93360e63691"
+    },
+    {
+      "npc": "harin",
+      "key": "personal-trace",
+      "line": "네가 문틀의 금을 본떴지. 이 물금도 남기고 싶어.",
+      "generation_id": "csCVAnLlPQjXYXSsRBBd",
+      "seconds": 4.64,
+      "sha256": "fc52d7113fda9f07def48956b46b345920399e9f8b6b80f08c38e9e3d51fe912"
+    },
+    {
+      "npc": "harin",
+      "key": "personal-new",
+      "line": "문틀에 네 키를 쟀듯이, 오늘 물높이도 쟀어.",
+      "generation_id": "1kfj9LvrxLFqhhL3HQD2",
+      "seconds": 3.92,
+      "sha256": "af717792dcb1bf58069684971fa28d144803b4439ce2ffae28b74ae495057ad0"
+    },
+    {
+      "npc": "harin",
+      "key": "hint",
+      "line": "문짝이 처졌어. 못을 새로 벼릴 쇠가 조금만 있으면 되는데.",
+      "generation_id": "3dtAdzi2Oqi1cs9j1Uzy",
+      "seconds": 4.64,
+      "sha256": "0ab152f46755adfb78ac2bbcd4a9292f674b4d29e2f23fece16f6a3c94dcdba1"
+    },
+    {
+      "npc": "harin",
+      "key": "gift-iron",
+      "line": "이걸로 못을 뽑으면 문이 반듯해지겠어. 손잡이 높이도 네 손에 맞춰 볼까?",
+      "generation_id": "1jHFmhBB0ivs7rlMb0zw",
+      "seconds": 5.44,
+      "sha256": "8071aa7619450090d209429cf8d32c0d5dd38d477881f17a9c7b19bc1f2f946f"
+    },
+    {
+      "npc": "harin",
+      "key": "gift-bread",
+      "line": "끼니를 또 건너뛸 뻔했네. 톱밥 묻기 전에 먹을게.",
+      "generation_id": "6mUSRh5njRc68Dc9Z3ep",
+      "seconds": 3.68,
+      "sha256": "1b78500b76a6bd53605cd196d3e2a9ab20eac8828eba22ef0b57bab342e5d268"
+    },
+    {
+      "npc": "harin",
+      "key": "reply-trace",
+      "line": "재 보니 이 금, 내 어깨까지 오네. 컸으면 지금쯤 나보다 크겠지.",
+      "generation_id": "waIXAhgRMjtA9dRCTozn",
+      "seconds": 6.08,
+      "sha256": "f36db65ceea41079cf17afc1bb444c4cb6ff06eb6dd954adaef9df425f602c73"
+    },
+    {
+      "npc": "harin",
+      "key": "recall-trace",
+      "line": "네가 본뜬 금 말이야. 어제 그 집 아이가 대번에 알아봤어.",
+      "generation_id": "ttDIdaV5j060IwsLLLtg",
+      "seconds": 4.56,
+      "sha256": "4c53d9f0c452b639246cd3867aece4bc4f94645ea5f80ac9cc3948a0d9a861a5"
+    },
+    {
+      "npc": "harin",
+      "key": "reply-new",
+      "line": "그럼 네가 먼저 서 봐. 연필 줘. 삐뚤어져도 지우기 없기다.",
+      "generation_id": "v1sL5YzG4SfYFUjhIZax",
+      "seconds": 4.88,
+      "sha256": "8657dd2597fa432a90caae186aa15d53fa66fac228841481af8324dbf648be11"
+    },
+    {
+      "npc": "harin",
+      "key": "recall-new",
+      "line": "문틀에 네 키를 쟀더니 아이들이 자기 키도 재 달라고 줄을 섰어.",
+      "generation_id": "Q1253DQgNcKwAtIeoqW8",
+      "seconds": 4.48,
+      "sha256": "b58cdc8746c20061514c6778c382afbae8050f0c7dbffa4c047e84e60f1aa902"
+    },
+    {
+      "npc": "sola",
+      "key": "arrival",
+      "line": "마른 밭에서도 싹튼 씨앗은 따로 모아 뒀어.",
+      "generation_id": "yyCE2eFg5IDFAl3peOi4",
+      "seconds": 3.36,
+      "sha256": "08145df6a02db15fe521eb32b73b180f27260e4a7160feed339f5604d31ce04a"
+    },
+    {
+      "npc": "sola",
+      "key": "crystalSeen",
+      "line": "광산이 빛난 날엔 밭흙도 달라졌을까? 적어 두자.",
+      "generation_id": "H2hgPUXpFaYftHqSS4Ht",
+      "seconds": 4.24,
+      "sha256": "5b8750375bf084085dd8d943bd618274dddc4e6df575b723ad726dc9486a32e5"
+    },
+    {
+      "npc": "sola",
+      "key": "forestVisited",
+      "line": "숲길 풀은 강 쪽 잎부터 말렸어. 내 수첩에 그렸어.",
+      "generation_id": "XmaBTueukQNXqXqTFm0x",
+      "seconds": 4.0,
+      "sha256": "4af66e87eb69a250b62d2f28d4f6d53d94e3e0f533aee67f4f8b98c0f1caac29"
+    },
+    {
+      "npc": "sola",
+      "key": "springRepaired",
+      "line": "샘 가까운 흙부터 젖었어. 먼 밭은 내일 또 볼래.",
+      "generation_id": "O00ZuJb1pCGkuKDj6SRy",
+      "seconds": 4.24,
+      "sha256": "166dc85949bbabd31f2c7b5c8a508bdcabc12cdded3228d2e87ed9e39c3e971a"
+    },
+    {
+      "npc": "sola",
+      "key": "personal-date",
+      "line": "싹튼 날 옆에 흙이 젖은 날도 네 글씨로 써 줘.",
+      "generation_id": "mWhNM0rTsXNT7EbtCeAj",
+      "seconds": 3.76,
+      "sha256": "9185388f30b633e3081d11a4a4c7fb94e3d3f2d3eda136700f55f6fadc6ab039"
+    },
+    {
+      "npc": "sola",
+      "key": "personal-nickname",
+      "line": "낮잠밭 흙은 아직 말랐어. 우리 같이 기다려 보자.",
+      "generation_id": "nJKjwGeObV3dTdRbsa1f",
+      "seconds": 4.0,
+      "sha256": "d057fc17ee096339ae13074778162c1800955c4093ae32ee2ad1f2b71b18e8f6"
+    },
+    {
+      "npc": "sola",
+      "key": "hint",
+      "line": "주황 뿌리를 세로로 잘라 보면 안쪽에도 결이 있어. 밭에서 꼭 한번 보여 주고 싶어.",
+      "generation_id": "DP7tT6F82LPPO2QQqj1M",
+      "seconds": 6.48,
+      "sha256": "e1f0fe457d75c74b56a39e9ec871891f40cbc698dfae6264da42c065f4b61338"
+    },
+    {
+      "npc": "sola",
+      "key": "gift-carrot",
+      "line": "봐, 이 둥근 결! 같은 밭에서 난 것도 무늬가 조금씩 달라.",
+      "generation_id": "PGq4RQ9j853NFpNQjQF7",
+      "seconds": 4.88,
+      "sha256": "acd7d7664991ce4fbe17e3f97a15030842509077f979ed8e726f1e09500d7d54"
+    },
+    {
+      "npc": "sola",
+      "key": "gift-wheat",
+      "line": "이삭 끝이 참 고르네. 다음 파종 기록에 한 줄 보태야겠다.",
+      "generation_id": "feLlXEWvjkcoMijCoJPq",
+      "seconds": 4.72,
+      "sha256": "c413068eeb3bd6d8fa607af4d4ed99caf2e13241839a4e0df6287e358c961338"
+    },
+    {
+      "npc": "sola",
+      "key": "reply-date",
+      "line": "그날 밤엔 서리가 내렸지. 잘 견뎠다고 적어 줘야겠다.",
+      "generation_id": "JSYvJMdBUxARjdWXx5VW",
+      "seconds": 4.56,
+      "sha256": "bb58c727254bb82cf7f3d7709a09f52fafcc89f5564cc1ac60f6587e024623f3"
+    },
+    {
+      "npc": "sola",
+      "key": "recall-date",
+      "line": "네가 날짜를 적어 둬서 옆 밭보다 사흘 일찍 싹텄다는 걸 알았어.",
+      "generation_id": "G2MR73oVnaTO2TVcjY9B",
+      "seconds": 4.72,
+      "sha256": "c5b05e81cd8d2f8cbee365528317d0513269a432d9c52b2fb0f01d6d1a000594"
+    },
+    {
+      "npc": "sola",
+      "key": "reply-nickname",
+      "line": "고개 숙인 모양이 졸고 있는 것 같지? 그럼 ‘낮잠밭’ 어때?",
+      "generation_id": "C8BWplUXPhnh9l79oGOn",
+      "seconds": 5.04,
+      "sha256": "8726d81c37bfde3ba49efbee3e1e2b4a5979e1919cac51d089288ee3c52edba4"
+    },
+    {
+      "npc": "sola",
+      "key": "recall-nickname",
+      "line": "오늘은 낮잠밭부터 보고 왔어. 네 덕에 밭에 인사하는 버릇이 생겼네.",
+      "generation_id": "0ygtwCtSu52jTGjablVj",
+      "seconds": 5.36,
+      "sha256": "c4eea5d0d5a59d351325233249ae0c6c2d0317893c3762f13578c212f2ca3513"
+    },
+    {
+      "npc": "yeoul",
+      "key": "arrival",
+      "line": "옛날엔 눈을 감고도 마을에서 강 굽이를 셌어.",
+      "generation_id": "VBh61EpIYsSkNwr1wDz7",
+      "seconds": 3.76,
+      "sha256": "c76f1389fedf879a804e8f876ba1a9a3c8ff48dcd4013f59de520f3387533f19"
+    },
+    {
+      "npc": "yeoul",
+      "key": "crystalSeen",
+      "line": "네가 본 빛 얘기, 나도 별샘에서 본 게 있어.",
+      "generation_id": "LzB1a4felmdgWnTE7Q7d",
+      "seconds": 3.76,
+      "sha256": "2ac2bb99b9f776566974f99e2d0b63a47aa17af08eef389832b28c54bb8de723"
+    },
+    {
+      "npc": "yeoul",
+      "key": "forestVisited",
+      "line": "마른 돌에도 물금은 남아. 옛 강은 저리 굽었지.",
+      "generation_id": "616NyNXlU7wVTVwLMHYA",
+      "seconds": 4.56,
+      "sha256": "0d1814b9461ff3d5abefd96eeb17e9e20e4a3f6119b406c85b8a49405584c930"
+    },
+    {
+      "npc": "yeoul",
+      "key": "springRepaired",
+      "line": "샘 아래 첫 굽이에서 물소리가 나. 거기까진 들었어.",
+      "generation_id": "FIbSblHvoGJmExXMnuEv",
+      "seconds": 4.32,
+      "sha256": "ebfb97a2b4959611ba8b8eeecdd3261dc4528c9a74a4e5e79a2e93202fdda61c"
+    },
+    {
+      "npc": "yeoul",
+      "key": "personal-ripple",
+      "line": "그날 같이 듣던 자갈, 샘 아래서도 구르더라.",
+      "generation_id": "n2BbIiMfru6VVvoCCeWO",
+      "seconds": 3.6,
+      "sha256": "6ec348e2d0e5eab50a83d8163499269b579a61ba1d2cae862159786b5b9c4455"
+    },
+    {
+      "npc": "yeoul",
+      "key": "personal-pool",
+      "line": "깊은 소는 아직 조용해. 네가 골랐던 자리 말이야.",
+      "generation_id": "7yIzJsmmOFHL56MmXwpA",
+      "seconds": 3.84,
+      "sha256": "1d58492e98ee4d30ac12202404a138ae89d713f4613a9bd15b0a1693146ee41f"
+    },
+    {
+      "npc": "yeoul",
+      "key": "hint",
+      "line": "등에 비단 무늬가 번지는 녀석을 보면, 어릴 때 보던 물빛이 생각나.",
+      "generation_id": "hr6Oeunf7NMr1Jlb1o1u",
+      "seconds": 4.88,
+      "sha256": "7fce9d70b2717007c9d9db747c221fefb49796882ec18b6af9cf562b6cc62a21"
+    },
+    {
+      "npc": "yeoul",
+      "key": "gift-carp",
+      "line": "이 비늘 좀 봐. 고개를 틀 때마다 물빛이 달라지지? 한참 보고 싶었어.",
+      "generation_id": "OWp1szBSvkMfLjQH4pZp",
+      "seconds": 5.92,
+      "sha256": "efc2fa12024109a20d4c2077b038dc03b81abd050aa49fb20d00860090d8fd87"
+    },
+    {
+      "npc": "yeoul",
+      "key": "gift-perch",
+      "line": "지느러미가 튼튼하네. 빠른 여울을 타고 올라온 녀석이겠다.",
+      "generation_id": "fv6UuJhXYseLW5qTOtq8",
+      "seconds": 4.24,
+      "sha256": "ffdca1050862ef2d9ba9f481b780b1c38a3377cea445231279d2dab289c45373"
+    },
+    {
+      "npc": "yeoul",
+      "key": "reply-ripple",
+      "line": "잘 들어 봐. 물소리 사이로 자갈 굴러가는 소리가 끼어들지?",
+      "generation_id": "6ZxRK2E0yLOLmMFMJExK",
+      "seconds": 4.48,
+      "sha256": "8684b7d58bd2b55246d39f3f59441abc5ee6bf96d9d800d7ec38d7f01c63b7ac"
+    },
+    {
+      "npc": "yeoul",
+      "key": "recall-ripple",
+      "line": "자갈 소리가 다시 나더라. 그날 네가 골랐던 그 얕은 자리에서.",
+      "generation_id": "vkaIMZFRGDDK6zpgBmxh",
+      "seconds": 4.8,
+      "sha256": "1c162e49b6d16b6d34c1f052d7f07b8f8978338a1876361e0e05decd75171dfe"
+    },
+    {
+      "npc": "yeoul",
+      "key": "reply-pool",
+      "line": "여긴 한 박자 늦게 울려. 눈 감고 들으면 강이 더 넓어진 것 같아.",
+      "generation_id": "GlQ41TK4Ipah2MUcn64E",
+      "seconds": 5.28,
+      "sha256": "b2e0aa9124757bfdcac0b5e440b8446dfcad0973f933abf5d448164847fe22ba"
+    },
+    {
+      "npc": "yeoul",
+      "key": "recall-pool",
+      "line": "깊은 소가 오늘 유난히 낮게 울어. 너도 알아들을 것 같았어.",
+      "generation_id": "HRocPhDcGn2J0tat8un8",
+      "seconds": 4.8,
+      "sha256": "d4f14d43f68be04760457bdc547a85689eaf6b026c937ee2fac2a501ed5caef7"
+    },
+    {
+      "npc": "seoon",
+      "key": "arrival",
+      "line": "수로 도면 한쪽이 비었어. 빈칸은 빈칸으로 둘게.",
+      "generation_id": "wRIlDhWCCcp81rwqMHyN",
+      "seconds": 4.4,
+      "sha256": "5bda30cea4983cac4aaf59af8d47767dcb5dd9c00f4aebdcea08811c7d2dbb59"
+    },
+    {
+      "npc": "seoon",
+      "key": "crystalSeen",
+      "line": "별광이 되풀이된 간격부터 적자. 밝기는 그다음이야.",
+      "generation_id": "5E525fvDczpTz99zN9c2",
+      "seconds": 4.64,
+      "sha256": "36113543a7705575cc252fd1994559bdb724e8a6f675363394c3674e18e15a03"
+    },
+    {
+      "npc": "seoon",
+      "key": "forestVisited",
+      "line": "여울이 짚은 굽이가 내 도면엔 없어. 다시 재 볼게.",
+      "generation_id": "Fn3p5aUCDVki0Ka1oWo3",
+      "seconds": 3.84,
+      "sha256": "4227e05715fef2ebcdfa4f59f5f55b64157305f21bc0e767958edcaadfe50d2a"
+    },
+    {
+      "npc": "seoon",
+      "key": "springRepaired",
+      "line": "장치에 남은 경고를 옮겨 적었어. 쓴 이는 몰라.",
+      "generation_id": "yYxShCy3ubzegFXYzIZW",
+      "seconds": 3.92,
+      "sha256": "8e2c7dc4bc4dba2d62332be4781eaac02bf31d98611a3366f539a05f04efafd9"
+    },
+    {
+      "npc": "seoon",
+      "key": "personal-light",
+      "line": "꼬리표에 적은 그 빛깔로는 경고의 뜻을 못 읽어.",
+      "generation_id": "L5z4Cq1z72ZpDrMtoWi5",
+      "seconds": 3.68,
+      "sha256": "3e903a39a3dfdd65b4a0b3c55f362333ef0d179383976dd990f0f83a0967dc94"
+    },
+    {
+      "npc": "seoon",
+      "key": "personal-place",
+      "line": "그때처럼 위치부터 쓰자. 경고는 장치에 새겨졌어.",
+      "generation_id": "cZ5FS4KaZiM49wGIzinD",
+      "seconds": 4.48,
+      "sha256": "3b6fa6e58e7be83fc61f98fda102febb55ebee61d86082b0c60878dfc483c6a9"
+    },
+    {
+      "npc": "seoon",
+      "key": "hint",
+      "line": "빛이 돌 속에서 두 갈래로 나뉘는 표본이라면 온종일 들여다볼 수 있어.",
+      "generation_id": "vBERF2fHGg4TuFxArFPG",
+      "seconds": 5.04,
+      "sha256": "4a07853df75b2fc4761b09e1512ee812baea5b996eece9e65a05dea82e97400c"
+    },
+    {
+      "npc": "seoon",
+      "key": "gift-crystal",
+      "line": "빛줄기가 딱 둘로 갈라져. 종이를 대 봐. 이건 그림으로 남길 만해.",
+      "generation_id": "IefXDE0GuESXIqfqaF9S",
+      "seconds": 5.44,
+      "sha256": "5c7efa6bcca3ac53ebd766d8134bbab0d875a53977596a1519dcd0f4a0f9ef49"
+    },
+    {
+      "npc": "seoon",
+      "key": "gift-copper",
+      "line": "푸른 녹이 슨 자리까지 잘 보이네. 이대로 보관할게.",
+      "generation_id": "sthVwY41BjguuUb19QpK",
+      "seconds": 3.84,
+      "sha256": "2c2fbbeb953054d0d0954868b9d06a1f8ece80d653f87b066b67454e258ae088"
+    },
+    {
+      "npc": "seoon",
+      "key": "reply-light",
+      "line": "그늘에선 회색인데 기울이면 보랏빛이 돌아. 첫 줄에 둘 다 쓰자.",
+      "generation_id": "iP2corgZ5kxFHLRmSByG",
+      "seconds": 5.04,
+      "sha256": "af0e2873f1db23ced5492d40797fead7d2bc168680ec206c26f5e7ee54d468d8"
+    },
+    {
+      "npc": "seoon",
+      "key": "recall-light",
+      "line": "네가 적은 보랏빛 덕분에 서랍 속에서 그 표본을 단번에 찾았어.",
+      "generation_id": "gzNx8DklWANs1OHdsO9O",
+      "seconds": 4.48,
+      "sha256": "038c21ed308d92f845d2606d5c3d9d0abc7c20c863be122ee664acd206a15dce"
+    },
+    {
+      "npc": "seoon",
+      "key": "reply-place",
+      "line": "좋아. 다음에 가서 같은 층의 돌과 나란히 비교할 수 있겠어.",
+      "generation_id": "aU6JF6GoPQGoLD9RGAA7",
+      "seconds": 4.32,
+      "sha256": "35e986892ce1eb6a8d0ae2781236f4d1e926b5327b00d4174453e966ed49413f"
+    },
+    {
+      "npc": "seoon",
+      "key": "recall-place",
+      "line": "꼬리표에 네가 적은 자리로 돌아갔어. 옆 돌에서도 같은 결을 찾았지.",
+      "generation_id": "qG4oZ5qvO2gSE0Ii4T3g",
+      "seconds": 5.04,
+      "sha256": "bb4e2cebf54e922a72354253d59c020573810fedf6ba4cf9d70769b858adc6ba"
+    },
+    {
+      "npc": "maru",
+      "key": "arrival",
+      "line": "빈 좌판도 아침마다 닦지. 누가 돌아올지 모르잖아!",
+      "generation_id": "M8wqPogEBK0JyZjbcl8d",
+      "seconds": 4.16,
+      "sha256": "39eab7c7c54ff2e07d639eff5a0a8800e98167b7ad1a933d7cc62ca50ec8c01a"
+    },
+    {
+      "npc": "maru",
+      "key": "crystalSeen",
+      "line": "값은 나중에 매기자고. 어디서 빛났는지부터 듣자!",
+      "generation_id": "LdhzceNpVJhGfOsphUEL",
+      "seconds": 3.6,
+      "sha256": "e032d0f8b66af1955d349f4b2a2c76e6384f420930af14443cccc84b6fd79a40"
+    },
+    {
+      "npc": "maru",
+      "key": "forestVisited",
+      "line": "숲길 걸어 봤지? 물 한 통 이고 오면 꽤 멀어!",
+      "generation_id": "vaH8UFRmCne8taEQrLg7",
+      "seconds": 3.68,
+      "sha256": "ce782e92070dfa088e5952c437311d9fb74b8406f20d25f52bd4e0b7328d860d"
+    },
+    {
+      "npc": "maru",
+      "key": "springRepaired",
+      "line": "첫 굽이에 물이 찼대. 물지게는 아직 팔 때가 아냐.",
+      "generation_id": "5ROpbJZiE7Y6xIn3bUlf",
+      "seconds": 4.08,
+      "sha256": "3c3877ff17295c8357f96b358d7cadcae747d4537734e0aadf3806d798abf53e"
+    },
+    {
+      "npc": "maru",
+      "key": "personal-trade",
+      "line": "그 첫 손님도 물값보다 수문 안부부터 묻더라니까.",
+      "generation_id": "mIdEE0tdmKurfpJBJblh",
+      "seconds": 3.84,
+      "sha256": "9c6e0c5532dde3a5c645e642856597fa9c68f1a1ac895b11c0682cc413ca9c6c"
+    },
+    {
+      "npc": "maru",
+      "key": "personal-share",
+      "line": "감자 나눠 먹던 이들 몫으로 물 한 통 남겨 두자.",
+      "generation_id": "o7etWG3OOtQZbsaNDhhk",
+      "seconds": 3.28,
+      "sha256": "d9e1db001808e5bc14e5a2080149c308091b648291355de4bdec3bb47d1c91e4"
+    },
+    {
+      "npc": "maru",
+      "key": "hint",
+      "line": "장이 서는 날엔 식어도 든든한 게 좋아. 생선이랑 감자를 푹 끓인 거면 더 좋고!",
+      "generation_id": "G7i8m364qsDHcDhQg3IU",
+      "seconds": 5.92,
+      "sha256": "c3251ed89f3507cf00d1d3245b0104cb7cfced7be1829afcb4d67b5741e83025"
+    },
+    {
+      "npc": "maru",
+      "key": "gift-stew",
+      "line": "이 냄새면 손님이 우리 가게로 다 오겠는데? 그래도 첫 숟갈은 내 거야!",
+      "generation_id": "PoH6RlsTSEVT4gPPL4BS",
+      "seconds": 5.28,
+      "sha256": "bcbc50ec3868e22d8cef83fe29e812128dca1102d53b856f0327011c6e9ce41a"
+    },
+    {
+      "npc": "maru",
+      "key": "gift-potato",
+      "line": "한 손에 쏙 들어오네. 숯불에 묻어 놨다가 장 끝나면 먹어야지.",
+      "generation_id": "UdlsyQzIss4L7lZWAhyr",
+      "seconds": 4.56,
+      "sha256": "9bb3807c3b7d3eae16eeefe1a5872ba17078b0f4223de3fc39ddb7dd69d5c09b"
+    },
+    {
+      "npc": "maru",
+      "key": "reply-trade",
+      "line": "그 손님, 일부러 한 번 깎아 달라고 해. 그래야 나랑 말 섞을 핑계가 생긴대.",
+      "generation_id": "OBQduLyRiF4ELvkoFmJA",
+      "seconds": 5.68,
+      "sha256": "1ac352a778efdebec0a3cc9f19fb93de398d4750f955397a1ce368da9ba70f1f"
+    },
+    {
+      "npc": "maru",
+      "key": "recall-trade",
+      "line": "그날 첫 손님 기억나? 오늘은 물건도 안 보고 나부터 찾더라니까.",
+      "generation_id": "PTz4pDtMpq22G7o2x097",
+      "seconds": 4.96,
+      "sha256": "77c52e84e7b6d18bd07ef8f44f4e68a8197a3c9da4f880ac1dd2160efbff9e4c"
+    },
+    {
+      "npc": "maru",
+      "key": "reply-share",
+      "line": "봤구나! 내일은 아예 작은 감자를 두 알 구워 놔야겠어.",
+      "generation_id": "xdtN2ezYROWT8Kf031Kx",
+      "seconds": 4.24,
+      "sha256": "8bc679202597a4715fa7992b5b162f8ff62038a3616ff090ac999e00cfe14470"
+    },
+    {
+      "npc": "maru",
+      "key": "recall-share",
+      "line": "감자를 둘로 나누던 손님들 말이야. 오늘은 셋이 와서 의자를 더 꺼냈어.",
+      "generation_id": "Ja4ooSdNbPCZWG9AoQhU",
+      "seconds": 5.36,
+      "sha256": "477f421cf0de4d496de4ce34b4fee50474d915654f1e56c8be3244261916dd92"
+    },
+    {
+      "npc": "tobak",
+      "key": "arrival",
+      "line": "수문 고칠 쇠못은 모루 밑에 챙겨 뒀다.",
+      "generation_id": "xrnlPmvMZLN1AWgWEyIx",
+      "seconds": 3.04,
+      "sha256": "c092bd731a6deb0be6792391a821b4666d1bced9b391aaadcf9e7dd4cd132efa"
+    },
+    {
+      "npc": "tobak",
+      "key": "crystalSeen",
+      "line": "광맥에서 낸 빛이군. 화덕에 넣기 전부터였나?",
+      "generation_id": "3bb2X2OxKiCeUiPTWM8x",
+      "seconds": 3.84,
+      "sha256": "f0e722a0c55c4c3be9f51805dbdbebcc9f06330540242cbb8bd7c077b4060e82"
+    },
+    {
+      "npc": "tobak",
+      "key": "forestVisited",
+      "line": "숲길 이음쇠를 보면 녹이 어디까지 슬었나 봐 둬.",
+      "generation_id": "HkZGkkqEGgRiTV3mhwRt",
+      "seconds": 3.76,
+      "sha256": "b9621779e30771e1ff40f653d2b10a1629f84424efbfedf28b2e6dcb6f3b6e83"
+    },
+    {
+      "npc": "tobak",
+      "key": "springRepaired",
+      "line": "물 닿은 쇠부터 살핀다. 수문은 고친 뒤가 더 길어.",
+      "generation_id": "4L9AjQCBgBaIUpiubIiW",
+      "seconds": 4.8,
+      "sha256": "6682c590f09eef1feb0088c14296cd1962892f525505427ca1e2a43e22e748e5"
+    },
+    {
+      "npc": "tobak",
+      "key": "personal-steady",
+      "line": "가운데 두드리던 그 손으로 수문 떨림을 짚어 봐.",
+      "generation_id": "p5EyoyIRYQSdLptAPeCj",
+      "seconds": 3.44,
+      "sha256": "fe62e31d20a718b97238de41a3a5039b19b467fb9581ef20bb5b1b45a6eb06fd"
+    },
+    {
+      "npc": "tobak",
+      "key": "personal-edge",
+      "line": "네가 만져 본 쇠끝처럼, 수문 모서리도 살펴야지.",
+      "generation_id": "Z2UsHWTd1yWCYtiG7FS7",
+      "seconds": 4.0,
+      "sha256": "dc5aa147f9155014cf134ab882c0004a2eb5441e6772deeb4bffff1236e205ff"
+    },
+    {
+      "npc": "tobak",
+      "key": "hint",
+      "line": "불이 제대로 올랐는지는 쇳덩이가 벌겋게 달아오를 때 알 수 있지.",
+      "generation_id": "Ny6xVXtcjGBiRvGgR2rd",
+      "seconds": 4.8,
+      "sha256": "f6cb6945d339d1299d0085dd95cfd9b8086c3cb0a986d3506fb6ce8b08fa56f7"
+    },
+    {
+      "npc": "tobak",
+      "key": "gift-iron",
+      "line": "손에 무게가 딱 맞네. 첫 망치질은 네가 보는 앞에서 하지.",
+      "generation_id": "spAuPLxiBw5iL6cSzAos",
+      "seconds": 4.72,
+      "sha256": "2560137694b9c8d81852c4cdf9301e31075dc2adeba6aa7469db36157ad24f93"
+    },
+    {
+      "npc": "tobak",
+      "key": "gift-orecoal",
+      "line": "좋은 연료군. 불이 오래 가겠어. 손 좀 녹이고 가.",
+      "generation_id": "OOmh41zlTFLJdkzxb2TD",
+      "seconds": 4.16,
+      "sha256": "5b90d80d2902d82be459f9d99ceeaa1762d86c7d9e0a4358032c7fe83b7a13f6"
+    },
+    {
+      "npc": "tobak",
+      "key": "reply-steady",
+      "line": "서두르지 않는구나. 봐, 자국이 둥글고 고르지.",
+      "generation_id": "z17z4x6Mu7T9hOzZQ3sk",
+      "seconds": 4.56,
+      "sha256": "ee2f8f93ecbdf6564e7867d3e40a990ffa00d8a2d7ab0457ee2baebcd766d2eb"
+    },
+    {
+      "npc": "tobak",
+      "key": "recall-steady",
+      "line": "네가 가운데 남긴 자국, 견습한테 힘 조절 가르칠 때 보여 줬다.",
+      "generation_id": "NBTWUm8FmsylDPR5Osd2",
+      "seconds": 5.04,
+      "sha256": "ba48fb8ccef322fdf05d321fe5cbe58a521f001270e95e79c9f26bc31b1c04d5"
+    },
+    {
+      "npc": "tobak",
+      "key": "reply-edge",
+      "line": "손이 닿을 자릴 봤군. 이러면 쥘 때 걸리는 데가 없어.",
+      "generation_id": "YdDCQhpwhJ6T6rwip7vA",
+      "seconds": 4.4,
+      "sha256": "76d2eeb4fc49b9e1291840efe208ba1b82632f28d88b1fa66580a5601221c53a"
+    },
+    {
+      "npc": "tobak",
+      "key": "recall-edge",
+      "line": "네가 다듬은 끝을 쓸어 봤어. 장갑을 벗고 잡아도 편하더군.",
+      "generation_id": "fzn9CYBPg3b6cwyyrcx9",
+      "seconds": 4.8,
+      "sha256": "9c4f80acec71dd97eec0e0470e9e1d68df32f4d3d73d7b97cf052be6da36971e"
+    },
+    {
+      "npc": "gaengi",
+      "key": "arrival",
+      "line": "꺼진 갱도에서도 돌아오는 쪽은 표시해 둔다고!",
+      "generation_id": "17LAQqbKgvE2HWuTvci2",
+      "seconds": 3.6,
+      "sha256": "f4e4588ac3e7f8284928d5dd091009e2324bd2f980a81d96e84e7a6f9043a351"
+    },
+    {
+      "npc": "gaengi",
+      "key": "crystalSeen",
+      "line": "등불은 가려 봤냐? 돌이 스스로 빛나는지 보자고!",
+      "generation_id": "fyO6XiZnzECdyDuTdKx1",
+      "seconds": 3.6,
+      "sha256": "705ba00291b8f4c006232637b2a43828a52b58b39a1c428d1205fdaab7bf79db"
+    },
+    {
+      "npc": "gaengi",
+      "key": "forestVisited",
+      "line": "숲에선 물금, 갱도에선 젖은 벽이지. 모양을 봐!",
+      "generation_id": "1EpUerTtF9f075l8HySc",
+      "seconds": 4.48,
+      "sha256": "0a7cf39f8de0c2b2c1766efdc1e2685dd99a33a70406cc0f6175da4e1f93e985"
+    },
+    {
+      "npc": "gaengi",
+      "key": "springRepaired",
+      "line": "샘 하나가 깼다고 깊은 갱도까지 안심하진 마라!",
+      "generation_id": "QeI5FKZPT1giN5vTmdgy",
+      "seconds": 3.92,
+      "sha256": "14883007885450abb34ce90b7d7c35f2125ecefdd1efbe879a2d491e153b5a59"
+    },
+    {
+      "npc": "gaengi",
+      "key": "personal-dent",
+      "line": "헬멧 찧던 얘기 기억하지? 물 구경할 때도 위를 봐!",
+      "generation_id": "ppxqeYMxG5YzRMowv9RL",
+      "seconds": 4.24,
+      "sha256": "5e1a42d52b529605de5dddceab12eb93f3f331a9ef147dd6507311119ef018d0"
+    },
+    {
+      "npc": "gaengi",
+      "key": "personal-scratch",
+      "line": "그 헬멧 빌려 준 후배랑도 물소릴 꼭 같이 듣지.",
+      "generation_id": "wuLMaS47SINFKuJgx0bI",
+      "seconds": 3.68,
+      "sha256": "43b84f60bd1f9875ab87f3d49cb3c822274bf356f06ec823a8c970c92cdf5b8c"
+    },
+    {
+      "npc": "gaengi",
+      "key": "hint",
+      "line": "갱도에서 등불이 꺼져 봤냐? 형님은 주머니에 검은 연료 하나 꼭 챙긴다.",
+      "generation_id": "cksxUq0ATF6IEaaAIXfk",
+      "seconds": 6.0,
+      "sha256": "a04ff9f354ab51ee6e8780c669fa6ca1009c5906ad3afbf6d8a6580ad816a41e"
+    },
+    {
+      "npc": "gaengi",
+      "key": "gift-orecoal",
+      "line": "이거지! 반짝이는 돌 백 개보다 등불 한 번 더 켤 게 반가울 때가 있어.",
+      "generation_id": "v2mwjzaaFVfA6C8OWsII",
+      "seconds": 5.92,
+      "sha256": "e42928d1989ff2b4fda9ec85c09ca283b588b875d1c47a982a5ce22000d0e3bc"
+    },
+    {
+      "npc": "gaengi",
+      "key": "gift-bread",
+      "line": "갱도 입구에 앉아서 반씩 뜯자. 부스러기는 수염에 숨겨 둬야지!",
+      "generation_id": "jTtxiwsWtssQn0RwGMnS",
+      "seconds": 4.88,
+      "sha256": "72661adf8258663abca4a3f02229b14314fe37b75b23bd2c0258106cdb00f883"
+    },
+    {
+      "npc": "gaengi",
+      "key": "reply-dent",
+      "line": "낙석이었냐고? 일어서다 갱목에 찧었다! 남들한텐 비밀이다.",
+      "generation_id": "2BIGREQZZb9TQcKt3Pfs",
+      "seconds": 5.12,
+      "sha256": "585a79e851ad60c8f4a34053973eec196287c549e30893fc773e37ed4f14d22a"
+    },
+    {
+      "npc": "gaengi",
+      "key": "recall-dent",
+      "line": "어이, 내 헬멧 정수리 얘기는 둘만 아는 거다. 갱목 아래선 고개 숙이고!",
+      "generation_id": "r63yc0WJ7Yfw5Yphu82n",
+      "seconds": 5.28,
+      "sha256": "5725966a36c4be68bb808cc37b2e914d145d1b3a2517bddc5df6e3455f089aac"
+    },
+    {
+      "npc": "gaengi",
+      "key": "reply-scratch",
+      "line": "후배한테 헬멧을 빌려준 날 생겼어. 둘 다 멀쩡히 나왔으니 됐지.",
+      "generation_id": "LzIWICWYlyMWtxEt08ne",
+      "seconds": 4.88,
+      "sha256": "c683bf68ca5e40dd86b4edaf4d3d8f6f7d198e92d85f5dc53936e226984e1ad8"
+    },
+    {
+      "npc": "gaengi",
+      "key": "recall-scratch",
+      "line": "헬멧 빌려 갔던 후배한테 편지가 왔어. 그 흠집 얘긴 아직도 미안하대.",
+      "generation_id": "qbChkx7uJGDygw5mB6k9",
+      "seconds": 5.6,
+      "sha256": "ffc32b0c5806a7a06c58e133d902e7b0cf4000cdd51945913e82515305df63f3"
+    },
+    {
+      "npc": "yeoul",
+      "key": "river-marks",
+      "line": "전에 네 도감으로 짚은 물길, 그 표식부터 다시 보자.",
+      "generation_id": "oSQhmkunLrcVYoQmaYLB",
+      "seconds": 4.24,
+      "sha256": "7681ae8444bbd44d7da34f6b512e8772f004452a4f92e9205d2da3422843a303"
+    },
+    {
+      "npc": "harin",
+      "key": "story-repaired",
+      "line": "수문턱에 금을 그었어. 다음 물높이도 같이 재자.",
+      "generation_id": "3pnCjATWaz6Md9pjdKgm",
+      "seconds": 3.84,
+      "sha256": "76e07f1a2ad10c48cee421f89cc7d078e50d346867bb567d14b08f74a706caab"
+    },
+    {
+      "npc": "harin",
+      "key": "story-mine",
+      "line": "광산 X55에서 묘한 빛이 보여. 근처 땅을 조금 캐보고 살펴줄래?",
+      "generation_id": "8wVtYBIyAE0PWs5bHrlD",
+      "seconds": 5.92,
+      "sha256": "c76810895d3f18b8687ad38a68347438931f5159fcea3d51c8cbcf62ab923360"
+    }
+  ]
+}

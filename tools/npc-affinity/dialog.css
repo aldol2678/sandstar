@@ -1,0 +1,66 @@
+/* Only resident conversations use the portrait, paper and notebook treatment. */
+#dialog:has(> .ss-npc-head){
+  --npc-ink:#172e2b;--npc-paper:#fff5de;--npc-edge:#527775;
+  box-sizing:border-box;width:min(100%,564px);max-height:min(90dvh,800px);
+  padding:clamp(14px,3vw,24px);border:1px solid #83a19a;border-radius:18px;
+  background:linear-gradient(145deg,#1c3a3c,#112a31 75%);color:#f0f5e9;
+  box-shadow:0 16px 55px #071c25a6;word-break:keep-all;overflow-wrap:anywhere;
+  font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;scroll-padding-block:86px 16px;
+}
+.ss-npc-head{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+.ss-npc-portrait{display:grid;place-items:center;font-size:24px;position:relative;flex:none;width:58px;height:58px;overflow:hidden;
+  border-radius:14px;border:1px solid #819787;background:radial-gradient(ellipse at 45% 75%,var(--coat),#365350 83%)}
+.ss-npc-portrait canvas{display:block;position:static;width:100%;height:100%;pointer-events:none}
+#dialog:has(> .ss-npc-head) .ss-npc-head{position:sticky;top:0;z-index:2;background:#1c383b;border-radius:6px;box-shadow:0 5px 0 #1c383b}
+.ss-npc-id{flex:1;min-width:0}
+.ss-npc-id span{display:block;font-size:14px;line-height:1.45;color:#c6dcd1}
+#dialog .ss-npc-id h2{margin:1px 0 0;font-size:clamp(24px,4.5vw,30px);color:#fff4da;line-height:1.2}
+#dialog:has(> .ss-npc-head) :is(button,summary){box-sizing:border-box;min-height:44px;line-height:1.4;font-size:15px}
+#dialog:has(> .ss-npc-head) :is(button,summary):focus-visible{outline:3px solid #ffce69;outline-offset:2px}
+#dialog:has(> .ss-npc-head) .ss-npc-speech :is(button,summary):focus-visible{outline-color:#1f68a2}
+#dialog .ss-npc-head .ss-npc-close{flex:none;width:44px;height:44px;padding:0;border:1px solid var(--npc-edge);border-radius:50%;
+  background:#203f41;color:#e8f2e7;font:400 25px/1 system-ui}
+#dialog .ss-npc-speech{padding:clamp(15px,3.6vw,24px);border-radius:12px;border:1px solid #d7c69e;
+  background:var(--npc-paper);color:var(--npc-ink);box-shadow:0 3px 0 #0a2327}
+#dialog #ssNpcProg,#dialog .ss-npc-quest h3{font-size:14px;font-weight:700;line-height:1.45;color:#546456;margin:0 0 7px}
+#dialog #ssNpcLine,#dialog .ss-npc-quest>p:first-of-type{color:var(--npc-ink);font-size:clamp(20px,4vw,24px);
+  line-height:1.55;min-height:2lh;font-weight:650;margin:0 0 12px}
+#dialog .ss-npc-quest>p{color:#374c43;font-size:16px}
+#dialog .ss-npc-quest .note{font-size:14px;line-height:1.55;margin-bottom:0;color:#4c6055}
+.ss-npc-controls{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr));gap:6px}
+#dialog .ss-npc-controls button{padding:7px 5px;white-space:normal;letter-spacing:0;border-radius:7px;background:#fffaf0;border:1px solid #acaa90;color:#364a3e}
+#dialog .ss-npc-controls .cta{background:#215448;border:1px solid #215448;color:white}
+#dialog .ss-npc-controls .cta::after{content:"";display:inline-block;margin-left:6px;width:5px;height:5px;border:solid currentColor;border-width:1.5px 1.5px 0 0;transform:rotate(45deg);vertical-align:.12em}
+#ssNpcExtras{display:grid;gap:8px;margin-top:12px;min-width:0}
+#ssNpcExtras .ss-npc-extra:empty{display:none}
+#ssNpcExtras>details{margin:0;border:1px solid var(--npc-edge);border-radius:9px;background:#1c373b;min-width:0}
+#ssNpcExtras>details>summary{list-style:none;display:flex;align-items:center;gap:9px;min-height:48px;
+  padding:9px 12px;cursor:pointer;color:#f8f3df;font-weight:700}
+#ssNpcExtras>details>summary::-webkit-details-marker{display:none}
+#ssNpcExtras>details>summary::after{content:"";margin-left:auto;flex:none;width:7px;height:7px;border:solid #d0e2d6;border-width:0 1.75px 1.75px 0;transform:rotate(45deg)}
+#ssNpcExtras>details[open]>summary::after{transform:rotate(225deg)}
+#ssNpcExtras>details[open]>summary{border-bottom:1px solid var(--npc-edge)}
+#ssNpcExtras>details>:not(summary){margin:10px 12px}
+#ssNpcExtras .ss-affinity-title{display:flex;flex:1;flex-wrap:wrap;align-items:baseline;gap:3px 10px}
+#ssNpcExtras .ss-affinity-title small{color:#c7ddd3;font-size:13px;text-decoration:none;font-weight:500}
+#ssNpcExtras .ss-affinity-title em{font-weight:700;font-style:normal;color:#ffdd95}
+#ssNpcExtras .ss-affinity-result{font-size:14px;line-height:1.5;color:#e8dcb4;margin:0;border-left:2px solid #d8b66f}
+#ssNpcExtras .ss-affinity-result:focus{outline:2px solid #d8b66f;outline-offset:1px}
+#ssNpcExtras .ss-affinity section{border-color:#476765}
+#ssNpcExtras :is(p,li,blockquote){font-size:15px;line-height:1.55}
+#ssNpcExtras :is(p,li,blockquote,.ss-chapter-options button){color:#deebe3}
+#ssNpcExtras :is(button,summary){touch-action:manipulation}
+#ssNpcExtras button:disabled{opacity:1;color:#aebfba;background:#2f4246;border-color:#526561}
+@media(max-width:360px){
+  #dialog:has(> .ss-npc-head){padding:12px}.ss-npc-head{gap:9px}
+  #dialog .ss-npc-speech{padding:12px}.ss-npc-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ss-npc-controls .cta{grid-column:1/-1}
+}
+@media(max-height:520px){#dialog:has(> .ss-npc-head){max-height:calc(100dvh - 24px)}}
+
+#ssNpcExtras .ss-npc-roster{border-top:1px solid var(--npc-edge);padding-top:3px}
+#ssNpcExtras .ss-npc-roster summary{font-size:15px;padding-block:12px}
+#ssNpcExtras .ss-npc-roster li{margin-block:3px}
+
+#dialog .ss-npc-listen{display:block;margin-top:6px;min-height:44px;font-size:14px}
+#dialog .ss-affinity-result .ss-npc-listen{margin-bottom:4px}
