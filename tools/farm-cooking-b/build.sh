@@ -57,6 +57,7 @@ if [ "$base" = v44 ]; then
   python3 "$root/tools/mining-onboarding/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
   python3 "$root/tools/mining-rope/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
   python3 "$root/tools/mining-tools/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
+  python3 "$root/tools/npc-affinity/patch.py" "$out/fcb-index.html" "$out/fcb-index.html"
 fi
 python3 "$root/tools/farm-cooking-b/rebuild-worker.py" "$out/base-main.mjs" "$out/fcb-index.html" "$out/fcb-main.mjs"
 case "$glb" in
