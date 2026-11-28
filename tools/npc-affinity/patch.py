@@ -11,13 +11,31 @@ def patch(html):
         html = html.replace(old, new)
 
     source = "\n".join(Path(__file__).with_name(name).read_text(encoding="utf-8")
-                       for name in ("residents.js", "affinity.js"))
+                       for name in ("residents.js", "chapter-one.js", "affinity.js"))
     replace("function newGame(seed=", source + "\nfunction newGame(seed=")
     replace("return {storyM1:ssM1Fresh(),livingP0:freshLivingP0()",
             "return {affinity:ssAffinityNormalize(),storyM1:ssM1Fresh(),livingP0:freshLivingP0()")
     replace("d.livingP0=normalizeLivingP0(d.livingP0);",
             "d.affinity=ssAffinityNormalize(d.affinity);d.livingP0=normalizeLivingP0(d.livingP0);")
-    replace(" $('ssNpcReplay').onclick=", " ssAffinityPanel(npc);\n $('ssNpcReplay').onclick=")
+    replace(" $('ssNpcReplay').onclick=", " ssAffinityPanel(npc);ssChapterConversation(npc);\n $('ssNpcReplay').onclick=")
+
+    # Show heard testimony at the physical spring, on either side of the one-time repair.
+    replace("생활·채굴은 계속할 수 있습니다.</p>');return true;}",
+            "생활·채굴은 계속할 수 있습니다.</p>'+ssChapterFieldNotes(game));return true;}")
+    replace("지역을 오가도 소지품은 보존됩니다.</p>`);",
+            "지역을 오가도 소지품은 보존됩니다.</p>`+ssChapterFieldNotes(game));")
+    replace("미발견 · 마을 X55", "미발견 · 광산 X55")
+    replace("저쪽 X55에서 묘한 빛이 보여.", "광산 X55에서 묘한 빛이 보여.")
+    replace("${game.storyM1.crystalSeen?'별빛 결정이라…",
+            "${game.storyM1.springRepaired?'수문턱에 금을 그었어. 다음 물높이도 같이 재자.':game.storyM1.crystalSeen?'별빛 결정이라…")
+    replace("const choices = [3,4,5].filter(i => i !== previous);",
+            "const idleLines = id==='sola' && game.storyM1?.springRepaired ? [3,4] : [3,4,5];\n"
+            "  const choices = idleLines.filter(i => i !== previous);")
+    # The forest researcher and Harin's chapter option use the original chapter modal.
+    replace("자원과 장비는 공유합니다.</p>`);return true;",
+            "자원과 장비는 공유합니다.</p>`);ssChapterConversation(ssNpcById('harin'),$('dialog').querySelector('h2'));return true;")
+    replace("판단하지 않았습니다.</p>`);return true;",
+            "판단하지 않았습니다.</p>`);ssChapterConversation(ssNpcById('seoon'),$('dialog').querySelector('h2'));return true;")
 
     # Limit the hook to livingAction. Cooking has a separate transaction with a similar shape.
     replace("if(!anywhereFood&&Math.abs(context.y-context.groundY)>5)",
@@ -50,6 +68,11 @@ def patch(html):
         raise ValueError("Incomplete living delivery transaction")
     replace(old_action, action)
     css = """
+.ss-chapter-talk,.ss-chapter-field{margin:.45rem 0;text-align:left}
+.ss-chapter-talk summary,.ss-chapter-field summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:.7rem .2rem;font-weight:bold;color:#d8e7cf}
+.ss-chapter-options{display:flex;flex-wrap:wrap;gap:.4rem}
+.ss-chapter-options button{min-height:44px;white-space:normal}
+.ss-chapter-response p,.ss-chapter-field li,.ss-chapter-field p{line-height:1.45}
 .ss-affinity{margin:.45rem 0;text-align:left}
 .ss-affinity summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:.7rem .2rem;font-weight:bold;color:#ffe6ac}
 .ss-affinity summary small{font-weight:normal;text-decoration:underline}

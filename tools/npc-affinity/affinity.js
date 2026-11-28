@@ -44,7 +44,9 @@ function ssAffinityNormalize(raw) {
     const profile = SS_AFFINITY_RESIDENTS[id];
     const tastes = Object.keys(profile.gifts).filter(item => Array.isArray(old?.tastes) && old.tastes.includes(item));
     const choice = profile.choices.find(c => c.id === old?.memory);
-    npc[id] = { ...old, points, level: ssAffinityLevel(points), tastes,
+    const chapterHeard = SS_CHAPTER_ONE_TOPICS.map(t => t.key)
+      .filter(key => Array.isArray(old?.chapterHeard) && old.chapterHeard.includes(key));
+    npc[id] = { ...old, points, level: ssAffinityLevel(points), tastes, chapterHeard,
       giftWeek: typeof old?.giftWeek === 'string' ? old.giftWeek : '',
       memory: choice?.id || '', recalled: !!choice && old.recalled === true };
   }

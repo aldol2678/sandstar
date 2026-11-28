@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-const rules = vm.runInNewContext(['residents.js','affinity.js'].map(file => fs.readFileSync(path.join(__dirname, file), 'utf8')).join('\n') +
-  '\n;({normalize:ssAffinityNormalize, gain:ssAffinityGain, day:ssAffinityDay, week:ssAffinityWeek, profiles:SS_AFFINITY_RESIDENTS})');
+const rules = vm.runInNewContext(['residents.js','chapter-one.js','affinity.js'].map(file => fs.readFileSync(path.join(__dirname, file), 'utf8')).join('\n') +
+  '\n;({normalize:ssAffinityNormalize, gain:ssAffinityGain, day:ssAffinityDay, week:ssAffinityWeek, profiles:SS_AFFINITY_RESIDENTS, topics:ssChapterTopics, links:ssChapterConnections, voices:SS_CHAPTER_ONE_VOICES})');
 const day = '2026-11-28', next = '2026-11-29';
 
 test('old saves start with seven separate residents, valid points survive reloading', () => {
@@ -104,4 +104,47 @@ test('loading a previous friendship save preserves points and sanitizes unknown 
   assert.equal(world.npc.sola.recalled,false);
   assert.equal(world.npc.sola.tastes.join(','),'wheat');
   assert.equal(world.tickets,9);
+});
+
+test('chapter topics follow each documented world flag independently', () => {
+  const keys = ['crystalSeen','forestVisited','springRepaired'];
+  for (let mask = 0; mask < 8; mask++) {
+    const want = keys.filter((_, index) => mask & (1 << index));
+    const story = Object.fromEntries(want.map(key => [key,true]));
+    assert.deepEqual(Array.from(rules.topics(story), t => t.key), want);
+  }
+  assert.equal(rules.topics({crystalSeen:'true'}).length,0);
+});
+
+test('saved testimony migrates independently and reveals a joint note only after every witness is heard', () => {
+  const affinity = rules.normalize({v:1,npc:{sola:{points:76,memory:'nickname',chapterHeard:['forestVisited','other','forestVisited']}}});
+  assert.deepEqual(Array.from(affinity.npc.sola.chapterHeard),['forestVisited']);
+  assert.equal(affinity.npc.sola.memory,'nickname');
+  assert.equal(affinity.npc.sola.points,76);
+  assert.equal(affinity.npc.harin.chapterHeard.length,0);
+  const world = {affinity, storyM1:{}};
+  for (const [key, residents] of [
+    ['forestVisited',['yeoul','sola']], ['crystalSeen',['maru','tobak','gaengi']], ['springRepaired',['harin','seoon']]
+  ]) {
+    world.storyM1[key] = true;
+    for (const id of residents.filter(id => !world.affinity.npc[id].chapterHeard.includes(key))) {
+      assert.ok(!rules.links(world).some(link => link.key === key));
+      affinity.npc[id].chapterHeard.push(key);
+    }
+    assert.equal(rules.links(world).filter(link => link.key === key).length,1);
+    world.storyM1[key] = false;
+    assert.ok(!rules.links(world).some(link => link.key === key));
+  }
+});
+
+test('each resident has three short chapter reactions and a matching callback for either scene choice', () => {
+  const stories = ['arrival','crystalSeen','forestVisited','springRepaired'];
+  assert.deepEqual(Object.keys(rules.voices).sort(),Object.keys(rules.profiles).sort());
+  for (const [id, profile] of Object.entries(rules.profiles)) {
+    const voice = rules.voices[id];
+    assert.deepEqual(Object.keys(voice.personal).sort(),Array.from(profile.choices,c => c.id).sort());
+    assert.equal(new Set(Object.values(voice.personal)).size,2);
+    for (const line of [...stories.map(key => voice[key]),...Object.values(voice.personal)])
+      assert.ok(line.length > 0 && [...line].length <= 30, id + ' ' + line);
+  }
 });
