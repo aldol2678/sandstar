@@ -195,9 +195,13 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   check('catching does not pay coins (sale happens at the market)', Number.isFinite(coins0) && coins0 === coins1, `${coins0} → ${coins1}`);
 
   // ===== fight rules (at B)
-  let probe = {};
+  // The probes need a hooked fish; luring can miss, so retry (up to 3 lures) and record why if it never bites.
+  // tools/fishing-s1/qa/fight-rules.cjs checks the same rules from a fixture, without luring luck.
+  let probe = {}, r1 = null;
   const anySpecies = async () => { const st = await rs(); return (st.fish.find(f => f.species === 'river_fish') || st.fish[0]).species; };
-  const r1 = await catchOne(await anySpecies(), {
+  for (let tries = 0; tries < 3 && !probe.idle; tries++) {
+   if (r1) { const cur = await rs(); if (cur.phase === 'lure') await press('#riverRetrieve'); if (cur.phase === 'result') await press('#riverCard button[data-river="again"]'); await wait(300); log(lines, `fight probe retry ${tries}: ${JSON.stringify(r1).slice(0, 160)}`); }
+   r1 = await catchOne(await anySpecies(), {
     stopAt: 1, beforeFight: async () => {
       const a = (await rs()).fight.progress; await wait(5000); const b = (await rs()).fight.progress;
       probe.idle = { a, b };
@@ -209,6 +213,8 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
       probe.hold = { stalled, before, after }; probe.release = { relA, relB };
     }
   });
+  }
+  if (!probe.idle) log(lines, 'fight probe never reached a fight: ' + JSON.stringify(r1).slice(0, 240));
   check('fight: 5s with no input → no progress', probe.idle && probe.idle.a === probe.idle.b, JSON.stringify(probe.idle));
   check('fight: holding nonstop ends in a stall with no progress', probe.hold && probe.hold.stalled && probe.hold.after === probe.hold.before, JSON.stringify(probe.hold));
   check('fight: releasing never lowers progress', probe.release && probe.release.relB >= probe.release.relA, JSON.stringify(probe.release));

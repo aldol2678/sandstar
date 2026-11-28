@@ -1,0 +1,28 @@
+PASS m390: river_fish: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS m390: river_fish: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"river_fish","progress":0,"strain":0,"stall":false,"phase":"gap"}}
+PASS m390: river_fish: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS m390: river_fish: holding nonstop reaches a stall within 10s — {"atMs":2154,"progress":45.83333333333326,"strain":1.01}
+PASS m390: river_fish: 1s more holding while stalled → progress unchanged — {"stalled":45.83333333333326,"after":45.83333333333326}
+PASS m390: river_fish: releasing never lowers progress — {"atRelease":45.83333333333326,"after2s":45.83333333333326}
+PASS m390: river_fish: the stall clears after resting — {"strain":0,"stall":false}
+PASS m390: river_fish: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"3.1"}
+PASS m390: river_fish: no page errors
+PASS m390: perch: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS m390: perch: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"perch","progress":0,"strain":0,"stall":false,"phase":"gap"}}
+PASS m390: perch: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS m390: perch: holding nonstop reaches a stall within 10s — {"atMs":2188,"progress":23.80952380952382,"strain":1}
+PASS m390: perch: 1s more holding while stalled → progress unchanged — {"stalled":23.80952380952382,"after":23.80952380952382}
+PASS m390: perch: releasing never lowers progress — {"atRelease":23.80952380952382,"after2s":23.80952380952382}
+PASS m390: perch: the stall clears after resting — {"strain":0,"stall":false}
+PASS m390: perch: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"5.3"}
+PASS m390: perch: no page errors
+PASS m390: carp: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS m390: carp: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"carp","progress":0,"strain":0,"stall":false,"phase":"loose"}}
+PASS m390: carp: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS m390: carp: holding nonstop reaches a stall within 10s — {"atMs":2139,"progress":19.75185185185186,"strain":1.01}
+PASS m390: carp: 1s more holding while stalled → progress unchanged — {"stalled":19.75185185185186,"after":19.75185185185186}
+PASS m390: carp: releasing never lowers progress — {"atRelease":19.75185185185186,"after2s":19.75185185185186}
+PASS m390: carp: the stall clears after resting — {"strain":0,"stall":false}
+PASS m390: carp: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"9.0"}
+PASS m390: carp: no page errors
+27 pass, 0 fail

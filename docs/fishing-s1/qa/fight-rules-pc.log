@@ -1,0 +1,28 @@
+PASS pc: river_fish: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS pc: river_fish: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"river_fish","progress":0,"strain":0,"stall":false,"phase":"gap"}}
+PASS pc: river_fish: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS pc: river_fish: holding nonstop reaches a stall within 10s — {"atMs":2255,"progress":51.38750000000005,"strain":1.01}
+PASS pc: river_fish: 1s more holding while stalled → progress unchanged — {"stalled":51.38750000000005,"after":51.38750000000005}
+PASS pc: river_fish: releasing never lowers progress — {"atRelease":51.38750000000005,"after2s":51.38750000000005}
+PASS pc: river_fish: the stall clears after resting — {"strain":0,"stall":false}
+PASS pc: river_fish: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"2.4"}
+PASS pc: river_fish: no page errors
+PASS pc: perch: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS pc: perch: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"perch","progress":0,"strain":0,"stall":false,"phase":"gap"}}
+PASS pc: perch: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS pc: perch: holding nonstop reaches a stall within 10s — {"atMs":1746,"progress":4.2654761904761935,"strain":1.01}
+PASS pc: perch: 1s more holding while stalled → progress unchanged — {"stalled":4.2654761904761935,"after":4.2654761904761935}
+PASS pc: perch: releasing never lowers progress — {"atRelease":4.2654761904761935,"after2s":4.2654761904761935}
+PASS pc: perch: the stall clears after resting — {"strain":0,"stall":false}
+PASS pc: perch: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"9.1"}
+PASS pc: perch: no page errors
+PASS pc: carp: fixture opens in the fishing ground at B — {"active":true,"near":"B"}
+PASS pc: carp: hooked fish restored with the resume card — {"open":true,"card":"resume","fight":{"fish":"carp","progress":0,"strain":0,"stall":false,"phase":"loose"}}
+PASS pc: carp: 5s without input → progress unchanged — {"before":0,"after":0}
+PASS pc: carp: holding nonstop reaches a stall within 10s — {"atMs":2550,"progress":30.244444444444476,"strain":1.01}
+PASS pc: carp: 1s more holding while stalled → progress unchanged — {"stalled":30.244444444444476,"after":30.244444444444476}
+PASS pc: carp: releasing never lowers progress — {"atRelease":30.244444444444476,"after2s":30.244444444444476}
+PASS pc: carp: the stall clears after resting — {"strain":0,"stall":false}
+PASS pc: carp: holding only in open gaps lands the fish once — {"phase":"result","bag":1,"attempt":null,"landedInS":"7.9"}
+PASS pc: carp: no page errors
+27 pass, 0 fail

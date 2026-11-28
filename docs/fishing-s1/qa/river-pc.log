@@ -7,21 +7,21 @@ PASS pc: walk to spot A and open the fishing view there — {"ok":true,"label":"
 PASS pc: no rod → rod card, crafting works inside the fishing ground — rod
 PASS pc: rod crafted once (3 wood), card closes
 PASS pc: view is locked to the spot you walked to (A on, B/C off) — A+B-C-
-PASS pc: cast into weeds snaps to nearest valid water (no cost) — lure x=182.2 · 수초·바위를 피해 가까운 물에 떨어졌어요
-PASS pc: catch river_fish at A with its own pattern — {"ok":true,"result":{"fish":"river_fish","size":76,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":76,"perch":0,"carp":0},"spots":{"A":1,"B":0,"C":0},"attempt":null,"done":["rmwzpz3ja
+PASS pc: cast into weeds snaps to nearest valid water (no cost) — lure x=182.5 · 수초·바위를 피해 가까운 물에 떨어졌어요
+PASS pc: catch river_fish at A with its own pattern — {"ok":true,"result":{"fish":"river_fish","size":92,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":92,"perch":0,"carp":0},"spots":{"A":1,"B":0,"C":0},"attempt":null,"done":["rmwzsqbd6
 PASS pc: walk to spot C and open — {"ok":true,"label":"🎣 C 좁은 물살에서 낚시","walked":true}
-PASS pc: catch perch at C with its own pattern — {"ok":true,"result":{"fish":"perch","size":290,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":76,"perch":290,"carp":0},"spots":{"A":1,"B":0,"C":1},"attempt":null,"done":["rmwzpz3ja5"
+PASS pc: catch perch at C with its own pattern — {"ok":true,"result":{"fish":"perch","size":209,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":92,"perch":209,"carp":0},"spots":{"A":1,"B":0,"C":1},"attempt":null,"done":["rmwzsqbd64"
 PASS pc: walk to spot B and open — {"ok":true,"label":"🎣 B 깊은 소에서 낚시","walked":true}
-PASS pc: catch carp at B with its own pattern — {"ok":true,"result":{"fish":"carp","size":334,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":76,"perch":290,"carp":334},"spots":{"A":1,"B":1,"C":1},"attempt":null,"done":["rmwzpz3ja5
-PASS pc: bag +1 each, dex 3/3, fished 3, best sizes and spot counts saved — {"bag":{"seed":6,"crop":0,"seed_wheat":3,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":0,"potato":0,"carrot":0,"river_fish":1,"perch":1,"carp":1,"bread":0,"soup":0,"stew":0},"best":{"river_fish":76,"perch":290,"carp":334},"spots":{"A":1,"B":1,"C":1}}
+PASS pc: catch carp at B with its own pattern — {"ok":true,"result":{"fish":"carp","size":445,"record":true},"phase":"result","card":null,"saved":{"schema":1,"best":{"river_fish":92,"perch":209,"carp":445},"spots":{"A":1,"B":1,"C":1},"attempt":null,"done":["rmwzsqbd64
+PASS pc: bag +1 each, dex 3/3, fished 3, best sizes and spot counts saved — {"bag":{"seed":6,"crop":0,"seed_wheat":3,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":0,"potato":0,"carrot":0,"river_fish":1,"perch":1,"carp":1,"bread":0,"soup":0,"stew":0},"best":{"river_fish":92,"perch":209,"carp":445},"spots":{"A":1,"B":1,"C":1}}
 PASS pc: catching does not pay coins (sale happens at the market) — 50 → 50
 PASS pc: fight: 5s with no input → no progress — {"a":0,"b":0}
-PASS pc: fight: holding nonstop ends in a stall with no progress — {"stalled":true,"before":37.49583333333309,"after":37.49583333333309}
-PASS pc: fight: releasing never lowers progress — {"relA":37.49583333333309,"relB":37.49583333333309}
-PASS pc: attempt saved with progress ≥25% before reload — {"id":"rmwzq0lgb15","fish":"river_fish","spot":"B","size":112,"progress":25}
+PASS pc: fight: holding nonstop ends in a stall with no progress — {"stalled":true,"before":3.472023809523826,"after":3.472023809523826}
+PASS pc: fight: releasing never lowers progress — {"relA":3.472023809523826,"relB":3.472023809523826}
+PASS pc: attempt saved with progress ≥25% before reload — {"id":"rmwzsrz7n14","fish":"perch","spot":"B","size":207,"progress":25}
 PASS pc: continue restores the fishing ground, standing at spot B — {"active":true,"near":"B","action":"🎣 이어서 낚시"}
 PASS pc: the hooked fish stays at its spot (A does not open it) — {"ok":false,"label":"🎣 A 완만한 강가에서 낚시","walked":true}
-PASS pc: back at B: same fish restored paused with resume card — {"o":{"ok":true,"label":"🎣 이어서 낚시","walked":true},"card":"resume","fight":{"fish":"river_fish","progress":37,"strain":0,"stall":false,"phase":"gap"}}
+PASS pc: back at B: same fish restored paused with resume card — {"o":{"ok":true,"label":"🎣 이어서 낚시","walked":true},"card":"resume","fight":{"fish":"perch","progress":31,"strain":0,"stall":false,"phase":"gap"}}
 PASS pc: resume card shows the general hint, not a stale "감으세요" — 틈에 감고, 버티면 손을 떼세요
 PASS pc: restored fish lands exactly once — {"phase":"result","fished":4}
 PASS pc: replaying the same catch is rejected — 이미 처리한 행동이에요
@@ -29,10 +29,10 @@ PASS pc: tab hide pauses the cast (pause card) — {"paused":true,"card":"pause"
 PASS pc: resume continues after a short ready
 PASS pc: layout: canvas + hold button + exit/pause inside the viewport, touch targets ≥44px — {"vh":800,"hold":[569.796875,637.796875]}
 PASS pc: closing the view returns to the fishing ground
-PASS pc: life clock runs once in the fishing ground (≈3s per 3s) — +3.02s
+PASS pc: life clock runs once in the fishing ground (≈3s per 3s) — +3.01s
 PASS pc: fishing ground HUD (action + move pad) inside the viewport — {"vh":800,"act":[732,790]}
 PASS pc: west gate offers the way back — 🚪 마을로 돌아가기
-PASS pc: exit lands in town by the fishing gate, saved as town — {"region":"village_hub_01","town":{"x":18,"z":-0.6},"saved":{"schema":1,"activeWorldId":"village_hub_01","position":{"x":2.924501569061245,"y":11.205600917250186},"entryCount":1,"lastSpot":"B"}}
+PASS pc: exit lands in town by the fishing gate, saved as town — {"region":"village_hub_01","town":{"x":18,"z":-0.6},"saved":{"schema":1,"activeWorldId":"village_hub_01","position":{"x":2.8853416450721325,"y":10.94565156283192},"entryCount":1,"lastSpot":"B"}}
 PASS pc: legacy save: old hooked fish offered as "이어서 끌어올리기" — legacy {"id":"perch","progress":40,"tension":30,"round":2}
 PASS pc: legacy save: river state created fresh, old dex shown as 크기 미기록
 PASS pc: legacy fish continues at its old progress — {"fish":"perch","progress":40,"strain":0,"stall":false,"phase":"gap"}
