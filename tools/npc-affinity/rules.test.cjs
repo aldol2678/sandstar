@@ -148,3 +148,21 @@ test('each resident has three short chapter reactions and a matching callback fo
       assert.ok(line.length > 0 && [...line].length <= 30, id + ' ' + line);
   }
 });
+
+test('recorded v4 lines cover the resident scripts and both answers of every scene', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname,'../../assets/npc-voices-v4/manifest.json'),'utf8'));
+  assert.equal(manifest.model_id,'eleven_v4');
+  const extra = {
+    yeoul:['전에 네 도감으로 짚은 물길, 그 표식부터 다시 보자.'],
+    harin:['수문턱에 금을 그었어. 다음 물높이도 같이 재자.','광산 X55에서 묘한 빛이 보여. 근처 땅을 조금 캐보고 살펴줄래?']
+  };
+  for (const [id,profile] of Object.entries(rules.profiles)) {
+    const voice=rules.voices[id];
+    const expected=[voice.arrival,voice.crystalSeen,voice.forestVisited,voice.springRepaired,...Object.values(voice.personal),
+      profile.hint.slice(1,-1),...Object.values(profile.gifts),...profile.choices.flatMap(c=>[c.reply,c.recall]),...(extra[id] || [])];
+    const takes=manifest.clips.filter(c=>c.npc===id);
+    assert.deepEqual(takes.map(c=>c.line).sort(),expected.sort());
+    assert.equal(new Set(takes.map(c=>c.key)).size,takes.length);
+  }
+  assert.equal(new Set(manifest.clips.map(c=>c.generation_id)).size,manifest.clips.length);
+});

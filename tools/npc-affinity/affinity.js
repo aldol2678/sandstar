@@ -101,7 +101,7 @@ function ssAffinityGiftCount(world, item) {
 
 function ssAffinityGive(npc, item) {
   const profile = SS_AFFINITY_RESIDENTS[npc.id];
-  if (!Object.hasOwn(profile.gifts, item) || !ssAffinityAtResident(npc.id)) return '주민 곁에서 건넬 수 있어요.';
+  if (!Object.hasOwn(profile.gifts, item) || !ssAffinityAtResident(npc.id)) return {message:'주민 곁에서 건넬 수 있어요.'};
   let notice = '이번 주 선물은 이미 건넸어요.';
   let gain = 0;
   const ok = safeMarketTransaction(world => {
@@ -118,17 +118,18 @@ function ssAffinityGive(npc, item) {
     notice = '선물을 저장하지 못했어요. 다시 건네 주세요.';
     return true;
   });
-  if (!ok) return notice;
-  return npc.name + ' “' + profile.gifts[item] + '” · ' + (item === profile.favorite ? '특히 좋아하는 선물' : '좋아하는 선물') + (gain ? ' · 호감도 +' + gain : '');
+  if (!ok) return {message:notice};
+  const message = npc.name + ' “' + profile.gifts[item] + '” · ' + (item === profile.favorite ? '특히 좋아하는 선물' : '좋아하는 선물') + (gain ? ' · 호감도 +' + gain : '');
+  return {message,line:profile.gifts[item]};
 }
 
 function ssAffinityChoose(npc, choice) {
   const old = game.affinity, resident = old.npc[npc.id];
-  if (resident.level < 2 || resident.memory || !SS_AFFINITY_RESIDENTS[npc.id].choices.includes(choice)) return '';
+  if (resident.level < 2 || resident.memory || !SS_AFFINITY_RESIDENTS[npc.id].choices.includes(choice)) return {message:''};
   game.affinity = { ...old, npc: { ...old.npc, [npc.id]: { ...resident, memory: choice.id, recalled: false } } };
-  if (saveGame(true)) return npc.name + ' “' + choice.reply + '”';
+  if (saveGame(true)) return {message:npc.name + ' “' + choice.reply + '”',line:choice.reply};
   game.affinity = old;
-  return '이야기를 저장하지 못했어요. 다시 골라 주세요.';
+  return {message:'이야기를 저장하지 못했어요. 다시 골라 주세요.'};
 }
 
 function ssAffinityGiftSection(npc, resident, day) {
@@ -148,14 +149,14 @@ function ssAffinityGiftSection(npc, resident, day) {
   let status = given ? '이번 주 선물 전달 완료' : '주민마다 주 1회 · 월요일 오전 5시 갱신';
   if (!given && resident.points < 180) status += ' · 취향에 따라 +4 또는 +10점';
   if (resident.points === 180) status += ' · 최고 단계에서는 취향만 기록해요.';
-  return '<section><h3>선물</h3><blockquote>' + profile.hint + '</blockquote><p>' + status + '</p>'
+  return '<section><h3>선물</h3><blockquote class="ss-affinity-hint">' + profile.hint + '</blockquote><p>' + status + '</p>'
     + '<div class="ss-affinity-choices">' + buttons + '</div>'
     + (discoveries.length ? '<p>알게 된 취향 · ' + discoveries.join(' / ') + '</p>' : '') + '</section>';
 }
 
 function ssAffinityMomentSection(profile, resident) {
   const choice = profile.choices.find(c => c.id === resident.memory);
-  if (choice) return '<section><h3>' + profile.title + '</h3><p>내 선택 · ' + choice.label + '</p><blockquote>'
+  if (choice) return '<section><h3>' + profile.title + '</h3><p>내 선택 · ' + choice.label + '</p><blockquote class="ss-affinity-memory">'
     + choice.reply + '</blockquote></section>';
   if (resident.level < 2) return '<p>30점에서 함께할 이야기 · ' + profile.title + '</p>';
   const buttons = profile.choices.map(c => '<button class="ghost" type="button" data-affinity-choice="'
@@ -164,7 +165,7 @@ function ssAffinityMomentSection(profile, resident) {
     + buttons + '</div></section>';
 }
 
-function ssAffinityPanel(npc, greet = true, notice = '') {
+function ssAffinityPanel(npc, greet = true, notice = '', spoken = '') {
   const old = game.affinity, id = npc.id;
   if (old.v !== 1 || !Object.hasOwn(SS_AFFINITY_NOTES, id)) return;
   const profile = SS_AFFINITY_RESIDENTS[id], day = ssAffinityDay();
@@ -183,7 +184,10 @@ function ssAffinityPanel(npc, greet = true, notice = '') {
       if (saveGame(true)) {
         const after = candidate.npc[id];
         const messages = [];
-        if (memory) messages.push(npc.name + ' “' + memory.recall + '”');
+        if (memory) {
+          spoken = memory.recall;
+          messages.push(npc.name + ' “' + spoken + '”');
+        }
         if (gained) messages.push('오늘 첫 대화 +' + (after.points - before.points));
         if (after.level > before.level) messages.push('새 수첩 기록');
         result = messages.join(' · ');
@@ -227,19 +231,29 @@ function ssAffinityPanel(npc, greet = true, notice = '') {
     + '<details class="ss-npc-roster"><summary>마을 주민의 호감도</summary><ul class="ss-affinity-roster">' + roster + '</ul>'
     + '<p>오늘 첫 대화 +6 · 납품 +2 (세 주민 합계 하루 10점) · 매일 오전 5시 갱신</p>'
     + '<p>축제 티켓 ' + state.tickets + '장 · 관계 단계가 오르면 2장 (최대 30장)</p></details></details>');
-  document.querySelector('.ss-affinity-result').textContent = result;
+  const feedback = document.querySelector('.ss-affinity-result');
+  feedback.textContent = result;
+  if (spoken) {
+    ssNpcListenButton(feedback,id,[spoken]);
+    if (!greet) ssNpcSpeak(id,[spoken]);
+  }
   if (wasOpen) document.querySelector('.ss-affinity').open = true;
   const panel = document.querySelector('.ss-affinity');
+  const hint = panel.querySelector('.ss-affinity-hint'), memory = panel.querySelector('.ss-affinity-memory');
+  if (hint) ssNpcListenButton(hint,id,[profile.hint.slice(1,-1)],'취향 힌트 듣기');
+  if (memory) ssNpcListenButton(memory,id,[memory.textContent],'답변 다시 듣기');
   panel.querySelectorAll('[data-affinity-gift]').forEach(button => {
     button.onclick = () => {
-      ssAffinityPanel(npc, false, ssAffinityGive(npc, button.dataset.affinityGift));
+      const reply = ssAffinityGive(npc,button.dataset.affinityGift);
+      ssAffinityPanel(npc,false,reply.message,reply.line);
       document.querySelector('.ss-affinity-result').focus();
     };
   });
   panel.querySelectorAll('[data-affinity-choice]').forEach(button => {
     button.onclick = () => {
       const choice = profile.choices.find(c => c.id === button.dataset.affinityChoice);
-      ssAffinityPanel(npc, false, ssAffinityChoose(npc, choice));
+      const reply = ssAffinityChoose(npc,choice);
+      ssAffinityPanel(npc,false,reply.message,reply.line);
       document.querySelector('.ss-affinity-result').focus();
     };
   });
@@ -250,4 +264,5 @@ function ssAffinityPanel(npc, greet = true, notice = '') {
       document.querySelector('.ss-affinity-result').focus();
     };
   }
+  return spoken;
 }

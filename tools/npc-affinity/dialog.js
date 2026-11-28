@@ -45,6 +45,12 @@ function ssNpcFrame(npc, chapter = false) {
     const caption = document.createElement('h3');
     caption.textContent = '제1장 · 꺼진 샘의 비밀';
     story.append(caption,...dialog.children);
+    for (const paragraph of story.querySelectorAll('p:not(.note)')) {
+      const line = paragraph.textContent;
+      if (!SS_NPC_EXTRA_VOICES[npc.id]?.[line]) continue;
+      ssNpcSpeak(npc.id,[line]);
+      ssNpcListenButton(paragraph,npc.id,[line]);
+    }
     const extras = document.createElement('div');
     extras.id = 'ssNpcExtras';
     dialog.append(story, extras);

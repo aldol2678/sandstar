@@ -99,6 +99,11 @@ function ssChapterConversation(npc, anchor = $('ssNpcExtras')) {
     + '</div><div class="ss-chapter-response" role="status"><p></p></div>';
   const response = element.querySelector('.ss-chapter-response');
   response.firstChild.textContent = voice.arrival;
+  let currentLines = [voice.arrival];
+  ssNpcListenButton(response,npc.id,currentLines);
+  element.ontoggle = () => {
+    if (element.open && element.isConnected) ssNpcSpeak(npc.id,currentLines);
+  };
   anchor.insertBefore(element,anchor.querySelector('.ss-npc-extra'));
   const storyButton = $('ssNpcStoryBtn');
   if (storyButton) element.querySelector('.ss-chapter-options').append(storyButton);
@@ -106,6 +111,8 @@ function ssChapterConversation(npc, anchor = $('ssNpcExtras')) {
     button.onclick = () => {
       const key = button.dataset.chapterTopic;
       if (!ssChapterListen(npc,key)) {
+        ssNpcStopVoice();
+        currentLines = [];
         response.textContent = '이야기를 기록하지 못했어요. 다시 물어 주세요.';
         return;
       }
@@ -122,13 +129,15 @@ function ssChapterConversation(npc, anchor = $('ssNpcExtras')) {
         spoken.push('전에 네 도감으로 짚은 물길, 그 표식부터 다시 보자.');
       }
       const match = ssChapterConnections(game).find(entry => entry.key === key && entry.people.includes(npc.id));
-      ssNpcStopVoice();
+      currentLines = spoken;
+      ssNpcSpeak(npc.id,spoken);
       response.replaceChildren();
       for (const line of spoken) {
         const p = document.createElement('p');
         p.textContent = '“' + line + '”';
         response.append(p);
       }
+      ssNpcListenButton(response,npc.id,spoken);
       if (match) {
         const p = document.createElement('p');
         p.textContent = '함께 읽은 단서 · ' + match.title + ' — ' + match.note;

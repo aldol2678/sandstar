@@ -1,9 +1,11 @@
 """Attach resident bonds to the existing NPC modal and world-save transactions."""
 from pathlib import Path
 import sys
+import json
+from voice_assets import voice_map
 
 
-def patch(html):
+def patch(html, inline_voices=False):
     def replace(old, new):
         nonlocal html
         if html.count(old) != 1:
@@ -11,7 +13,28 @@ def patch(html):
         html = html.replace(old, new)
 
     source = "\n".join(Path(__file__).with_name(name).read_text(encoding="utf-8")
-                       for name in ("residents.js", "chapter-one.js", "affinity.js", "dialog.js"))
+                       for name in ("residents.js", "chapter-one.js", "affinity.js", "dialog.js", "voices.js"))
+    source = "const SS_NPC_EXTRA_VOICES=" + json.dumps(voice_map(inline_voices), ensure_ascii=False) + ";\n" + source
+    start = html.index("function ssNpcStopVoice(")
+    end = html.index("function ssNpcById(", start)
+    replace(html[start:end], """function ssNpcStopVoice() {
+ const active = ssNpcAudio;
+ if (!active) return;
+ ssNpcAudio = null;
+ active.onended = active.onerror = null;
+ active.pause();
+ active.removeAttribute('src');
+ active.load();
+}
+function ssNpcPlayVoice(id,lineNo,followup) {
+ const first = SS_NPC_VOICE_BASE+'/'+id+'-'+String(lineNo).padStart(2,'0')+'.mp3';
+ ssNpcPlayQueue([first,...(followup ? ssNpcVoiceUrls(id,[followup]) : [])]);
+}
+""")
+    replace("if($('ssNpcLine'))ssNpcStopVoice();", "if($('ssNpcSpeaker')||$('ssNpcLine'))ssNpcStopVoice();")
+    replace("function setSoundEnabled(value){sfxState.enabled=!!value;", "function setSoundEnabled(value){if(!value)ssNpcStopVoice();sfxState.enabled=!!value;")
+    replace("if(sfxState.master)sfxState.master.gain.value=sfxState.volume;saveSoundPref();","if(ssNpcAudio)ssNpcAudio.volume=sfxState.volume; if(sfxState.master)sfxState.master.gain.value=sfxState.volume;saveSoundPref();")
+    replace("ssNpcPlayVoice(id,line.voice);", "ssNpcPlayVoice(id,line.voice,firstRecall);firstRecall='';")
     replace("function newGame(seed=", source + "\nfunction newGame(seed=")
     replace("return {storyM1:ssM1Fresh(),livingP0:freshLivingP0()",
             "return {affinity:ssAffinityNormalize(),storyM1:ssM1Fresh(),livingP0:freshLivingP0()")
@@ -21,8 +44,8 @@ def patch(html):
     end = html.index(" $('ssNpcReplay').onclick=", start)
     replace(html[start:end], " showModal(npc.name,ssNpcDialogBody(npc));ssNpcFrame(npc);\n")
     replace("'다음 ▶' : '다른 이야기'", "'다음 대화' : '다른 이야기'")
-    replace("function showModal(title,html){", "function showModal(title,html){\n $('overlay').removeAttribute('aria-labelledby');")
-    replace(" $('ssNpcReplay').onclick=", " ssAffinityPanel(npc);ssChapterConversation(npc);\n $('ssNpcReplay').onclick=")
+    replace("function showModal(title,html){", "function showModal(title,html){\n if($('ssNpcSpeaker'))ssNpcStopVoice();$('overlay').removeAttribute('aria-labelledby');")
+    replace(" $('ssNpcReplay').onclick=", " let firstRecall=ssAffinityPanel(npc);ssChapterConversation(npc);\n $('ssNpcReplay').onclick=")
 
     # Show heard testimony at the physical spring, on either side of the one-time repair.
     replace("생활·채굴은 계속할 수 있습니다.</p>');return true;}",
@@ -98,5 +121,5 @@ def patch(html):
 
 
 if __name__ == "__main__":
-    source, output = map(Path, sys.argv[1:])
-    output.write_text(patch(source.read_text(encoding="utf-8")), encoding="utf-8")
+    source, output = map(Path, sys.argv[1:3])
+    output.write_text(patch(source.read_text(encoding="utf-8"), "--inline-voices" in sys.argv[3:]), encoding="utf-8")

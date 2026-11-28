@@ -61,3 +61,6 @@
 #ssNpcExtras .ss-npc-roster{border-top:1px solid var(--npc-edge);padding-top:3px}
 #ssNpcExtras .ss-npc-roster summary{font-size:15px;padding-block:12px}
 #ssNpcExtras .ss-npc-roster li{margin-block:3px}
+
+#dialog .ss-npc-listen{display:block;margin-top:6px;min-height:44px;font-size:14px}
+#dialog .ss-affinity-result .ss-npc-listen{margin-bottom:4px}
