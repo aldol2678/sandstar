@@ -37,7 +37,7 @@ async function verify(browser, url, mobile) {
     await visit('harin');
     assert.equal((await snapshot()).affinity.npc.harin.points, 6);
     await press('#ssNpcNextBtn'); await press('#ssNpcHintBtn');
-    await press('.ss-affinity summary');
+    await press('.ss-affinity > summary');
     assert.equal(await page.locator('.ss-affinity-roster li').count(), 7);
     const fits = await page.locator('#dialog').evaluate(el => el.scrollWidth <= el.clientWidth + 1);
     assert.equal(fits, true);
@@ -64,7 +64,7 @@ async function verify(browser, url, mobile) {
         assert.equal(accepted.livingP0.bag.perch, fishBefore);
         assert.equal(accepted.affinity.npc.yeoul.points, 6);
       }
-      await press('.ss-affinity summary');
+      await press('.ss-affinity > summary');
       await press('#ssAffinityDeliver');
       const next = await snapshot();
       assert.equal(next.livingP0.bag[target], 0); assert.equal(next.coins, game.coins + amount);
@@ -100,7 +100,7 @@ async function verify(browser, url, mobile) {
       sessionStorage.setItem('milestone-fixture','1');
     },{key,poised});
     await page.reload(); await continueWorld(page); await visit('sola');
-    await press('.ss-affinity summary');
+    await press('.ss-affinity > summary');
     assert.match(await page.locator('.ss-affinity').innerText(), /밀 씨앗/);
     assert.equal((await snapshot()).affinity.tickets, 2);
     await press('#backBtn'); await visit('sola');
@@ -126,7 +126,7 @@ async function verify(browser, url, mobile) {
     const step = mobile ? 1 : 0;
     for (const [id,pair] of Object.entries(gifts)) {
       await visit(id);
-      await press('.ss-affinity summary');
+      await press('.ss-affinity > summary');
       const item = pair[step], gift = '[data-affinity-gift="' + item + '"]';
       const options = page.locator('[data-affinity-choice]');
       assert.equal(await options.count(),2);
@@ -171,7 +171,7 @@ async function verify(browser, url, mobile) {
       const echo = await page.locator('.ss-affinity-result').innerText();
       assert.ok(echo.includes('“') && echo !== immediate);
       assert.equal((await snapshot()).affinity.npc[id].recalled,true);
-      await press('.ss-affinity summary');
+      await press('.ss-affinity > summary');
       assert.match(await page.locator('.ss-affinity').innerText(), /내 선택/);
       assert.ok(await page.locator(gift).isDisabled());
       assert.equal((await snapshot()).affinity.tickets,selected.affinity.tickets);

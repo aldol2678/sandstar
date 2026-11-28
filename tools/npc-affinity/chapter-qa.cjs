@@ -117,6 +117,7 @@ async function verify(browser, url, mobile, fishing) {
     for (const id of ['sola','yeoul','maru','tobak','gaengi','harin','seoon']) {
       await visit(id);
       if (id === 'harin') {
+        await press('.ss-chapter-talk summary');
         await press('#ssNpcStoryBtn');
         assert.match(await page.locator('#dialog').innerText(),/다음 물높이/);
       }

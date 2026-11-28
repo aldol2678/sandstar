@@ -12,8 +12,8 @@ async function visitResident(page, press, id) {
     throw Error('No accessible interaction for ' + id);
   }, id);
   await press('#town25dAction');
-  await page.locator('.ss-affinity summary').waitFor();
-  assert.match(await page.locator('.ss-affinity summary').innerText(), new RegExp(name));
+  await page.locator('.ss-affinity > summary').waitFor();
+  assert.match(await page.locator('.ss-affinity > summary').innerText(), new RegExp(name));
 }
 async function rejectNextSave(page) {
   await page.evaluate(() => {

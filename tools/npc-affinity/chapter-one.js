@@ -87,7 +87,7 @@ function ssChapterListen(npc, key) {
   return false;
 }
 
-function ssChapterConversation(npc, anchor = $('ssNpcProg')) {
+function ssChapterConversation(npc, anchor = $('ssNpcExtras')) {
   const topics = ssChapterTopics(game.storyM1), voice = SS_CHAPTER_ONE_VOICES[npc.id];
   if (!voice || !anchor || game.affinity?.v !== 1) return;
   const resident = game.affinity.npc[npc.id];
@@ -99,7 +99,9 @@ function ssChapterConversation(npc, anchor = $('ssNpcProg')) {
     + '</div><div class="ss-chapter-response" role="status"><p></p></div>';
   const response = element.querySelector('.ss-chapter-response');
   response.firstChild.textContent = voice.arrival;
-  anchor.after(element);
+  anchor.insertBefore(element,anchor.querySelector('.ss-npc-extra'));
+  const storyButton = $('ssNpcStoryBtn');
+  if (storyButton) element.querySelector('.ss-chapter-options').append(storyButton);
   element.querySelectorAll('[data-chapter-topic]').forEach(button => {
     button.onclick = () => {
       const key = button.dataset.chapterTopic;

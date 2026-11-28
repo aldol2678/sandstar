@@ -215,15 +215,18 @@ function ssAffinityPanel(npc, greet = true, notice = '') {
   const wasOpen = document.querySelector('.ss-affinity')?.open;
   document.querySelector('.ss-affinity')?.remove();
   document.querySelector('.ss-affinity-result')?.remove();
-  $('ssNpcProg').insertAdjacentHTML('afterend',
+  $('ssNpcExtras').insertAdjacentHTML('afterbegin',
     '<p class="ss-affinity-result" role="status" tabindex="-1"></p>'
-    + '<details class="ss-affinity"><summary>♥ ' + npc.name + ' · ' + SS_AFFINITY_LEVELS[resident.level - 1]
-    + ' · ' + progress + '점 <small>' + (resident.level >= 2 && !resident.memory ? '새 이야기' : '주민 수첩') + '</small></summary>'
+    + '<details class="ss-affinity"><summary><span class="ss-affinity-title"><strong>호감도 수첩' + (ssAffinityAtResident(id) ? ' · 선물' : '') + '</strong>'
+    + '<small>' + npc.name + ' · ' + SS_AFFINITY_LEVELS[resident.level - 1] + ' · ' + progress + '점'
+    + (resident.level >= 2 && !resident.memory ? ' · <em>새 이야기</em>' : '') + '</small></span></summary>'
     + ssAffinityMomentSection(profile, resident)
     + (ssAffinityAtResident(id) ? ssAffinityGiftSection(npc, resident, day) : '')
-    + (records ? '<ul>' + records + '</ul>' : '')
-    + '<p>오늘 첫 대화 +6 · 목수·농부·어부 납품 +2 (세 주민 합계 하루 10점) · 매일 오전 5시 갱신</p>'
-    + delivery + '<ul class="ss-affinity-roster">' + roster + '</ul><p>축제 티켓 ' + state.tickets + '장 · 관계 단계가 오르면 2장 (최대 30장)</p></details>');
+    + delivery
+    + (records ? '<section><h3>함께한 기억</h3><ul>' + records + '</ul></section>' : '')
+    + '<details class="ss-npc-roster"><summary>마을 주민의 호감도</summary><ul class="ss-affinity-roster">' + roster + '</ul>'
+    + '<p>오늘 첫 대화 +6 · 납품 +2 (세 주민 합계 하루 10점) · 매일 오전 5시 갱신</p>'
+    + '<p>축제 티켓 ' + state.tickets + '장 · 관계 단계가 오르면 2장 (최대 30장)</p></details></details>');
   document.querySelector('.ss-affinity-result').textContent = result;
   if (wasOpen) document.querySelector('.ss-affinity').open = true;
   const panel = document.querySelector('.ss-affinity');

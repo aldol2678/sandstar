@@ -11,12 +11,17 @@ def patch(html):
         html = html.replace(old, new)
 
     source = "\n".join(Path(__file__).with_name(name).read_text(encoding="utf-8")
-                       for name in ("residents.js", "chapter-one.js", "affinity.js"))
+                       for name in ("residents.js", "chapter-one.js", "affinity.js", "dialog.js"))
     replace("function newGame(seed=", source + "\nfunction newGame(seed=")
     replace("return {storyM1:ssM1Fresh(),livingP0:freshLivingP0()",
             "return {affinity:ssAffinityNormalize(),storyM1:ssM1Fresh(),livingP0:freshLivingP0()")
     replace("d.livingP0=normalizeLivingP0(d.livingP0);",
             "d.affinity=ssAffinityNormalize(d.affinity);d.livingP0=normalizeLivingP0(d.livingP0);")
+    start = html.index(" const storyBtn=npc.story?")
+    end = html.index(" $('ssNpcReplay').onclick=", start)
+    replace(html[start:end], " showModal(npc.name,ssNpcDialogBody(npc));ssNpcFrame(npc);\n")
+    replace("'다음 ▶' : '다른 이야기'", "'다음 대화' : '다른 이야기'")
+    replace("function showModal(title,html){", "function showModal(title,html){\n $('overlay').removeAttribute('aria-labelledby');")
     replace(" $('ssNpcReplay').onclick=", " ssAffinityPanel(npc);ssChapterConversation(npc);\n $('ssNpcReplay').onclick=")
 
     # Show heard testimony at the physical spring, on either side of the one-time repair.
@@ -33,9 +38,9 @@ def patch(html):
             "  const choices = idleLines.filter(i => i !== previous);")
     # The forest researcher and Harin's chapter option use the original chapter modal.
     replace("자원과 장비는 공유합니다.</p>`);return true;",
-            "자원과 장비는 공유합니다.</p>`);ssChapterConversation(ssNpcById('harin'),$('dialog').querySelector('h2'));return true;")
+            "자원과 장비는 공유합니다.</p>`);ssNpcFrame(ssNpcById('harin'),true);ssChapterConversation(ssNpcById('harin'));return true;")
     replace("판단하지 않았습니다.</p>`);return true;",
-            "판단하지 않았습니다.</p>`);ssChapterConversation(ssNpcById('seoon'),$('dialog').querySelector('h2'));return true;")
+            "판단하지 않았습니다.</p>`);ssNpcFrame(ssNpcById('seoon'),true);ssChapterConversation(ssNpcById('seoon'));return true;")
 
     # Limit the hook to livingAction. Cooking has a separate transaction with a similar shape.
     replace("if(!anywhereFood&&Math.abs(context.y-context.groundY)>5)",
@@ -87,6 +92,7 @@ def patch(html):
 .ss-affinity .ss-affinity-choices button{flex:1 1 9rem;min-height:44px;white-space:normal}
 .ss-affinity p,.ss-affinity li,.ss-affinity-result{font-size:.9rem;line-height:1.45}
 """
+    css += Path(__file__).with_name("dialog.css").read_text(encoding="utf-8")
     replace("</head>", "<style>" + css + "</style>\n</head>")
     return html
 
