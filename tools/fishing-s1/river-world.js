@@ -74,7 +74,7 @@ function fishingWorldEnterCore(){
   flash('낚시터 저장에 실패했어요. 진입하지 않았습니다.');return false;
  }
  fwYaw=FW_VIEW.yaw;fwPitch=FW_VIEW.pitch;
- fishingWorldActivate();fwLastEnter=performance.now();fishingWorldToast('도래 낚시터에 도착했어요. 물가의 자리 A·B·C로 걸어가 보세요.');return true;
+ fishingWorldActivate();fwLastEnter=performance.now();fishingWorldToast('도래 낚시터 · 자리 A·B·C로 걸어가세요');return true;
 }
 function fishingWorldExitCore(){
  if(!fishingWorldActive||!fishingWorldNearGate()){fishingWorldToast('서쪽 출입구로 가까이 가야 돌아갈 수 있어요');return false;}
@@ -265,13 +265,14 @@ function fw3Mat(color,opts={}){return new window.THREE.MeshStandardMaterial({col
 function fw3Box(w,h,d,color,x,y,z){const T=window.THREE,m=new T.Mesh(new T.BoxGeometry(w,h,d),fw3Mat(color));m.position.set(x,y,z);fw3.scene.add(m);return m;}
 function fw3Plane(x0,z0,x1,z1,y,color,opts){const T=window.THREE,m=new T.Mesh(new T.PlaneGeometry(x1-x0,z1-z0),fw3Mat(color,opts));m.rotation.x=-Math.PI/2;m.position.set((x0+x1)/2,y,(z0+z1)/2);fw3.scene.add(m);return m;}
 function fw3Label(text,color){
- const T=window.THREE,c=document.createElement('canvas');c.width=512;c.height=112;const g=c.getContext('2d');
- g.font='900 52px system-ui,sans-serif';const w=Math.min(500,g.measureText(text).width+56);
- g.fillStyle='#183e42e6';g.beginPath();g.roundRect((512-w)/2,10,w,90,24);g.fill();g.strokeStyle='#fff0b8';g.lineWidth=4;g.stroke();
- g.fillStyle=color||'#fff0bb';g.textAlign='center';g.textBaseline='middle';g.fillText(text,256,57);
+ // canvas sized to the tag so short tags ("B") keep their proportions
+ const T=window.THREE,m=document.createElement('canvas').getContext('2d');m.font='900 52px system-ui,sans-serif';
+ const w=Math.ceil(Math.min(500,m.measureText(text).width+56)),c=document.createElement('canvas');c.width=w+8;c.height=112;const g=c.getContext('2d');
+ g.font='900 52px system-ui,sans-serif';g.fillStyle='#183e42e6';g.beginPath();g.roundRect(4,10,w,90,24);g.fill();g.strokeStyle='#fff0b8';g.lineWidth=4;g.stroke();
+ g.fillStyle=color||'#fff0bb';g.textAlign='center';g.textBaseline='middle';g.fillText(text,c.width/2,57);
  const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
- const sp=new T.Sprite(new T.SpriteMaterial({map:tex,depthTest:false,transparent:true}));sp.scale.set(3.4,.75,1);sp.renderOrder=10;fw3.scene.add(sp);
- sp.userData.canvas=c;sp.userData.text=text;return sp;
+ const sp=new T.Sprite(new T.SpriteMaterial({map:tex,depthTest:false,transparent:true}));sp.scale.set(.75*c.width/112,.75,1);sp.renderOrder=10;fw3.scene.add(sp);
+ sp.userData.text=text;return sp;
 }
 function fw3Sheet(dir){
  const T=window.THREE;if(fw3.sheets[dir])return fw3.sheets[dir];
@@ -303,12 +304,12 @@ function fw3Build(){
  }
  // gate to town
  fw3Box(.25,2.4,.25,0x6a4d31,FW_GATE.x,1.2,9.7);fw3Box(.25,2.4,.25,0x6a4d31,FW_GATE.x,1.2,12.3);fw3Box(.3,.25,3,0x6a4d31,FW_GATE.x,2.35,11);
- st.labels.gate=fw3Label('🚪 마을');st.labels.gate.position.set(FW_GATE.x,3.1,11);
+ st.gateLabel=fw3Label('🚪 마을');st.gateLabel.position.set(FW_GATE.x,3.1,11);
  // spot rings + labels
  for(const [id,sp] of Object.entries(FW_SPOTS)){
   const ring=new T.Mesh(new T.TorusGeometry(.85,.07,6,36),fw3Mat(0xfff0b8,{emissive:0xffd27a,emissiveIntensity:.5,flatShading:false}));
   ring.rotation.x=-Math.PI/2;ring.position.set(sp.x,fw3Floor(sp.x,sp.y)+.04,sp.y);st.scene.add(ring);st.rings[id]=ring;
-  const lab=fw3Label(sp.label);lab.position.set(sp.x,fw3Floor(sp.x,sp.y)+3.1,sp.y);st.labels[id]=lab;
+  st.labels[id]={pos:new T.Vector3(sp.x,fw3Floor(sp.x,sp.y)+3.1,sp.y),cache:{},cur:null};
  }
  // fish shadows under the surface (decoration; the fishing view decides real fish)
  for(let i=0;i<6;i++){const m=new T.Mesh(new T.CircleGeometry(.5,14),new T.MeshBasicMaterial({color:0x0e2a33,transparent:true,opacity:.45,depthWrite:false}));m.rotation.x=-Math.PI/2;m.scale.set(1+i*.25,.45+i*.08,1);m.position.y=-.5;st.scene.add(m);st.fish.push({m,cx:17+((i*2.3)%10),cz:4+i*2.4,r:1.2+i*.4,sp:.25+i*.05,ph:i});}
@@ -318,6 +319,29 @@ function fw3Build(){
  st.ready=true;
 }
 function fw3Floor(x,y){return fwDock(x,y)?.27:0;}
+// Spot name tags: full name within 9 units (or the spot you stand at / the hooked one), a letter
+// further away; hidden when the tag would land under the header/guide or past the screen edge.
+function fw3SafeTop(){const g=document.getElementById('fishWorldGuide'),r=fwRoot.getBoundingClientRect();return g&&!g.hidden?Math.max(0,g.getBoundingClientRect().bottom-r.top+6):60;}
+function fw3PlaceLabels(near,att){
+ const st=fw3,W=fwCanvasW,H=fwCanvasH,top=fw3SafeTop(),bottom=H-((document.getElementById('fishWorldAction')?.getBoundingClientRect().height)||60)-24,out={};
+ for(const [id,L] of Object.entries(st.labels)){
+  if(id==='gate')continue;
+  const sp=FW_SPOTS[id],hooked=att&&att.spot===id,full=id===near||hooked||Math.hypot(fwPlayer.x-sp.x,fwPlayer.y-sp.y)<9;
+  const text=full?sp.label+(hooked?' · 걸림':''):id+(hooked?' · 걸림':'');
+  let lab=L.cache[text];if(!lab){lab=fw3Label(text,hooked?'#ffb48a':null);lab.position.copy(L.pos);L.cache[text]=lab;}
+  for(const other of Object.values(L.cache))other.visible=false;
+  // try the tag above the ring first, then just over the ring (keeps far spots findable)
+  let ok=false;
+  for(const lift of [0,-2.2,-3.0]){
+   const at=L.pos.clone();at.y+=lift;
+   const v=at.clone().project(st.camera),sx=(v.x+1)/2*W,sy=(1-v.y)/2*H;
+   const tagH=Math.max(18,Math.abs(((at.clone().setY(at.y+.75).project(st.camera).y)-v.y)/2*H)),tagW=tagH*lab.scale.x/lab.scale.y;
+   if(v.z<1&&sy-tagH/2>=top&&sy+tagH/2<=bottom&&sx-tagW/2>=4&&sx+tagW/2<=W-4){lab.position.copy(at);ok=true;break;}
+  }
+  lab.visible=ok;L.cur=lab;out[id]=ok?text:'';
+ }
+ st.labelState=out;
+}
 function fw3Render(){
  const st=fw3,T=window.THREE;if(!st||!st.ready)return;
  const W=fwCanvasW,H=fwCanvasH;if(!W||!H)return;
@@ -332,8 +356,8 @@ function fw3Render(){
  st.player.position.set(fwPlayer.x,floor,fwPlayer.y);st.blob.position.set(fwPlayer.x,floor+.02,fwPlayer.y);
  // spot rings pulse, near spot highlighted, hooked spot tinted
  const near=fishingWorldNearSpot(),att=game?.livingP0?.river?.attempt;
- for(const [id,ring] of Object.entries(st.rings)){const on=id===near,k=1+(on?.12:.05)*Math.sin(t*4);ring.scale.set(k,k,k);ring.material.emissiveIntensity=on?1.1:.45;ring.material.color.set(att&&att.spot===id?0xffb48a:0xfff0b8);
-  const lab=st.labels[id],txt=FW_SPOTS[id].label+(att&&att.spot===id?' · 걸림':'');if(lab.userData.text!==txt){st.scene.remove(lab);const nl=fw3Label(txt,att&&att.spot===id?'#ffb48a':null);nl.position.copy(lab.position);st.labels[id]=nl;}}
+ for(const [id,ring] of Object.entries(st.rings)){const on=id===near,k=1+(on?.12:.05)*Math.sin(t*4);ring.scale.set(k,k,k);ring.material.emissiveIntensity=on?1.1:.45;ring.material.color.set(att&&att.spot===id?0xffb48a:0xfff0b8);}
+ st.camera.updateMatrixWorld();fw3PlaceLabels(near,att);
  for(const f of st.fish){const a=t*f.sp+f.ph;f.m.position.x=f.cx+Math.cos(a)*f.r;f.m.position.z=f.cz+Math.sin(a*1.3)*f.r*.6;f.m.rotation.z=-a;}
  for(const m of st.flow){m.position.x+=.03;if(m.position.x>25)m.position.x=20.5;}
  st.water.position.y=-.12+Math.sin(t*1.2)*.015;
@@ -369,7 +393,7 @@ function fw3Render(){
  window.addEventListener('resize',()=>{if(fishingWorldActive){fishingWorldResize();fishingWorldDraw();}});
 })();
 window.__sandstarFishingWorld=Object.freeze({
- state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,
+ state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,labels:fw3?.labelState||null,
   frameMs:fwFrameMs.length?(()=>{const a=[...fwFrameMs].sort((x,y)=>x-y);return {median:+a[a.length>>1].toFixed(1),p90:+a[Math.floor(a.length*.9)].toFixed(1),n:a.length};})():null,nearSpot:fishingWorldNearSpot(),nearGate:fishingWorldNearGate(),
   action:document.getElementById('fishWorldAction')?.textContent||'',saved:JSON.parse(JSON.stringify(game?.fishingWorldV1||null)),spots:FW_SPOTS,gate:FW_GATE}),
  testMove:(x,y)=>{if(!fishingWorldActive||fishingWorldBlocked(x,y))return false;fwPlayer.x=x;fwPlayer.y=y;game.fishingWorldV1.position={x,y};fishingWorldRefreshHud();fishingWorldDraw();return true;},

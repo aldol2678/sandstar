@@ -18,6 +18,6 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.screenshot({ path: process.argv[3] + '/3d-dock-' + process.argv[2] + '.png' });
   await page.evaluate(() => window.__sandstarFishingWorld.testMove(12.2, 15.2)); await wait(1500);
   await page.screenshot({ path: process.argv[3] + '/3d-A-' + process.argv[2] + '.png' });
-  console.log(JSON.stringify((await page.evaluate(() => window.__sandstarFishingWorld.state())).frameMs), problems.slice(0, 5));
+  { const st = await page.evaluate(() => window.__sandstarFishingWorld.state()); console.log(JSON.stringify({ frameMs: st.frameMs, labels: st.labels }), problems.slice(0, 5)); }
   await browser.close();
 })();

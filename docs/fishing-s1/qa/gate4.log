@@ -1,4 +1,4 @@
-== Gate 4 pc 2026-11-27T04:49:16.255Z http://127.0.0.1:8761/
+== Gate 4 pc 2026-11-28T01:23:53.720Z http://127.0.0.1:8761/
 manifest {"wheat":{"url":"/fcb/glb/wheat-crop-c073-dbd41325.glb","sha256":"dbd41325a2c9255e6872a1238059282281e925cef60067a0e888837b76fd0ee2","bytes":423652,"source":"wheat-crop-c073.glb"},"potato":{"url":"/fcb/glb/potato-crop-c047-e68aa60f.glb","sha256":"e68aa60fc2024ab3280515d4f2391c08b6ccad675a3643fa1bf7344c947176ec","bytes":338748,"source":"potato-crop-c047.glb"},"carrot":{"url":"/fcb/glb/carrot-crop-carrot-86444601.glb","sha256":"8644460182d09e84bc39aea3bd7eadf03c7f1a8ae9ac35d2672018342edde061","bytes":257908,"source":"carrot-crop-carrot.glb"}}
 PASS pc: no GLB request before the kitchen opens (lazy)
 PASS pc: 2.5D stills shown in the scene (hero + 4 shelf items) — {"heroVisible":false,"heroLoaded":true,"shelf":[true,true,true,true],"tag":"밀 · 3D","note":"3D 미리보기 · 끌어서 돌려 보세요"}
@@ -6,11 +6,11 @@ PASS pc: 3D highlight active — {"mode":"3d","reason":"","focus":"wheat","frame
 PASS pc: exactly the 3 ingredient GLBs fetched, all 200 — [["wheat-crop-c073-dbd41325.glb",200],["potato-crop-c047-e68aa60f.glb",200],["carrot-crop-carrot-86444601.glb",200]] total 1020308B
 PASS pc: GLB response is model/gltf-binary with an immutable cache header — {"type":"model/gltf-binary","cache":"public, max-age=31536000, immutable"}
 PASS module carries no GLB bytes (GLBs served as static assets) — dist/fcb-qa/fcb-main.mjs
-PASS pc: 3D model rendered (opaque pixels, context alive) — {"w":112,"h":112,"opaque":619,"hash":"53c87522","yaw":0.9053681633974485,"focus":"wheat","contextLost":false}
-PASS pc: 3D model rotates over time — 0.91->1.48
-PASS pc: shelf → potato shown in 3D — 감자 · 3D opaque 2695
-PASS pc: shelf → carrot shown in 3D — 당근 · 3D opaque 1300
-PASS pc: wheat/potato/carrot renders differ — {"wheat":"cc8aabe0","potato":"89fc5573","carrot":"d274848d"}
+PASS pc: 3D model rendered (opaque pixels, context alive) — {"w":112,"h":112,"opaque":642,"hash":"f2bfa8c8","yaw":0.9203981633974483,"focus":"wheat","contextLost":false}
+PASS pc: 3D model rotates over time — 0.92->1.48
+PASS pc: shelf → potato shown in 3D — 감자 · 3D opaque 2721
+PASS pc: shelf → carrot shown in 3D — 당근 · 3D opaque 1289
+PASS pc: wheat/potato/carrot renders differ — {"wheat":"a12bdd5c","potato":"1b3c1084","carrot":"340fded8"}
 PASS pc: fish uses the P5 2D sprite (no fish GLB) — 물고기 · 2D
 PASS pc: cook bread with scene open -> bread +1, scene still 3D, focus wheat, no refetch — {"bread":1,"mode":"3d","focus":"wheat","glb":3}
 PASS pc: cook stew (fish sprite + potato) -> stew +1, focus potato in 3D

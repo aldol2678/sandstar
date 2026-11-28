@@ -153,6 +153,10 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   let w = await fw();
   check('town 낚시터 입구 opens the fishing ground (fishing_01)', /낚시터로 이동/.test(gateLabel) && w.active && w.worldId === 'fishing_01' && w.saved.activeWorldId === 'fishing_01', `${gateLabel} · ${JSON.stringify({ active: w.active, saved: w.saved })}`);
   await shot('world-arrive');
+  const toast = (await page.textContent('#fishWorldToast')).trim();
+  check('arrival notice is one short line', toast.length <= 24 && /A·B·C/.test(toast), toast);
+  const tags = (await fw()).labels || {};
+  check('3D spot tags are placed or hidden, never under the header (state reported)', w.renderer !== 'three' || Object.keys(tags).length === 3, JSON.stringify(tags));
 
   // ===== spot A: rod, locked spot, weeds
   let o = await openSpot('A');
@@ -228,6 +232,7 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
   o = await openSpot('B', [[8, 15.2], [8, 11], [12.4, 11], [12.4, 8], [19.2, 8]]);
   s2 = await rs();
   check('back at B: same fish restored paused with resume card', o.ok && s2.card === 'resume' && s2.paused && s2.saved.attempt.id === savedAttempt.id && s2.saved.attempt.size === savedAttempt.size && s2.fight.progress >= savedAttempt.progress, JSON.stringify({ o, card: s2.card, fight: s2.fight }).slice(0, 260));
+  check('resume card shows the general hint, not a stale "감으세요"', !/감으세요|돌진|기다리세요/.test(s2.hint), s2.hint);
   await shot('resume-card');
   await press('#riverCard button[data-river="resume"]'); await wait(1100);
   const fishedBefore = (await living()).stats.fished;

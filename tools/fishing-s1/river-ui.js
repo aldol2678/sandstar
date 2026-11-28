@@ -123,7 +123,7 @@ function ssRiverStartFight(a,restored){
  const tune=RIVER_FIGHT[a.fish];
  ssRiver.fight={id:a.id,fish:a.fish,size:a.size,progress:a.progress,strain:0,stall:false,pi:0,pt:0,pdur:0,bonus:0,taut:0,wob:0};
  ssRiverNextPhase(true);ssRiver.phase='fight';ssRiver.savedQuarter=Math.floor(a.progress/25);
- if(restored){ssRiver.paused=true;ssRiver.card='resume';}
+ if(restored){ssRiver.paused=true;ssRiver.card='resume';ssRiverClearHint();}
  else ssRiverSay(tune.phases[0][0]==='loose'?'힘이 풀렸어요. 길게 감으세요':'틈이 보이면 감으세요. 손을 떼도 진도는 남아요',2.6);
  ssRiverRender();
 }
@@ -194,9 +194,10 @@ function ssRiverCommand(type,extra){
  if(!saveGame(true)){game.livingP0=oldState;game.inv=oldInv;game.coins=oldCoins;return {ok:false,reason:'저장에 실패해 결과를 확정하지 못했어요. 저장 공간을 확인해 주세요'};}
  updHud();return r;
 }
+function ssRiverClearHint(){ssRiver.hint='';ssRiver.hintUntil=0;const el=ssRiverEl('riverHint');if(el)el.textContent=ssRiverDefaultHint();}
 function ssRiverPause(reason){
  if(!ssRiverIsOpen||ssRiver.paused)return;
- ssRiverRelease();
+ ssRiverRelease();ssRiverClearHint();
  if(ssRiver.phase==='fight'||ssRiver.phase==='bite'||ssRiver.phase==='lure'){ssRiver.paused=true;ssRiver.card='pause';ssRiverSaveProgress(true);ssRiverRender();}
 }
 function ssRiverResume(){ssRiver.paused=false;ssRiver.card=null;ssRiver.ready=.9;ssRiverSay('준비…',.9);ssRiverRender();}
@@ -237,7 +238,7 @@ function ssRiverTickFish(dt){
   }else{
    if(!L)f.interest=Math.max(0,f.interest-dt*.2);
    // shadows drift on after a while so the spot's mix rotates without reopening the view
-   f.stayT-=dt;if(f.stayT<=0&&f.interest<.1){f.state='leave';f.dir=f.x>ssRiver.W*.6?1:-1;continue;}
+   f.stayT-=dt;if(f.stayT<=0&&f.interest<.1){f.state='leave';f.dir=f.x>ssRiver.W*.6?1:-1;ssRiverSpawn(false);continue;}
    if(f.species==='perch'){if(f.x<f.patrol[0])f.dir=1;else if(f.x>f.patrol[1])f.dir=-1;}
    else{f.turnT-=dt;if(f.turnT<=0){f.turnT=ssRiverRand(1.5,4);f.dir*=-1;}}
    f.x+=f.dir*f.speed*.5*dt;f.y+=(f.homeY-f.y)*dt*.5+Math.sin(ssRiver.t*1.3+f.id)*dt*(f.species==='carp'?2:5);
@@ -420,14 +421,14 @@ function ssRiverCardAction(act){
  hold.addEventListener('contextmenu',e=>e.preventDefault());
  hold.addEventListener('click',e=>{if(e.detail===0){ssRiverPress();setTimeout(ssRiverRelease,120);}});
  ssRiverEl('riverRetrieve').addEventListener('click',()=>ssRiverRetrieve());
- ssRiverEl('riverPause').addEventListener('click',()=>{if(ssRiver.paused)ssRiverResume();else{ssRiverRelease();ssRiver.paused=true;ssRiver.card='pause';ssRiverSaveProgress(true);ssRiverRender();}});
- ssRiverEl('riverExit').addEventListener('click',()=>{if(ssRiver.phase==='fight'){ssRiverRelease();ssRiver.paused=true;ssRiver.card='exitfight';ssRiverSaveProgress(true);ssRiverRender();}else ssRiverClose();});
+ ssRiverEl('riverPause').addEventListener('click',()=>{if(ssRiver.paused)ssRiverResume();else{ssRiverRelease();ssRiverClearHint();ssRiver.paused=true;ssRiver.card='pause';ssRiverSaveProgress(true);ssRiverRender();}});
+ ssRiverEl('riverExit').addEventListener('click',()=>{if(ssRiver.phase==='fight'){ssRiverRelease();ssRiverClearHint();ssRiver.paused=true;ssRiver.card='exitfight';ssRiverSaveProgress(true);ssRiverRender();}else ssRiverClose();});
  ssRiverEl('riverSpots').addEventListener('click',e=>{const b=e.target.closest('button[data-spot]');if(b)ssRiverSetSpot(b.dataset.spot);});
  ssRiverEl('riverCard').addEventListener('click',e=>{const b=e.target.closest('button[data-river]');if(b){e.preventDefault();ssRiverCardAction(b.dataset.river);}});
  ssRiverEl('riverAssist').addEventListener('change',e=>{const r=ssRiverState();if(r){r.assist=!!e.target.checked;saveGame(true);}});
  window.addEventListener('keydown',e=>{if(!ssRiverIsOpen)return;const k=e.key.toLowerCase();
   if(k===' '||k==='f'){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)ssRiverPress();}
-  else if(k==='escape'){e.preventDefault();e.stopImmediatePropagation();if(ssRiver.phase==='fight'){ssRiverRelease();ssRiver.paused=true;ssRiver.card='exitfight';ssRiverSaveProgress(true);ssRiverRender();}else ssRiverClose();}
+  else if(k==='escape'){e.preventDefault();e.stopImmediatePropagation();if(ssRiver.phase==='fight'){ssRiverRelease();ssRiverClearHint();ssRiver.paused=true;ssRiver.card='exitfight';ssRiverSaveProgress(true);ssRiverRender();}else ssRiverClose();}
   else if(['1','2','3'].includes(k)){e.preventDefault();e.stopImmediatePropagation();ssRiverSetSpot('ABC'[Number(k)-1]);}
   else if(k==='r'){e.preventDefault();e.stopImmediatePropagation();ssRiverRetrieve();}
   else if(['w','a','s','d','e','arrowleft','arrowright','arrowup','arrowdown','m','t'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}
