@@ -1,0 +1,19 @@
+.p16-drill-hud{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);z-index:2;box-sizing:border-box;width:122px;padding:7px 9px;display:flex;flex-direction:column;gap:3px;border:1px solid #bdc5b589;border-radius:9px;background:#172a34e8;color:#f5edd8;pointer-events:none;box-shadow:0 3px 8px #09182070}
+.p16-drill-hud[hidden]{display:none!important}
+.p16-label{text-align:center;font-size:10px;font-weight:800;white-space:nowrap;color:#f5d59c}
+.p16-bar-label{display:flex;justify-content:space-between;font-size:9px;line-height:1.1;color:#e5ebed}
+.p16-meter{display:block;width:100%;height:5px;border-radius:4px;overflow:hidden;background:#0d1923;border:1px solid #ffffff24}
+.p16-spin-fill,.p16-heat-fill{display:block;height:100%;width:0;transition:width .12s linear}
+.p16-spin-fill{background:#70bad8}.p16-heat-fill{background:#dba462}
+.p16-drill-hud.overheat{border-color:#ef8a62}.p16-drill-hud.overheat .p16-heat-fill{background:#e76e52}
+.p16-hammer-hud{position:absolute;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);z-index:2;width:124px;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;padding:6px 7px;border:1px solid #c8a77c;border-radius:9px;background:#202c34ef;color:#f1dfc0;text-align:center;pointer-events:none;box-shadow:0 3px 8px #09182066}
+.p16-hammer-hud[hidden]{display:none!important}
+.p16-hammer-head{font-size:10px;font-weight:800}.p16-hammer-sub{font-size:8px;line-height:1.25;color:#dfd5c5;white-space:normal}
+@media(max-height:540px) and (orientation:landscape){.p16-hammer-hud{width:116px;padding:4px 5px;bottom:calc(100% + 4px)}}
+@media(orientation:portrait){.p16-hammer-hud{width:114px;padding:5px 5px}}
+
+@media(max-height:540px) and (orientation:landscape){.p16-drill-hud{bottom:calc(100% + 4px);padding:4px 7px;width:110px;gap:2px}.p16-label{font-size:9px}.p16-bar-label{font-size:8px}}
+@media(orientation:portrait){.p16-drill-hud{width:100px;padding:5px 6px;gap:2px;bottom:calc(100% + 5px)}.p16-label{font-size:9px}}
+.venue-content .ss-p14-panel{margin:10px 0;padding:10px;border:1px solid #8bada84d;border-radius:8px}
+.venue-content .ss-p14-craft-row{display:grid;gap:4px;margin-top:8px}
+.venue-content .ss-p14-craft-row button{justify-self:start}
