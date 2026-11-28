@@ -27,7 +27,7 @@ const RIVER_HINTS=Object.freeze({
  carp:'큰 그림자는 당기지 말고 바닥 가까이 조용히 흘려 두세요.'
 });
 const RIVER_BITE_WINDOW=2.6;
-function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false,keep:{river_fish:0,perch:0,carp:0},flow:livingRiverFlowFresh()};}
+function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false,keep:{river_fish:0,perch:0,carp:0},flow:livingRiverFlowFresh(),record:{quest:0,seen:false},rewards:[]};}
 // 남길 수량 (v0.4 4절): fish the player keeps back. Selling, cooking and the fisher's delivery only
 // use the fish above this count, so a kept fish is never consumed behind a "kept" label.
 const RIVER_KEEP_MAX=99;
@@ -64,6 +64,9 @@ const RIVER_FLOW_NOTES=Object.freeze([
  'B 깊은 소에 잔물결 흔적이 번져요. 큰 그림자가 더 잘 다가와요.',
  '다시 와 보니 A 강가 물이 한결 맑아졌어요.'
 ]);
+const RIVER_RECORD_REWARD='river-record-marks-1',RIVER_REWARD_IDS=Object.freeze([RIVER_RECORD_REWARD]);
+function livingFishRecordCount(state){const dex=Array.isArray(state?.fishDex)?state.fishDex:[];return LIVING_FISH_ORDER.filter(id=>dex.includes(id)).length;}
+function livingRiverMarked(state){return !!state?.river?.rewards?.includes(RIVER_RECORD_REWARD);}
 function livingFishKeep(state,id){return Math.min(RIVER_KEEP_MAX,livingInt(state?.river?.keep?.[id]));}
 function livingFishFree(state,id){return Math.max(0,livingInt(state?.bag?.[id])-livingFishKeep(state,id));}
 function livingFreeBag(state){const b={...state.bag};for(const id of LIVING_FISH_ORDER)b[id]=livingFishFree(state,id);return b;}
@@ -81,10 +84,26 @@ function livingRiverNormalize(raw){
  r.assist=raw.assist===true;
  r.flow=livingRiverFlowNormalize(raw.flow);
  if(raw.keep&&typeof raw.keep==='object')for(const id of Object.keys(r.keep))r.keep[id]=Math.min(RIVER_KEEP_MAX,livingInt(raw.keep[id]));
+ if(raw.record&&typeof raw.record==='object'){r.record.quest=raw.record.quest===1?1:0;r.record.seen=raw.record.seen===true;}
+ if(Array.isArray(raw.rewards))r.rewards=[...new Set(raw.rewards.filter(id=>RIVER_REWARD_IDS.includes(id)))];
  return r;
 }
 function livingRiverCommand(state,cmd,kind,bad,hasBuff){
  const river=state.river;
+ // 여울 '물고기 기록' (선택 의뢰): progress = river species in fishDex (old dex counts, no fish used);
+ // the reward is granted once, by id, and is only the 물살 관찰 표식 (no coins, no items).
+ if(kind==='river.record.accept'){
+  if(river.record.quest===1)return bad('이미 받은 의뢰예요');
+  river.record.quest=1;const n=livingFishRecordCount(state);
+  return {message:`여울의 물고기 기록 의뢰를 받았어요 · 기록 ${n}/3`,progress:n};
+ }
+ if(kind==='river.record.claim'){
+  if(river.record.quest!==1)return bad('먼저 여울의 의뢰를 받아 주세요');
+  if(river.rewards.includes(RIVER_RECORD_REWARD))return bad('이미 받은 보상이에요');
+  const n=livingFishRecordCount(state);if(n<3)return bad(`아직 기록이 ${n}/3이에요`);
+  river.rewards.push(RIVER_RECORD_REWARD);river.record.seen=false;
+  return {message:'물살 관찰 표식을 받았어요 · 도래 낚시터에 남았어요',reward:RIVER_RECORD_REWARD,progress:n};
+ }
  if(kind==='fish.keep'){
   if(!livingOwn(LIVING_FISH,cmd.item))return bad('물고기 종류를 확인해 주세요');
   if(!Number.isSafeInteger(cmd.count)||cmd.count<0||cmd.count>RIVER_KEEP_MAX)return bad('남길 수량을 확인해 주세요');

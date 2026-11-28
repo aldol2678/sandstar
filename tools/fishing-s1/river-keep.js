@@ -98,8 +98,46 @@ function ssBagWoodEntry(){
 }
 function ssFishTownTip(){
  const el=document.getElementById('t25FishTip');if(!el||!game?.livingP0)return;
- const w=game.livingP0,wood=Math.floor(Number(game.inv?.wood)||0),show=w.stats.fished===0&&!(w.river?.attempt);
+ const w=game.livingP0,wood=Math.floor(Number(game.inv?.wood)||0),rec=w.river?.record,n=livingFishRecordCount(w);
+ const questOpen=rec?.quest===1&&!livingRiverMarked(w),show=questOpen||(w.stats.fished===0&&!(w.river?.attempt));
  el.hidden=!show;if(!show)return;
- const t=w.rod?'선택 · 낚시: 낚시터 입구로 가서 자리 A·B·C에서 낚시해요':wood>=3?'선택 · 낚시: 원목 3개가 있어요 · 낚시터 입구에서 낚싯대를 만들어요':'선택 · 낚시: 잔빛숲 나무를 베어 원목 3개를 모으면 낚싯대를 만들 수 있어요';
+ const t=questOpen?(n>=3?'선택 · 물고기 기록 3/3 · 여울에게 기록을 보여 주세요':`선택 · 여울의 물고기 기록 ${n}/3 · 어종마다 좋아하는 물 깊이가 달라요`):
+  w.rod?'선택 · 낚시: 낚시터 입구로 가서 자리 A·B·C에서 낚시해요':wood>=3?'선택 · 낚시: 원목 3개가 있어요 · 낚시터 입구에서 낚싯대를 만들어요':'선택 · 낚시: 잔빛숲 나무를 베어 원목 3개를 모으면 낚싯대를 만들 수 있어요';
  const sp=el.querySelector('span');if(sp&&sp.textContent!==t)sp.textContent=t;
 }
+
+// ---- 여울 '물고기 기록' (선택 의뢰, 2026-11-28 알돌 확정 · 여울 안)
+// 수락·진행·완료 대사는 06_흙별_NPC별_최종대사목록_M0 의 여울 7~9번 줄 그대로 (음성 yeoul-07~09).
+const YEOUL_RECORD_LINES=Object.freeze({accept:{text:'강에서 물고기 3종만 기록해 줄래?',voice:7,tag:'퀘스트 수락'},progress:{text:'어종마다 좋아하는 물 깊이가 달라.',voice:8,tag:'퀘스트 진행'},done:{text:'이 기록이면 옛 물길을 찾을 수 있어!',voice:9,tag:'퀘스트 완료'}});
+function ssYeoulRecordSay(kind){
+ const L=YEOUL_RECORD_LINES[kind],line=document.getElementById('ssNpcLine'),prog=document.getElementById('ssNpcProg');
+ if(line)line.textContent='“'+L.text+'”';if(prog)prog.textContent='물고기 기록 · '+L.tag;
+ try{ssNpcPlayVoice('yeoul',L.voice);}catch(_){}
+}
+function ssYeoulRecordRender(){
+ const dlg=document.getElementById('dialog');if(!dlg||!game?.livingP0)return;
+ let box=document.getElementById('yeoulRecord');
+ if(!box){const stack=dlg.querySelector('.stack');if(!stack)return;stack.insertAdjacentHTML('beforebegin','<section id="yeoulRecord" class="yeoul-record" aria-label="여울의 물고기 기록 의뢰"></section>');box=document.getElementById('yeoulRecord');}
+ const w=game.livingP0,q=w.river.record.quest,done=livingRiverMarked(w),n=livingFishRecordCount(w);
+ const dex=LIVING_FISH_ORDER.map(id=>`<span class="rec-fish ${w.fishDex.includes(id)?'on':''}">${w.fishDex.includes(id)?'✓':'·'} ${LIVING_FISH[id].name}</span>`).join('');
+ let note,btn='';
+ if(done){note='기록 완료 · 물살 관찰 표식이 도래 낚시터에 남아 있어요.';btn='<button type="button" class="ghost" data-yrec="done">완료 이야기 다시 듣기</button>';}
+ else if(q!==1){note='선택 의뢰예요. 예전 도감도 인정하고, 물고기를 내지 않아요. 보상: 물살 관찰 표식.';btn='<button type="button" class="cta" data-yrec="accept">📜 의뢰 받기</button>';}
+ else if(n<3){note='도감에 강 어종 3종이 모이면 여울에게 보여 주세요. 물고기는 쓰지 않아요.';btn='<button type="button" class="ghost" data-yrec="progress">진행 이야기 듣기</button>';}
+ else{note='3종이 모두 기록됐어요. 물고기는 쓰지 않아요.';btn='<button type="button" class="cta" data-yrec="claim">📖 기록 보여 주기</button>';}
+ box.innerHTML=`<strong>📜 물고기 기록 <small>${done?'완료':q===1?`기록 ${n}/3`:'선택 의뢰'}</small></strong><div class="rec-dex">${dex}</div><p>${note}</p>${btn}`;
+ box.querySelectorAll('[data-yrec]').forEach(b=>b.onclick=e=>{e.preventDefault();ssYeoulRecordAct(b.dataset.yrec);});
+}
+function ssYeoulRecordAct(act){
+ if(act==='progress'||act==='done'){ssYeoulRecordSay(act);return;}
+ const r=livingVenueCommand(act==='accept'?'river.record.accept':'river.record.claim','self');
+ if(!r.ok){flash(r.reason);try{playSound('ui_error');}catch(_){}ssYeoulRecordRender();return;}
+ flash(r.message);
+ if(act==='accept')ssYeoulRecordSay('accept');
+ else{ssYeoulRecordSay('done');try{playSound('level_up');}catch(_){}}
+ ssYeoulRecordRender();try{ssFishTownTip();}catch(_){}
+}
+window.__sandstarFishRecord=Object.freeze({
+ state:()=>{const w=game?.livingP0;return w?{quest:w.river.record.quest,seen:w.river.record.seen,rewards:[...w.river.rewards],count:livingFishRecordCount(w),marked:livingRiverMarked(w),dex:[...w.fishDex]}:null;},
+ lines:()=>JSON.parse(JSON.stringify(YEOUL_RECORD_LINES))
+});

@@ -500,14 +500,20 @@ function ssRiverFlowTick(dt,notify){
  const st=ssRiverFlowStageNow();let changed=false;
  if(st>r.flow.stage){r.flow.stage=st;if(st===2)r.flow.stage2Entry=game.fishingWorldV1?.entryCount||0;changed=true;}
  if(notify&&r.flow.seen<r.flow.stage){r.flow.seen=r.flow.stage;changed=true;fishingWorldToast(RIVER_FLOW_NOTES[r.flow.stage]);}
+ // 여울의 물살 관찰 표식: one notice the first time the marks are seen (after any flow notice has been read)
+ else if(notify&&!fwToastUntil&&livingRiverMarked(game.livingP0)&&!r.record.seen){r.record.seen=true;changed=true;fishingWorldToast('🧭 여울의 물살 관찰 표식 · 자리마다 물길 표식이 남았어요');}
  ssRiverFlowSaveT+=dt;
  if(changed||ssRiverFlowSaveT>10){ssRiverFlowSaveT=0;saveGame(true);}
 }
 function ssRiverFlowLogHtml(){
  const f=ssRiverState()?.flow;if(!f)return '';
  const notes=f.seen>0?RIVER_FLOW_NOTES.slice(1,f.seen+1):[RIVER_FLOW_NOTES[0]];
- return '<b>물길 관찰 기록</b><ul>'+notes.map(n=>`<li>${n}</li>`).join('')+'</ul>';
+ let html='<b>물길 관찰 기록</b><ul>'+notes.map(n=>`<li>${n}</li>`).join('')+'</ul>';
+ const w=game?.livingP0;
+ if(livingRiverMarked(w))html+='<b>🧭 물살 관찰 표식 (여울의 물고기 기록)</b><ul class="river-marks">'+Object.keys(RIVER_MARK_NOTES).map(id=>`<li data-mark="${id}">${RIVER_MARK_NOTES[id]} · 낚은 수 ${livingInt(w.river.spots[id])}</li>`).join('')+'</ul>';
+ return html;
 }
+const RIVER_MARK_NOTES=Object.freeze({A:'A 완만한 강가 · 수초 옆 얕은 물 · 피라미가 자주 보여요',B:'B 깊은 소 · 바닥 가까이 큰 그림자 · 비단잉어 크기 기록에 좋아요',C:'C 좁은 물살 · 바위 뒤 이동선 앞 · 강농어가 물살을 타요'});
 function ssRiverFlowOverlay(c,W,H,surf,bot,t,s){
  const st=s.stage||0;
  if(ssRiver.spot==='C'&&st>=1){ // livelier, lighter current where the spring water arrives

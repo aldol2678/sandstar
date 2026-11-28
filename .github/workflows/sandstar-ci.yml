@@ -144,6 +144,7 @@ jobs:
           node tools/fishing-s1/qa/keep-flow.cjs http://127.0.0.1:8752/ qa-out/fishing-s1 pc
           node tools/fishing-s1/qa/flow-stages.cjs http://127.0.0.1:8752/ qa-out/fishing-s1 pc
           node tools/fishing-s1/qa/followups.cjs http://127.0.0.1:8752/ qa-out/fishing-s1 pc
+          node tools/fishing-s1/qa/record-flow.cjs http://127.0.0.1:8752/ qa-out/fishing-s1 pc
       - name: Upload no-hook logs and screenshots
         if: always()
         uses: actions/upload-artifact@v4

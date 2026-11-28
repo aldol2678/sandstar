@@ -8,6 +8,10 @@
 // transitions and saves are renderer-independent (map x → three X, map y → three Z).
 var FISH_WORLD_ID='fishing_01',FW_W=30,FW_H=22,FW_TILE=32;
 var FW_GATE={x:2.6,y:11},FW_SPAWN={x:6.4,y:11};
+// 여울의 물살 관찰 표식 (물고기 기록 보상): the old water path C → B → A drawn on the water, plus a flag per spot
+var FW_MARK_PATH=[[23.6,18.1],[21.6,14.6],[20.2,10.4],[18.4,11.6],[16.6,13.4],[15.4,14.8]];
+function fwMarkPoints(step){const out=[];for(let i=0;i<FW_MARK_PATH.length-1;i++){const [x0,y0]=FW_MARK_PATH[i],[x1,y1]=FW_MARK_PATH[i+1],L=Math.hypot(x1-x0,y1-y0),n=Math.max(1,Math.round(L/step));for(let k=0;k<n;k++){const u=(k+.5)/n;out.push({x:x0+(x1-x0)*u,y:y0+(y1-y0)*u,a:Math.atan2(y1-y0,x1-x0)});}}return out;}
+function fwMarked(){return typeof livingRiverMarked==='function'&&livingRiverMarked(game?.livingP0);}
 var FW_SPOTS=Object.freeze({
  A:{x:12.6,y:15.2,face:'right',label:'A 완만한 강가'},
  B:{x:19.2,y:8,face:'right',label:'B 깊은 소'},
@@ -221,13 +225,14 @@ function fishingWorldDraw2D(){
  for(const [tx,ty] of [[6,4],[9,3.2],[4,18],[8,19.4],[10.5,6.5]]){c.fillStyle='#5a3f28';c.fillRect(X(tx)-4,Y(ty),8,S*.6);c.fillStyle='#3f7a4f';c.beginPath();c.arc(X(tx),Y(ty)-4,S*.62,0,Math.PI*2);c.fill();}
  // gate
  c.fillStyle='#6a4d31';c.fillRect(X(1.6),Y(9.6),6,2.8*S);c.fillRect(X(1.6),Y(9.6),S*1.2,6);c.fillStyle='#fff0bb';c.font='900 11px system-ui';c.textAlign='center';c.fillText('🚪 마을',X(2.4),Y(9.3));
+ if(fwMarked()){c.save();c.strokeStyle='#bff3ea';c.lineWidth=2.5;for(const [i,p] of fwMarkPoints(1.1).entries()){c.globalAlpha=.45+.45*((Math.sin(t*3-i*.7)+1)/2);const x=X(p.x),y=Y(p.y),ca=Math.cos(p.a),sa=Math.sin(p.a),k=S*.28;c.beginPath();c.moveTo(x-ca*k-sa*k,y-sa*k+ca*k);c.lineTo(x,y);c.lineTo(x-ca*k+sa*k,y-sa*k-ca*k);c.stroke();}c.restore();}
  // spot markers
- const near=fishingWorldNearSpot(),att=game?.livingP0?.river?.attempt;
+ const near=fishingWorldNearSpot(),att=game?.livingP0?.river?.attempt,mk=fwMarked()?' 🧭':'';
  for(const [id,s] of Object.entries(FW_SPOTS)){
   const on=id===near,pulse=1+.08*Math.sin(t*4);
   c.strokeStyle=on?'#ffe28a':'#fff6d2cc';c.lineWidth=on?3:2;c.setLineDash(on?[]:[5,4]);c.beginPath();c.ellipse(X(s.x),Y(s.y),S*.8*pulse,S*.45*pulse,0,0,Math.PI*2);c.stroke();c.setLineDash([]);
-  c.fillStyle='#183e42e6';const w=c.measureText(s.label).width+16;c.fillRect(X(s.x)-w/2,Y(s.y)-S*1.35,w,18);
-  c.fillStyle=att&&att.spot===id?'#ffb48a':'#fff0bb';c.fillText(s.label+(att&&att.spot===id?' · 걸림':''),X(s.x),Y(s.y)-S*1.35+13);
+  c.fillStyle='#183e42e6';const w=c.measureText(s.label+mk).width+16;c.fillRect(X(s.x)-w/2,Y(s.y)-S*1.35,w,18);
+  c.fillStyle=att&&att.spot===id?'#ffb48a':'#fff0bb';c.fillText(s.label+mk+(att&&att.spot===id?' · 걸림':''),X(s.x),Y(s.y)-S*1.35+13);
  }
  // shadows hinting fish (decoration only)
  c.fillStyle='#10303a66';for(let i=0;i<5;i++){const x=16+((t*.25*(i%2?1:-1)+i*2.6)%11+11)%11,y=4+i*2.8;c.beginPath();c.ellipse(X(x),Y(y),6+i*2,3+i*.6,0,0,Math.PI*2);c.fill();}
@@ -315,6 +320,15 @@ function fw3Build(){
   ring.rotation.x=-Math.PI/2;ring.position.set(sp.x,fw3Floor(sp.x,sp.y)+.04,sp.y);st.scene.add(ring);st.rings[id]=ring;
   st.labels[id]={pos:new T.Vector3(sp.x,fw3Floor(sp.x,sp.y)+3.1,sp.y),cache:{},cur:null};
  }
+ // 물살 관찰 표식 (hidden until the record reward): chevrons along the old water path + a flag at each spot
+ st.marks=new T.Group();st.markChevrons=[];st.scene.add(st.marks);
+ for(const p of fwMarkPoints(1.1)){const g=new T.Group(),mat=new T.MeshBasicMaterial({color:0xbff3ea,transparent:true,opacity:.7,depthWrite:false});
+  for(const sgn of [1,-1]){const b=new T.Mesh(new T.BoxGeometry(.42,.02,.07),mat);b.position.set(-.13,0,sgn*.13);b.rotation.y=sgn*.75;g.add(b);}
+  g.position.set(p.x,-.08,p.y);g.rotation.y=-p.a;st.marks.add(g);st.markChevrons.push(mat);}
+ for(const [id,sp] of Object.entries(FW_SPOTS)){const fx=sp.x+.95,fz=sp.y-.75,fy=fw3Floor(sp.x,sp.y);
+  const pole=new T.Mesh(new T.BoxGeometry(.07,1.25,.07),fw3Mat(0x6a4d31));pole.position.set(fx,fy+.62,fz);st.marks.add(pole);
+  const flag=new T.Mesh(new T.PlaneGeometry(.55,.34),new T.MeshBasicMaterial({color:0x4fd1c5,side:T.DoubleSide}));flag.position.set(fx+.28,fy+1.08,fz);st.marks.add(flag);}
+ st.marks.visible=false;
  // fish shadows under the surface (decoration; the fishing view decides real fish)
  for(let i=0;i<6;i++){const m=new T.Mesh(new T.CircleGeometry(.5,14),new T.MeshBasicMaterial({color:0x0e2a33,transparent:true,opacity:.45,depthWrite:false}));m.rotation.x=-Math.PI/2;m.scale.set(1+i*.25,.45+i*.08,1);m.position.y=-.5;st.scene.add(m);st.fish.push({m,cx:17+((i*2.3)%10),cz:4+i*2.4,r:1.2+i*.4,sp:.25+i*.05,ph:i});}
  // player: walk-sheet billboard + blob shadow
@@ -331,7 +345,7 @@ function fw3PlaceLabels(near,att){
  for(const [id,L] of Object.entries(st.labels)){
   if(id==='gate')continue;
   const sp=FW_SPOTS[id],hooked=att&&att.spot===id,full=id===near||hooked||Math.hypot(fwPlayer.x-sp.x,fwPlayer.y-sp.y)<9;
-  const text=full?sp.label+(hooked?' · 걸림':''):id+(hooked?' · 걸림':'');
+  const mk=fwMarked()?' 🧭':'',text=full?sp.label+mk+(hooked?' · 걸림':''):id+mk+(hooked?' · 걸림':'');
   let lab=L.cache[text];if(!lab){lab=fw3Label(text,hooked?'#ffb48a':null);lab.position.copy(L.pos);L.cache[text]=lab;}
   for(const other of Object.values(L.cache))other.visible=false;
   // try the tag above the ring first, then just over the ring (keeps far spots findable)
@@ -368,6 +382,7 @@ function fw3Render(){
  st.cGlow.material.opacity=fstage>=2?.22:fstage>=1?.14:0;
  st.ripples.forEach((m,i)=>{const k=(t*.45+i/3)%1;m.visible=fstage>=2;m.scale.set(1+k*3,1+k*3,1);m.material.opacity=(1-k)*.6;});
  st.aClear.material.opacity=fstage>=3?.2:0;st.flowStage=fstage;
+ const marked=fwMarked();st.marks.visible=marked;st.drawnMarks=marked;if(marked)st.markChevrons.forEach((m,i)=>{m.opacity=.35+.5*((Math.sin(t*3-i*.7)+1)/2);});
  st.water.position.y=-.12+Math.sin(t*1.2)*.015;
  st.renderer.render(st.scene,st.camera);
 }
@@ -401,7 +416,7 @@ function fw3Render(){
  window.addEventListener('resize',()=>{if(fishingWorldActive){fishingWorldResize();fishingWorldDraw();}});
 })();
 window.__sandstarFishingWorld=Object.freeze({
- state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,labels:fw3?.labelState||null,flow:JSON.parse(JSON.stringify(game?.livingP0?.river?.flow||null)),drawnFlowStage:fw3?.flowStage??null,
+ state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,labels:fw3?.labelState||null,flow:JSON.parse(JSON.stringify(game?.livingP0?.river?.flow||null)),drawnFlowStage:fw3?.flowStage??null,drawnMarks:fw3?.drawnMarks??null,
   frameMs:fwFrameMs.length?(()=>{const a=[...fwFrameMs].sort((x,y)=>x-y);return {median:+a[a.length>>1].toFixed(1),p90:+a[Math.floor(a.length*.9)].toFixed(1),n:a.length};})():null,nearSpot:fishingWorldNearSpot(),nearGate:fishingWorldNearGate(),
   action:document.getElementById('fishWorldAction')?.textContent||'',saved:JSON.parse(JSON.stringify(game?.fishingWorldV1||null)),spots:FW_SPOTS,gate:FW_GATE}),
  testMove:(x,y)=>{if(!fishingWorldActive||fishingWorldBlocked(x,y))return false;fwPlayer.x=x;fwPlayer.y=y;game.fishingWorldV1.position={x,y};fishingWorldRefreshHud();fishingWorldDraw();return true;},

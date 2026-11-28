@@ -72,6 +72,11 @@ CSS = """<style id="river-s1-style">
 .fish-preview{display:block;margin-top:4px;color:#d6f0c8;font-weight:700}
 .living-sell-note{font-size:11px;opacity:.85}
 .t25-fish-tip{margin-top:6px;font-size:12px;opacity:.95;white-space:normal}
+.yeoul-record{margin:8px 0 10px;padding:10px 12px;border-radius:12px;background:#163a40;border:1px solid #4f8f8a;color:#eaf7f2}
+.yeoul-record strong{display:flex;justify-content:space-between;gap:8px;font-size:14px}.yeoul-record small{font-weight:700;color:#ffe28a}
+.yeoul-record .rec-dex{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.yeoul-record .rec-fish{padding:3px 8px;border-radius:999px;background:#0e2a30;font-size:12px;opacity:.7}
+.yeoul-record .rec-fish.on{opacity:1;background:#2c6b5f;color:#fff}.yeoul-record p{margin:4px 0 8px;font-size:12px;line-height:1.45}.yeoul-record button{width:100%;min-height:44px}
+.river-marks li{color:#bff3ea}
 #app.fish-world-active #ssHubBackdrop{z-index:92}#app.fish-world-active #ssHub{z-index:93}#app.fish-world-active #overlay{z-index:94}
 #app.ss-portal-transition #fishWorldRoot{pointer-events:none!important}
 </style>
@@ -137,14 +142,14 @@ def patch(html):
     replace(" return livingGrowPlots(state);\n}", " state.river=livingRiverNormalize(raw.river);\n return livingGrowPlots(state);\n}")
     replace(" switch(kind){\n  case 'tree.cut':{", " let riverExtra=null;\n switch(kind){\n  case 'tree.cut':{")
     replace("  default:return bad('지원하지 않는 행동이에요');",
-            "  case 'river.hook':case 'river.catch':case 'fish.keep':{const res=livingRiverCommand(state,cmd,kind,bad,hasBuff);if(res.ok===false)return res;message=res.message;riverExtra=res;break;}\n"
+            "  case 'river.hook':case 'river.catch':case 'fish.keep':case 'river.record.accept':case 'river.record.claim':{const res=livingRiverCommand(state,cmd,kind,bad,hasBuff);if(res.ok===false)return res;message=res.message;riverExtra=res;break;}\n"
             "  default:return bad('지원하지 않는 행동이에요');")
     replace(" return {ok:true,state,inv,coins:context.coins+award,message};\n}",
             " return {ok:true,state,inv,coins:context.coins+award,message,...(riverExtra?{river:riverExtra}:{})};\n}")
 
     # --- 남길 수량: selling, cooking and the fisher only use fish above the kept count
     replace("const anywhereFood=cmd.type==='food.eat'&&cmd.target==='self';",
-            "const anywhereFood=(cmd.type==='food.eat'||cmd.type==='fish.keep')&&cmd.target==='self';")
+            "const anywhereFood=(cmd.type==='food.eat'||cmd.type==='fish.keep'||cmd.type==='river.record.accept'||cmd.type==='river.record.claim')&&cmd.target==='self';")
     replace("   const short=livingRecipeShortfall(state.bag,cmd.item);if(short.length)return bad('재료가 부족해요: '+livingShortfallText(short));",
             "   const short=livingRecipeShortfall(livingFreeBag(state),cmd.item);if(short.length)return bad('재료가 부족해요'+(livingFishCount(state.bag)>livingFishCount(livingFreeBag(state))&&short.some(x=>x.item==='fish')?' (남길 물고기 제외)':'')+': '+livingShortfallText(short));\n"
             "   if(cmd.fish!==undefined&&(!livingOwn(LIVING_FISH,cmd.fish)||livingFishFree(state,cmd.fish)<1))return bad('고른 물고기를 쓸 수 없어요 (남김 또는 부족)');")
@@ -184,6 +189,8 @@ def patch(html):
 
     # --- QA 1차: wood listed in the bag's 생활 tab, optional fishing tip under the town objective
     replace("<small>${labels[selected.category]}</small><p>${selected.details}</p>", "<small>${selected.categoryLabel||labels[selected.category]}</small><p>${selected.details}</p>")
+    replace(" if(npc.story)$('ssNpcStoryBtn').onclick=()=>{ssNpcStopVoice();ssM1Talk(npc.story);};\n showLine();\n}",
+            " if(npc.story)$('ssNpcStoryBtn').onclick=()=>{ssNpcStopVoice();ssM1Talk(npc.story);};\n showLine();\n if(id==='yeoul')ssYeoulRecordRender();\n}")
     replace(" return items;\n}\nfunction ssInventoryViewModel(", " {const wd=ssBagWoodEntry();if(wd)items.push(wd);}\n return items;\n}\nfunction ssInventoryViewModel(")
     replace('<div id="t25Quest" class="t25-quest">✦ <span id="t25QuestText">마을 지도에서 광산 입구를 찾으세요.</span></div>',
             '<div id="t25Quest" class="t25-quest">✦ <span id="t25QuestText">마을 지도에서 광산 입구를 찾으세요.</span></div><div id="t25FishTip" class="t25-quest t25-fish-tip" hidden>🎣 <span></span></div>')

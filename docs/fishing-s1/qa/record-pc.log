@@ -1,0 +1,23 @@
+PASS pc: 여울 near the fishing gate offers the optional record request — {"label":"🎣 여울과 대화","b":{"text":"📜 물고기 기록 선택 의뢰 · 은빛 피라미 · 강농어 · 비단잉어 선택 의뢰예요. 예전 도감도 인정하고, 물고기를 내지 않아요. 보상: 물살 관찰 표식. 📜 의뢰 받기","btn":"accept","line":"“물소리는 다 비슷해도 방향은 다르지.”","prog":"첫 만남 1/3"}}
+PASS pc: accept: quest saved, official accept line shown — {"r":{"quest":1,"seen":false,"rewards":[],"count":0,"marked":false,"dex":[]},"b":{"text":"📜 물고기 기록 기록 0/3 · 은빛 피라미 · 강농어 · 비단잉어 도감에 강 어종 3종이 모이면 여울에게 보여 주세요. 물고기는 쓰지 않아요. 진행 이야기 듣기","btn":"progress","line":"“강에서 물고기 3종만 기록해 줄래?”","prog":"물고기 기록 · 퀘스트 수락"}}
+PASS pc: progress talk uses the official progress line — “어종마다 좋아하는 물 깊이가 달라.”
+PASS pc: town HUD tip shows record progress 0/3 — {"hidden":false,"text":"🎣 선택 · 여울의 물고기 기록 0/3 · 어종마다 좋아하는 물 깊이가 달라요"}
+PASS pc: engine refuses the reward before 3 species — 아직 기록이 0/3이에요
+PASS pc: engine refuses accepting twice — 이미 받은 의뢰예요
+PASS pc: catching the 3rd species makes the claim valid — {"cl":"물살 관찰 표식을 받았어요 · 도래 낚시터에 남았어요"}
+PASS pc: 3/3 recorded: tip asks to show the record to 여울 — {"hidden":false,"text":"🎣 선택 · 물고기 기록 3/3 · 여울에게 기록을 보여 주세요"}
+PASS pc: old dex counts: 3/3 and the claim button is offered — {"text":"📜 물고기 기록 기록 3/3 ✓ 은빛 피라미 ✓ 강농어 ✓ 비단잉어 3종이 모두 기록됐어요. 물고기는 쓰지 않아요. 📖 기록 보여 주기","btn":"claim","line":"“나는 여울이야. 강의 흐름을 찾는 어부야.”","prog":"첫 만남 2/3"}
+PASS pc: claim: official done line, reward id saved once — {"r":{"quest":1,"seen":false,"rewards":["river-record-marks-1"],"count":3,"marked":true,"dex":["river_fish","perch","carp"]},"b":{"text":"📜 물고기 기록 완료 ✓ 은빛 피라미 ✓ 강농어 ✓ 비단잉어 기록 완료 · 물살 관찰 표식이 도래 낚시터에 남아 있어요. 완료 이야기 다시 듣기","btn":"done","line":"“이 기록이면 옛 물길을 찾을 수 있어!”","prog":"물고기 기록 · 퀘스트 완료"}}
+PASS pc: no fish used and no coins given — {"c0":50,"c1":50,"bag0":[2,0,0],"bag1":[2,0,0]}
+PASS pc: engine refuses a second reward — 이미 받은 보상이에요
+PASS pc: tip leaves once the reward is taken — {"hidden":true,"text":"🎣 선택 · 물고기 기록 3/3 · 여울에게 기록을 보여 주세요"}
+PASS pc: quest and reward persist after reload — {"quest":1,"seen":false,"rewards":["river-record-marks-1"],"count":3,"marked":true,"dex":["river_fish","perch","carp"]}
+PASS pc: fishing ground draws the 물살 관찰 표식 and labels carry 🧭 — {"renderer":"three","drawn":true,"labels":{"A":"A 완만한 강가 🧭","B":"","C":""}}
+PASS pc: first visit after the reward: one notice, then marked seen — {"toast":"🧭 여울의 물살 관찰 표식 · 자리마다 물길 표식이 남았어요","seen":true}
+PASS pc: spot label shows the mark — {"A":"A 완만한 강가 🧭","B":"B 🧭","C":"C 🧭"}
+PASS pc: fishing view observation log lists the marks for A·B·C — 물길 관찰 기록C 물살이 약해요. 잔빛숲 별샘과 이어져 있는 것 같아요.🧭 물살 관찰 표식 (여울의 물고기 기록)A 완만한 강가 · 수초 옆 얕은 물 · 피라미가 자주 보여요 · 낚은 수 0B 깊은 소 · 바닥 가까이 큰 그림자 · 비단잉어 크기 기록에 좋아요 · 낚은 수 0C 좁은 물살 · 바위 뒤 이동선 앞 · 강농어가 물살을 타요 · 낚은 수 0
+PASS pc: save without record keys → quest 0, no reward, no marks drawn — {"r":{"quest":0,"seen":false,"rewards":[],"count":3,"marked":false,"dex":["river_fish","perch","carp"]},"drawn":false}
+PASS pc: reward list keeps known ids once; bad quest/seen values normalize — {"quest":0,"seen":true,"rewards":["river-record-marks-1"],"count":3,"marked":true,"dex":["river_fish","perch","carp"]}
+PASS pc: record box fits the screen; button ≥ 44px — {"bh":44,"l":423,"r":857,"vw":1280}
+PASS pc: no page errors
+22 pass, 0 fail
