@@ -20,6 +20,13 @@ function ssAffinityDay(now = Date.now()) {
   return new Date(now + 4 * 3600000).toISOString().slice(0, 10);
 }
 
+// Use the already-shifted game day so Monday 04:59 and 05:00 fall in different weeks.
+function ssAffinityWeek(day) {
+  const monday = new Date(day + 'T00:00:00Z');
+  monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+  return monday.toISOString().slice(0, 10);
+}
+
 function ssAffinityLevel(points) {
   return SS_AFFINITY_THRESHOLDS.filter(min => points >= min).length;
 }
@@ -34,15 +41,20 @@ function ssAffinityNormalize(raw) {
   for (const id of Object.keys(SS_AFFINITY_NOTES)) {
     const old = npc[id];
     const points = ssAffinityCount(old?.points, 180);
-    npc[id] = { ...old, points, level: ssAffinityLevel(points) };
+    const profile = SS_AFFINITY_RESIDENTS[id];
+    const tastes = Object.keys(profile.gifts).filter(item => Array.isArray(old?.tastes) && old.tastes.includes(item));
+    const choice = profile.choices.find(c => c.id === old?.memory);
+    npc[id] = { ...old, points, level: ssAffinityLevel(points), tastes,
+      giftWeek: typeof old?.giftWeek === 'string' ? old.giftWeek : '',
+      memory: choice?.id || '', recalled: !!choice && old.recalled === true };
   }
   return { ...raw, v: 1, npc, tickets: ssAffinityCount(raw?.tickets, 30),
     dayKey: typeof raw?.dayKey === 'string' ? raw.dayKey : '',
     deliveryPoints: ssAffinityCount(raw?.deliveryPoints, 10) };
 }
 
-// Returns a new state only when points actually change. The caller owns the save.
-function ssAffinityGain(state, id, source, day) {
+// A gift may still teach a taste at the point cap. The caller commits the full transaction.
+function ssAffinityGain(state, id, source, day, item) {
   if (state.v !== 1 || !Object.hasOwn(SS_AFFINITY_NOTES, id) || day < state.dayKey) return null;
   const resident = state.npc[id];
   const deliveries = day === state.dayKey ? state.deliveryPoints : 0;
@@ -52,12 +64,20 @@ function ssAffinityGain(state, id, source, day) {
     gain = 6;
   } else if (source === 'delivery') {
     gain = Math.min(2, 10 - deliveries);
+  } else if (source === 'gift') {
+    const profile = SS_AFFINITY_RESIDENTS[id];
+    if (!Object.hasOwn(profile.gifts, item) || resident.giftWeek >= ssAffinityWeek(day)) return null;
+    gain = item === profile.favorite ? 10 : 4;
   } else return null;
   const points = Math.min(180, resident.points + gain);
-  if (points === resident.points) return null;
+  if (points === resident.points && source !== 'gift') return null;
   const level = ssAffinityLevel(points);
   const next = { ...resident, points, level };
   if (source === 'talk') next.greetedDay = day;
+  if (source === 'gift') {
+    next.giftWeek = ssAffinityWeek(day);
+    next.tastes = [...new Set([...resident.tastes, item])];
+  }
   return { ...state, npc: { ...state.npc, [id]: next }, dayKey: day,
     deliveryPoints: deliveries + (source === 'delivery' ? points - resident.points : 0),
     tickets: Math.min(30, state.tickets + (level - resident.level) * 2) };
@@ -70,20 +90,105 @@ function ssAffinityAtResident(id) {
   return target?.npc === id && t25Distance(target) <= 2.65;
 }
 
+function ssAffinityGiftCount(world, item) {
+  if (Object.hasOwn(LIVING_FISH, item) && typeof livingFishFree === 'function')
+    return livingFishFree(world.livingP0, item);
+  if (Object.hasOwn(LIVING_ITEM_NAMES, item)) return livingInt(world.livingP0.bag[item]);
+  return sellableOreCount(item, world);
+}
+
+function ssAffinityGive(npc, item) {
+  const profile = SS_AFFINITY_RESIDENTS[npc.id];
+  if (!Object.hasOwn(profile.gifts, item) || !ssAffinityAtResident(npc.id)) return '주민 곁에서 건넬 수 있어요.';
+  let notice = '이번 주 선물은 이미 건넸어요.';
+  let gain = 0;
+  const ok = safeMarketTransaction(world => {
+    const next = ssAffinityGain(world.affinity, npc.id, 'gift', ssAffinityDay(), item);
+    if (!next) return false;
+    if (ssAffinityGiftCount(world, item) < 1) {
+      notice = '건넬 수 있는 물건이 없어요.';
+      return false;
+    }
+    const bag = Object.hasOwn(LIVING_ITEM_NAMES, item) ? world.livingP0.bag : world.inv;
+    bag[item]--;
+    gain = next.npc[npc.id].points - world.affinity.npc[npc.id].points;
+    world.affinity = next;
+    notice = '선물을 저장하지 못했어요. 다시 건네 주세요.';
+    return true;
+  });
+  if (!ok) return notice;
+  return npc.name + ' “' + profile.gifts[item] + '” · ' + (item === profile.favorite ? '특히 좋아하는 선물' : '좋아하는 선물') + (gain ? ' · 호감도 +' + gain : '');
+}
+
+function ssAffinityChoose(npc, choice) {
+  const old = game.affinity, resident = old.npc[npc.id];
+  if (resident.level < 2 || resident.memory || !SS_AFFINITY_RESIDENTS[npc.id].choices.includes(choice)) return '';
+  game.affinity = { ...old, npc: { ...old.npc, [npc.id]: { ...resident, memory: choice.id, recalled: false } } };
+  if (saveGame(true)) return npc.name + ' “' + choice.reply + '”';
+  game.affinity = old;
+  return '이야기를 저장하지 못했어요. 다시 골라 주세요.';
+}
+
+function ssAffinityGiftSection(npc, resident, day) {
+  const profile = SS_AFFINITY_RESIDENTS[npc.id];
+  const given = ssAffinityWeek(day) <= resident.giftWeek;
+  const label = id => LIVING_ITEM_NAMES[id] || MATERIAL_NAMES[id];
+  const choices = Object.keys(profile.gifts).sort((a,b) => label(a).localeCompare(label(b),'ko'));
+  const buttons = choices.map(item => {
+    const count = ssAffinityGiftCount(game, item);
+    const stock = Object.hasOwn(LIVING_ITEM_NAMES, item) ? game.livingP0.bag : game.inv;
+    const reserved = Math.max(0, livingInt(stock[item]) - count);
+    return '<button class="ghost" type="button" data-affinity-gift="' + item + '"'
+      + (given || count < 1 || day < game.affinity.dayKey ? ' disabled' : '') + '>' + label(item)
+      + ' 1개 건네기 · 가능 ' + count + '개' + (reserved ? ' (보관 ' + reserved + '개)' : '') + '</button>';
+  }).join('');
+  const discoveries = resident.tastes.map(item => label(item) + (item === profile.favorite ? ' ♥ 특히 좋아함' : ' · 좋아함'));
+  let status = given ? '이번 주 선물 전달 완료' : '주민마다 주 1회 · 월요일 오전 5시 갱신';
+  if (!given && resident.points < 180) status += ' · 취향에 따라 +4 또는 +10점';
+  if (resident.points === 180) status += ' · 최고 단계에서는 취향만 기록해요.';
+  return '<section><h3>선물</h3><blockquote>' + profile.hint + '</blockquote><p>' + status + '</p>'
+    + '<div class="ss-affinity-choices">' + buttons + '</div>'
+    + (discoveries.length ? '<p>알게 된 취향 · ' + discoveries.join(' / ') + '</p>' : '') + '</section>';
+}
+
+function ssAffinityMomentSection(profile, resident) {
+  const choice = profile.choices.find(c => c.id === resident.memory);
+  if (choice) return '<section><h3>' + profile.title + '</h3><p>내 선택 · ' + choice.label + '</p><blockquote>'
+    + choice.reply + '</blockquote></section>';
+  if (resident.level < 2) return '<p>30점에서 함께할 이야기 · ' + profile.title + '</p>';
+  const buttons = profile.choices.map(c => '<button class="ghost" type="button" data-affinity-choice="'
+    + c.id + '">' + c.label + '</button>').join('');
+  return '<section><h3>' + profile.title + '</h3><p>' + profile.prompt + '</p><div class="ss-affinity-choices">'
+    + buttons + '</div></section>';
+}
+
 function ssAffinityPanel(npc, greet = true, notice = '') {
-  const old = game.affinity;
-  if (old.v !== 1 || !Object.hasOwn(SS_AFFINITY_NOTES, npc.id)) return;
-  const candidate = greet && ssAffinityGain(old, npc.id, 'talk', ssAffinityDay());
+  const old = game.affinity, id = npc.id;
+  if (old.v !== 1 || !Object.hasOwn(SS_AFFINITY_NOTES, id)) return;
+  const profile = SS_AFFINITY_RESIDENTS[id], day = ssAffinityDay();
   let result = notice;
-  if (candidate) {
-    game.affinity = candidate;
-    if (saveGame(true)) {
-      const before = old.npc[npc.id], after = candidate.npc[npc.id];
-      result = '오늘 첫 대화 +' + (after.points - before.points);
-      if (after.level > before.level) result += ' · 새 수첩 기록';
-    } else {
-      game.affinity = old;
-      result = '인사를 저장하지 못했어요. 다시 말을 걸어 주세요.';
+  if (greet) {
+    const before = old.npc[id];
+    const memory = !before.recalled && profile.choices.find(c => c.id === before.memory);
+    const gained = ssAffinityGain(old, id, 'talk', day);
+    let candidate = gained;
+    if (memory) {
+      const state = gained || old;
+      candidate = { ...state, npc: { ...state.npc, [id]: { ...state.npc[id], recalled: true } } };
+    }
+    if (candidate) {
+      game.affinity = candidate;
+      if (saveGame(true)) {
+        const after = candidate.npc[id];
+        const messages = [];
+        if (memory) messages.push(npc.name + ' “' + memory.recall + '”');
+        if (gained) messages.push('오늘 첫 대화 +' + (after.points - before.points));
+        if (after.level > before.level) messages.push('새 수첩 기록');
+        result = messages.join(' · ');
+      } else {
+        game.affinity = old;
+        result = '인사를 저장하지 못했어요. 다시 말을 걸어 주세요.';
+      }
     }
   }
   const state = game.affinity, resident = state.npc[npc.id];
@@ -109,19 +214,35 @@ function ssAffinityPanel(npc, greet = true, notice = '') {
   document.querySelector('.ss-affinity')?.remove();
   document.querySelector('.ss-affinity-result')?.remove();
   $('ssNpcProg').insertAdjacentHTML('afterend',
-    '<details class="ss-affinity"><summary>♥ ' + npc.name + ' · ' + SS_AFFINITY_LEVELS[resident.level - 1]
-    + ' · ' + progress + '점 <small>주민 수첩</small></summary>'
-    + (records ? '<ul>' + records + '</ul>' : '<p>30점이 되면 ' + npc.name + '와의 첫 기록이 열려요.</p>')
+    '<p class="ss-affinity-result" role="status" tabindex="-1"></p>'
+    + '<details class="ss-affinity"><summary>♥ ' + npc.name + ' · ' + SS_AFFINITY_LEVELS[resident.level - 1]
+    + ' · ' + progress + '점 <small>' + (resident.level >= 2 && !resident.memory ? '새 이야기' : '주민 수첩') + '</small></summary>'
+    + ssAffinityMomentSection(profile, resident)
+    + (ssAffinityAtResident(id) ? ssAffinityGiftSection(npc, resident, day) : '')
+    + (records ? '<ul>' + records + '</ul>' : '')
     + '<p>오늘 첫 대화 +6 · 목수·농부·어부 납품 +2 (세 주민 합계 하루 10점) · 매일 오전 5시 갱신</p>'
-    + delivery + '<ul class="ss-affinity-roster">' + roster + '</ul><p>축제 티켓 ' + state.tickets + '장 · 관계 단계가 오르면 2장 (최대 30장)</p></details>'
-    + '<p class="ss-affinity-result" role="status"></p>');
+    + delivery + '<ul class="ss-affinity-roster">' + roster + '</ul><p>축제 티켓 ' + state.tickets + '장 · 관계 단계가 오르면 2장 (최대 30장)</p></details>');
   document.querySelector('.ss-affinity-result').textContent = result;
   if (wasOpen) document.querySelector('.ss-affinity').open = true;
+  const panel = document.querySelector('.ss-affinity');
+  panel.querySelectorAll('[data-affinity-gift]').forEach(button => {
+    button.onclick = () => {
+      ssAffinityPanel(npc, false, ssAffinityGive(npc, button.dataset.affinityGift));
+      document.querySelector('.ss-affinity-result').focus();
+    };
+  });
+  panel.querySelectorAll('[data-affinity-choice]').forEach(button => {
+    button.onclick = () => {
+      const choice = profile.choices.find(c => c.id === button.dataset.affinityChoice);
+      ssAffinityPanel(npc, false, ssAffinityChoose(npc, choice));
+      document.querySelector('.ss-affinity-result').focus();
+    };
+  });
   if (canDeliverHere && $('ssAffinityDeliver')) {
     $('ssAffinityDeliver').onclick = () => {
       const response = livingAction('npc.deliver', order[0], undefined, npc.id);
       ssAffinityPanel(npc, false, response.ok ? response.message : response.reason);
-      document.querySelector('.ss-affinity summary').focus();
+      document.querySelector('.ss-affinity-result').focus();
     };
   }
 }

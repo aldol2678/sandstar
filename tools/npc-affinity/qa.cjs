@@ -129,6 +129,84 @@ async function verify(browser, url, mobile) {
     assert.equal((await snapshot()).affinity.tickets, 2);
     await press('#backBtn'); await visit('sola');
     assert.equal((await snapshot()).affinity.tickets, 2);
+    await press('#backBtn');
+    const social = await snapshot();
+    for (const r of Object.values(social.affinity.npc)) r.points = 40;
+    social.pickaxeForge.rank = 7;
+    social.economy.reserveForgeMaterials = true;
+    social.inv.iron = 4; social.inv.crystal = 2; social.inv.copper = 20; social.inv.orecoal = 3;
+    Object.assign(social.livingP0.bag, {bread:4, wheat:2, carrot:2, carp:2, perch:2, stew:2, potato:2});
+    if (process.argv.includes('--river')) social.livingP0.river.keep.carp = 2;
+    await page.addInitScript(({key,social}) => {
+      if (sessionStorage.getItem('social-fixture')) return;
+      localStorage.setItem(key,JSON.stringify(social));
+      sessionStorage.setItem('social-fixture','1');
+    },{key,social});
+    await page.reload(); await continueWorld(page);
+    const gifts = {
+      harin:['iron','bread'], sola:['carrot','wheat'], yeoul:['perch','perch'],
+      seoon:['crystal','copper'], maru:['stew','potato'], tobak:['orecoal','iron'], gaengi:['orecoal','bread']
+    };
+    const step = mobile ? 1 : 0;
+    for (const [id,pair] of Object.entries(gifts)) {
+      await visit(id);
+      await press('.ss-affinity summary');
+      const item = pair[step], gift = '[data-affinity-gift="' + item + '"]';
+      const options = page.locator('[data-affinity-choice]');
+      assert.equal(await options.count(),2);
+      const choice = await options.nth(step).getAttribute('data-affinity-choice');
+      const number = world => ['iron','crystal','orecoal','copper'].includes(item)
+        ? world.inv[item] : world.livingP0.bag[item];
+      const before = await snapshot();
+      if (id === 'harin') {
+        assert.match(await page.locator('[data-affinity-gift="iron"]').innerText(), /가능 1개.*보관 3개/);
+        await failNextSave(); await press(gift);
+        assert.equal(number(await snapshot()), number(before));
+        assert.deepEqual((await snapshot()).affinity,before.affinity);
+        assert.match(await page.locator('.ss-affinity-result').innerText(), /저장하지 못/);
+      }
+      if (id === 'yeoul' && process.argv.includes('--river'))
+        assert.ok(await page.locator('[data-affinity-gift="carp"]').isDisabled());
+      if (id === 'tobak' && !mobile)
+        assert.ok(await page.locator('[data-affinity-gift="iron"]').isDisabled());
+      await press(gift);
+      const afterGift = await snapshot();
+      assert.equal(number(afterGift),number(before)-1);
+      assert.equal(afterGift.coins,before.coins);
+      assert.equal(afterGift.affinity.npc[id].tastes.join(','),item);
+      assert.ok(await page.locator(gift).isDisabled());
+      assert.match(await page.locator('.ss-affinity-result').innerText(), /호감도 \+/);
+      const select = '[data-affinity-choice="' + choice + '"]';
+      if (id === 'harin') {
+        await failNextSave(); await press(select);
+        assert.equal((await snapshot()).affinity.npc[id].memory,'');
+        assert.equal(await options.count(),2);
+      }
+      await press(select);
+      assert.equal(await options.count(),0);
+      const selected = await snapshot();
+      assert.equal(selected.affinity.npc[id].memory,choice);
+      assert.equal(selected.affinity.npc[id].recalled,false);
+      assert.equal(selected.affinity.npc[id].points,afterGift.affinity.npc[id].points);
+      const immediate = await page.locator('.ss-affinity-result').innerText();
+      await press('#backBtn');
+      if (id === 'harin') { await page.reload(); await continueWorld(page); }
+      await visit(id);
+      const echo = await page.locator('.ss-affinity-result').innerText();
+      assert.ok(echo.includes('“') && echo !== immediate);
+      assert.equal((await snapshot()).affinity.npc[id].recalled,true);
+      await press('.ss-affinity summary');
+      assert.match(await page.locator('.ss-affinity').innerText(), /내 선택/);
+      assert.ok(await page.locator(gift).isDisabled());
+      assert.equal((await snapshot()).affinity.tickets,selected.affinity.tickets);
+      assert.ok(await page.locator('#dialog').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+      await press('#backBtn');
+      if (id === 'harin') {
+        await visit(id);
+        assert.ok(!(await page.locator('.ss-affinity-result').textContent()).includes(echo));
+        await press('#backBtn');
+      }
+    }
     assert.deepEqual(errors, []);
     console.log(mobile ? 'Mobile 390×844 PASS' : 'Desktop 1280×800 PASS');
   } finally { await context.close(); }
