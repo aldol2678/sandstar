@@ -37,7 +37,12 @@ async function exercise(browser, url, mobile, landscape = false) {
   const position = () => page.evaluate(() => window.__sandstarM1.state().player);
   const y = async () => (await position()).y;
   const rope = page.locator('#ropeBtn'), auto = page.locator('#ropeAutoMove');
-  const connect = () => mobile ? rope.tap() : page.keyboard.press('r');
+  async function connect() {
+   if(mobile) return rope.tap();
+   const aim = await page.evaluate(() => window.__sandstarRopeAB.screen());
+   const canvas = await page.locator('#world').boundingBox();
+   await page.mouse.click(canvas.x+aim.x,canvas.y+aim.y-65,{button:'right'});
+  }
   async function hold(key, pressed) {
    if(!mobile) return pressed ? page.keyboard.down(key) : page.keyboard.up(key);
    const box = await page.locator('#mineStick').boundingBox();
@@ -53,6 +58,7 @@ async function exercise(browser, url, mobile, landscape = false) {
   await hold('d',false);
   const tip = await page.locator('#ssMineFeedback').innerText();
   assert.ok(tip.includes(mobile?'이동 패드':'W'));
+  if(!mobile) assert.ok(tip.includes('우클릭'));
   await connect();
   await isActive(true);
   await auto.waitFor({state:'visible'});
@@ -89,7 +95,7 @@ async function exercise(browser, url, mobile, landscape = false) {
   const bank = await position();
   assert.ok(Math.floor(bank.x)!==46 && bank.y<floor-2,'landed on adjacent bank');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({input:mobile?'touch':'keyboard',viewport:page.viewportSize(),tip,mined,floor,held,bank}));
+  console.log(JSON.stringify({input:mobile?'touch':'right-click + keyboard',viewport:page.viewportSize(),tip,mined,floor,held,bank}));
  } finally { await context.close(); }
 }
 
