@@ -61,6 +61,15 @@ CSS = """<style id="river-s1-style">
 #fishWorldCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
 #fishWorldGl{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
 #fishWorldGl[hidden],#fishWorldCanvas[hidden]{display:none!important}
+.keep-step{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
+.keep-step button{min-width:40px;min-height:40px;border-radius:10px;font-weight:900}
+.keep-step b{font-size:12px;min-width:48px;text-align:center}
+.living-sell .market-meta img,.fish-pick img{width:22px;height:22px;vertical-align:middle;image-rendering:pixelated;margin-right:4px}
+.fish-picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fish-pick{min-height:40px;border-radius:10px;padding:4px 8px;font-size:12px}
+.fish-pick.on{outline:3px solid #ffe28a}
+.fish-preview{display:block;margin-top:4px;color:#d6f0c8;font-weight:700}
+.living-sell-note{font-size:11px;opacity:.85}
 #app.fish-world-active #ssHubBackdrop{z-index:92}#app.fish-world-active #ssHub{z-index:93}#app.fish-world-active #overlay{z-index:94}
 #app.ss-portal-transition #fishWorldRoot{pointer-events:none!important}
 </style>
@@ -108,7 +117,7 @@ def patch(html):
     poses = {name: [p["fps"], p["loop"], [[*f["rect"][:2], *f["pivot"], *f["rod_tip"]] for f in p["frame_data"]]] for name, p in poses.items()}
     art = "const ssRiverPoseSpec=" + json.dumps(poses, separators=(",", ":")) + ";\n"
     art += (HERE / 'river-art.js').read_text(encoding='utf8')
-    ui = art + (HERE / 'river-ui.js').read_text(encoding='utf8') + (HERE / 'river-world.js').read_text(encoding='utf8')
+    ui = art + (HERE / 'river-ui.js').read_text(encoding='utf8') + (HERE / 'river-world.js').read_text(encoding='utf8') + (HERE / 'river-keep.js').read_text(encoding='utf8')
     if '</script>' in core or '</script>' in ui:
         raise ValueError('script terminator inside fishing source')
 
@@ -123,12 +132,52 @@ def patch(html):
     replace("fishDex:[],foodBuff:null,appliedIds:[],events:[],energy:LIVING_ENERGY.max,counts:livingFreshCounts()};",
             "fishDex:[],foodBuff:null,appliedIds:[],events:[],energy:LIVING_ENERGY.max,counts:livingFreshCounts(),river:livingRiverFresh()};")
     replace(" return livingGrowPlots(state);\n}", " state.river=livingRiverNormalize(raw.river);\n return livingGrowPlots(state);\n}")
-    replace("let award=0,message='',kind=cmd.type;", "let award=0,message='',kind=cmd.type,riverExtra=null;")
+    replace(" switch(kind){\n  case 'tree.cut':{", " let riverExtra=null;\n switch(kind){\n  case 'tree.cut':{")
     replace("  default:return bad('지원하지 않는 행동이에요');",
-            "  case 'river.hook':case 'river.catch':{const res=livingRiverCommand(state,cmd,kind,bad,hasBuff);if(res.ok===false)return res;message=res.message;riverExtra=res;break;}\n"
+            "  case 'river.hook':case 'river.catch':case 'fish.keep':{const res=livingRiverCommand(state,cmd,kind,bad,hasBuff);if(res.ok===false)return res;message=res.message;riverExtra=res;break;}\n"
             "  default:return bad('지원하지 않는 행동이에요');")
     replace(" return {ok:true,state,inv,coins:context.coins+award,message};\n}",
             " return {ok:true,state,inv,coins:context.coins+award,message,...(riverExtra?{river:riverExtra}:{})};\n}")
+
+    # --- 남길 수량: selling, cooking and the fisher only use fish above the kept count
+    replace("const anywhereFood=cmd.type==='food.eat'&&cmd.target==='self';",
+            "const anywhereFood=(cmd.type==='food.eat'||cmd.type==='fish.keep')&&cmd.target==='self';")
+    replace("   const short=livingRecipeShortfall(state.bag,cmd.item);if(short.length)return bad('재료가 부족해요: '+livingShortfallText(short));",
+            "   const short=livingRecipeShortfall(livingFreeBag(state),cmd.item);if(short.length)return bad('재료가 부족해요'+(livingFishCount(state.bag)>livingFishCount(livingFreeBag(state))&&short.some(x=>x.item==='fish')?' (남길 물고기 제외)':'')+': '+livingShortfallText(short));\n"
+            "   if(cmd.fish!==undefined&&(!livingOwn(LIVING_FISH,cmd.fish)||livingFishFree(state,cmd.fish)<1))return bad('고른 물고기를 쓸 수 없어요 (남김 또는 부족)');")
+    replace("if(item==='fish'){let need=n;for(const f of LIVING_FISH_ORDER){const use=Math.min(need,state.bag[f]);state.bag[f]-=use;need-=use;if(!need)break;}}",
+            "if(item==='fish'){let need=n;const order=cmd.fish?[cmd.fish,...LIVING_FISH_ORDER.filter(f=>f!==cmd.fish)]:LIVING_FISH_ORDER;for(const f of order){const use=Math.min(need,livingFishFree(state,f));state.bag[f]-=use;need-=use;if(!need)break;}}")
+    replace("   if(bag(item)<1)return bad('판매 물품이 없어요');\n   state.bag[item]--;award=prices[item];state.stats.sold++;message='판매 완료 · +'+award+' 크레딧';break;}",
+            "   if(bag(item)<1)return bad('판매 물품이 없어요');\n"
+            "   const sellN=Number.isSafeInteger(cmd.count)&&cmd.count>1?Math.min(cmd.count,999):1,free=livingOwn(LIVING_FISH,item)?livingFishFree(state,item):bag(item);\n"
+            "   if(free<sellN)return bad(livingOwn(LIVING_FISH,item)&&bag(item)>=sellN?`남길 수량(${livingFishKeep(state,item)})을 빼면 ${free}마리만 팔 수 있어요`:'판매 물품이 부족해요');\n"
+            "   state.bag[item]-=sellN;award=prices[item]*sellN;state.stats.sold+=sellN;message='판매 완료 · '+(LIVING_ITEM_NAMES[item]||item)+' '+sellN+'개 · +'+award+' 크레딧';break;}")
+    replace("    if(bag('river_fish')+bag('perch')+bag('carp')<2)return bad('어부에게 물고기 2마리가 필요해요');\n    let need=2;for(const fish of Object.keys(LIVING_FISH)){const use=Math.min(need,state.bag[fish]);",
+            "    if(livingFishCount(livingFreeBag(state))<2)return bad('어부에게 물고기 2마리가 필요해요'+(livingFishCount(state.bag)>=2?' (남길 물고기 제외)':''));\n    let need=2;for(const fish of Object.keys(LIVING_FISH)){const use=Math.min(need,livingFishFree(state,fish));")
+
+    # --- 바람장터 '생활 물품' tab, kitchen fish pick + preview, keep steppers in the living menu
+    replace("  const tabs=[['sell','판매','sell'],['gear','장비','gear'],['reserve','보존','reserve'],['stats','기록','stats']];",
+            "  const tabs=[['sell','판매','sell'],['living','생활 물품','sell'],['gear','장비','gear'],['reserve','보존','reserve'],['stats','기록','stats']];")
+    replace("  }else if(section==='gear'){", "  }else if(section==='living'){\n    content=ssLivingMarketMarkup();\n  }else if(section==='gear'){")
+    replace("document.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellOre(btn.dataset.sell,btn.dataset.qty==='all'?'all':Number(btn.dataset.qty)));",
+            "document.querySelectorAll('[data-sell]').forEach(btn=>btn.onclick=()=>sellOre(btn.dataset.sell,btn.dataset.qty==='all'?'all':Number(btn.dataset.qty)));if(section==='living')ssLivingMarketWire();")
+    replace("  const short=livingRecipeShortfall(w.bag,id);\n  const needs=Object.entries(r.needs).map(([item,n])=>{const have=livingNeedHave(w.bag,item);",
+            "  const short=livingRecipeShortfall(livingFreeBag(w),id);\n  const needs=Object.entries(r.needs).map(([item,n])=>{const have=livingNeedHave(livingFreeBag(w),item);")
+    replace("function fcbCook(id){", "function fcbCook(id,fish){")
+    replace("const cmd={id:'kitchen-'+Date.now()+'-'+(++livingActionSeq),type:'cook.make',target:'kitchen',item:id};",
+            "const cmd={id:'kitchen-'+Date.now()+'-'+(++livingActionSeq),type:'cook.make',target:'kitchen',item:id,...(fish?{fish}:{})};")
+    replace("$('dialog').querySelectorAll('[data-fcb-cook]').forEach(b=>b.onclick=()=>fcbCook(b.dataset.fcbCook));",
+            "$('dialog').querySelectorAll('[data-fcb-cook]').forEach(b=>b.onclick=()=>fcbCook(b.dataset.fcbCook,ssFishCookChoice(b.dataset.fcbCook)));ssFishKitchenDecorate();")
+    replace(" openKitchen:()=>fcbKitchenMenu(),cook:id=>fcbCook(id),", " openKitchen:()=>fcbKitchenMenu(),cook:(id,fish)=>fcbCook(id,fish),")
+    # living menu: fisher counts free fish; the old sale rows (dead in the 2.5D town) point to the market tab
+    replace("const enough=id==='carpenter'?(game.inv.wood||0)>=6:id==='farmer'?w.bag.wheat>=3:w.bag.river_fish+w.bag.perch+w.bag.carp>=2;",
+            "const enough=id==='carpenter'?(game.inv.wood||0)>=6:id==='farmer'?w.bag.wheat>=3:livingFishCount(livingFreeBag(w))>=2;")
+    replace("const demand=id==='carpenter'?'원목 6':id==='farmer'?'밀 3':'물고기 2';", "const demand=id==='carpenter'?'원목 6':id==='farmer'?'밀 3':'물고기 2 (남김 제외)';")
+    replace("  push('<h3>🛒 바람장터 판매</h3>');", "  push('<h3>🛒 바람장터 판매</h3><p>생활 물품은 바람장터의 \\'생활 물품\\' 탭에서 팔아요. 팔 개수와 받을 코인을 보고 고를 수 있고, 남긴 물고기는 팔지 않아요.</p>');")
+    replace("  for(const [item,price] of Object.entries(prices))if(w.bag[item]>0)push(row(`${LIVING_CROPS[item]?.name||LIVING_FISH[item]?.name||LIVING_RECIPES[item]?.name||'채소'} ${w.bag[item]}개 · ${price} 크레딧`,action('1개 판매','market.sell','market',item,!near(23))));",
+            "  for(const [item,price] of Object.entries(prices))if(w.bag[item]>0)push(row(`${LIVING_CROPS[item]?.name||LIVING_FISH[item]?.name||LIVING_RECIPES[item]?.name||'채소'} ${w.bag[item]}개 · ${price} 크레딧${LIVING_FISH[item]&&livingFishKeep(w,item)?` · 남김 ${livingFishKeep(w,item)}`:''}`,''));")
+    replace("document.querySelectorAll('[data-live-type]').forEach(el=>el.addEventListener('click',()=>{const r=livingAction(el.dataset.liveType,el.dataset.liveTarget,el.dataset.liveItem||undefined);if(r.ok)livingMenu()}));",
+            "document.querySelectorAll('[data-live-type]').forEach(el=>el.addEventListener('click',()=>{const r=livingAction(el.dataset.liveType,el.dataset.liveTarget,el.dataset.liveItem||undefined);if(r.ok)livingMenu()}));ssFishKeepWire(document.getElementById('dialog'),()=>livingMenu());")
 
     # --- forest object: the riverbank becomes a real action spot again
     replace(" ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x}))\n]);",
@@ -163,6 +212,7 @@ def patch(html):
         "  push('<h3>🎣 도래 낚시터</h3><p>마을 낚시터 입구로 들어가 물가의 자리 A·B·C에서 낚시해요. 낚싯대는 낚시 자리에서 원목 3개로 만들 수 있어요.</p>');\n"
         "  {const a=w.river?.attempt;push(row(a?`걸려 있는 ${LIVING_FISH[a.fish].name} · 발밑까지 ${a.progress}%`:w.fishing?`예전에 걸어 둔 ${LIVING_FISH[w.fishing.id].name}`:w.rod?'나무 낚싯대 보유':'나무 낚싯대 · 원목 3개 (강변에서 제작)',"
         "`<small>마을 낚시터 입구 → 자리 A·B·C</small>`));}\n"
+        "  push(`<div class=\"keep-rows\"><p>요리 재료로 남길 수량 · 판매·요리·납품에 쓰지 않아요</p>${LIVING_FISH_ORDER.map(id=>`<div class=\"line\"><div>${LIVING_FISH[id].name} 보유 ${w.bag[id]}</div>${ssFishKeepStepper(id)}</div>`).join('')}</div>`);\n"
         "  push(`<p>최고 크기: ${LIVING_FISH_ORDER.map(id=>LIVING_FISH[id].name+' '+(w.river?.best?.[id]?(w.river.best[id]/10).toFixed(1)+'cm':(w.fishDex.includes(id)?'크기 미기록':'-'))).join(' · ')}</p>`);\n"
     ) + html[end:]
     replace("label:'🎣 낚시터 (준비 중)',hint:'마을 낚시터 준비 중 · 낚싯대 재료는 원목 3개'", "label:'🎣 낚시터로 이동',hint:'도래 낚시터 · 물가의 자리 A·B·C에서 낚시해요'")

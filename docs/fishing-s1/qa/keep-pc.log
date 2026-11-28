@@ -1,0 +1,20 @@
+PASS pc: market has a 생활 물품 tab listing fish with price and sellable count — {"rf":{"text":"은빛 피라미 2개 개당 8C · 남김 0 · 판매 가능 2 − 남김 0 + 1개 판매 +8C 2개 판매 +16C","sells":[{"n":1,"label":"1개 판매 +8C","off":false},{"n":2,"label":"2개 판매 +16C","off":false}]},"pe":{"text":"강농어 2개 개당 12C · 남김 0 · 판매 가능 2 − 남김
+PASS pc: sell buttons preview count and coins — [{"n":1,"label":"1개 판매 +8C","off":false},{"n":2,"label":"2개 판매 +16C","off":false}]
+PASS pc: keep stepper sets 남김 2 for perch (saved state) — {"keep":{"river_fish":0,"perch":2,"carp":0},"pe":{"text":"강농어 2개 개당 12C · 남김 2 · 판매 가능 0 − 남김 2 + 1개 판매 +12C","sells":[{"n":1,"label":"1개 판매 +12C","off":true}]}}
+PASS pc: market summary says kept fish are not sold — 판매 가능 6개 · 66C
+
+남겨 둔 물고기 2마리는 팔지 않아요. 요리·납품에도 쓰지 않아요.
+
+낚은 물고기·작물·요리는 여기서 팔아요. 버튼에 팔 개수와 받을 코인이 적혀 있어요.
+PASS pc: selling 2 river fish pays exactly the previewed +16C — 50 → 66, bag 0
+PASS pc: engine refuses to sell a kept perch — 남길 수량(2)을 빼면 0마리만 팔 수 있어요
+PASS pc: stew offers only unkept fish (carp), preview names it and keeps the rest — {"picks":["river_fish-","perch-","carp+*"],"preview":"쓰는 재료: 감자 1 · 비단잉어 1 · 남긴 물고기는 그대로","head":"⚡ 기력 100/100 · 🐟 물고기 3마리 (피라미 0 · 강농어 2 · 비단잉어 1) · 남김 강농어 2"}
+PASS pc: cooking uses the picked carp, kept perch untouched — {"carp":0,"perch":2,"potato":2,"stew":1}
+PASS pc: with only kept fish left, stew is blocked with the keep reason — {"off":true,"why":"남길 수량을 빼면 물고기가 부족해요","preview":"남길 수량을 빼면 쓸 물고기가 없어요"}
+PASS pc: fisher delivery refuses kept fish — 어부에게 물고기 2마리가 필요해요 (남길 물고기 제외)
+PASS pc: living menu fish tab shows keep steppers
+PASS pc: lowering 남김 in the living menu frees one perch — {"river_fish":0,"perch":1,"carp":0}
+PASS pc: 남길 수량 persists after reload — {"keep":{"river_fish":0,"perch":1,"carp":0},"perch":2}
+PASS pc: keep buttons are at least 40px and inside the screen — {"w":40,"h":40,"right":847,"vw":1280}
+PASS pc: no page errors
+15 pass, 0 fail

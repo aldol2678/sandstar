@@ -187,7 +187,11 @@ const travelDone = (page, world) => page.waitForFunction(w => window.__sandstarW
       r = await catchOne(species, { shots: true });
     }
     check(`catch ${species} at ${sp} with its own pattern`, r.ok && r.result.fish === species, JSON.stringify(r).slice(0, 220));
-    if (r.ok) { await shot(`result-${species}`); await press('#riverCard button[data-river="again"]'); await wait(250); }
+    if (r.ok) {
+      await shot(`result-${species}`);
+      if (species === 'river_fish') { await press('#riverCard button[data-river="keep"]'); await wait(350); const kp = (await living()).river.keep.river_fish; const lbl = await page.textContent('#riverCard button[data-river="keep"]'); check('result card "요리 재료로 남기기" keeps that fish (남김 1)', kp === 1 && /남김 1/.test(lbl), `${kp} · ${lbl}`); }
+      await press('#riverCard button[data-river="again"]'); await wait(250);
+    }
   }
   const lv1 = await living();
   const coins1 = await page.evaluate(() => window.__sandstarTitleP0.state().worldCoins);

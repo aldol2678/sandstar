@@ -27,7 +27,13 @@ const RIVER_HINTS=Object.freeze({
  carp:'큰 그림자는 당기지 말고 바닥 가까이 조용히 흘려 두세요.'
 });
 const RIVER_BITE_WINDOW=2.6;
-function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false};}
+function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false,keep:{river_fish:0,perch:0,carp:0}};}
+// 남길 수량 (v0.4 4절): fish the player keeps back. Selling, cooking and the fisher's delivery only
+// use the fish above this count, so a kept fish is never consumed behind a "kept" label.
+const RIVER_KEEP_MAX=99;
+function livingFishKeep(state,id){return Math.min(RIVER_KEEP_MAX,livingInt(state?.river?.keep?.[id]));}
+function livingFishFree(state,id){return Math.max(0,livingInt(state?.bag?.[id])-livingFishKeep(state,id));}
+function livingFreeBag(state){const b={...state.bag};for(const id of LIVING_FISH_ORDER)b[id]=livingFishFree(state,id);return b;}
 function livingRiverNormalize(raw){
  const r=livingRiverFresh();if(!raw||typeof raw!=='object'||Array.isArray(raw))return r;
  if(raw.best&&typeof raw.best==='object')for(const id of Object.keys(r.best)){const v=raw.best[id];if(Number.isSafeInteger(v)&&v>=0)r.best[id]=Math.min(v,RIVER_FISH_SIZE[id][1]);}
@@ -40,10 +46,17 @@ function livingRiverNormalize(raw){
  if(Array.isArray(raw.done))r.done=raw.done.filter(id=>typeof id==='string'&&/^[\w-]{4,64}$/.test(id)).slice(-32);
  if(r.attempt&&r.done.includes(r.attempt.id))r.attempt=null;
  r.assist=raw.assist===true;
+ if(raw.keep&&typeof raw.keep==='object')for(const id of Object.keys(r.keep))r.keep[id]=Math.min(RIVER_KEEP_MAX,livingInt(raw.keep[id]));
  return r;
 }
 function livingRiverCommand(state,cmd,kind,bad,hasBuff){
  const river=state.river;
+ if(kind==='fish.keep'){
+  if(!livingOwn(LIVING_FISH,cmd.item))return bad('물고기 종류를 확인해 주세요');
+  if(!Number.isSafeInteger(cmd.count)||cmd.count<0||cmd.count>RIVER_KEEP_MAX)return bad('남길 수량을 확인해 주세요');
+  river.keep[cmd.item]=cmd.count;
+  return {message:`${LIVING_FISH[cmd.item].name} ${cmd.count}마리를 남겨 둬요 (판매·요리·납품에 쓰지 않음)`};
+ }
  if(cmd.target!=='pond')return bad('강변 낚시터에서 이용해 주세요');
  if(!state.rod)return bad('낚싯대를 먼저 제작해 주세요');
  if(kind==='river.hook'){

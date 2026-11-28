@@ -388,7 +388,8 @@ function ssRiverRender(){
  }else if(ssRiver.phase==='result'&&ssRiver.result){
   const x=ssRiver.result,info=LIVING_FISH[x.fish];
   html=`<div class="river-result">${fcbIconHtml(x.fish,info.name)}<div><h3>${info.name} · ${(x.size/10).toFixed(1)}cm</h3><p>${x.firstDex?'📖 도감에 새로 기록했어요':x.record?'🏅 최고 크기 신기록!':'📖 도감 기록 확인'}</p></div></div>
-   <ul class="river-facts"><li>🎒 가방에 보관됨 · <b>판매 전</b> (보유 ${w.bag[x.fish]})</li><li>🪙 바람장터에서 ${info.price}C에 팔 수 있어요</li><li>🍲 요리: 생선 스튜 = 물고기 1 + 감자 1 (바람장터 요리대)</li></ul>
+   <ul class="river-facts"><li>🎒 가방에 보관됨 · <b>판매 전</b> (보유 ${w.bag[x.fish]})</li><li>🪙 바람장터 '생활 물품' 탭에서 ${info.price}C에 팔 수 있어요</li><li>🍲 요리: 생선 스튜 = 물고기 1 + 감자 1 (바람장터 요리대)</li></ul>
+   <div class="river-row"><button type="button" data-river="keep" class="alt">🍲 요리 재료로 남기기 (남김 ${livingFishKeep(w,x.fish)})</button></div>
    <div class="river-row"><button type="button" data-river="again">계속 낚시</button><button type="button" data-river="exit" class="alt">나가기</button></div>`;
  }
  card.innerHTML=html;card.hidden=!html;
@@ -408,6 +409,7 @@ function ssRiverCardAction(act){
  if(act==='letgo'){ssRiverReleaseFish();return;}
  if(act==='retry'){ssRiver.card=null;ssRiver.paused=false;ssRiverLand();return;}
  if(act==='again'){ssRiverContinue();return;}
+ if(act==='keep'&&ssRiver.result){ssFishKeepSet(ssRiver.result.fish,livingFishKeep(game.livingP0,ssRiver.result.fish)+1);ssRiverRender();return;}
 }
 (function ssRiverWire(){
  const root=ssRiverEl('riverOverlay');if(!root)return;
