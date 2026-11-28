@@ -112,10 +112,10 @@ function livingRiverCommand(state,cmd,kind,bad,hasBuff){
  const a=river.attempt;
  if(!a||cmd.attempt!==a.id)return bad('걸린 물고기가 없어요');
  if(river.done.includes(a.id))return bad('이미 기록한 물고기예요');
- const id=a.fish,prevBest=river.best[id]||0,record=a.size>prevBest;
+ const id=a.fish,prevBest=river.best[id]||0,record=a.size>prevBest,hadDex=state.fishDex.includes(id);
  state.bag[id]++;state.stats.fished++;state.fishDex=[...new Set([...state.fishDex,id])];
  if(record)river.best[id]=a.size;
  river.spots[a.spot]++;river.done.push(a.id);if(river.done.length>32)river.done.shift();
  river.attempt=null;
- return {message:LIVING_FISH[id].name+' '+(a.size/10).toFixed(1)+'cm · 가방에 보관했어요 (판매 전)',record,size:a.size,fish:id,firstDex:prevBest===0};
+ return {message:LIVING_FISH[id].name+' '+(a.size/10).toFixed(1)+'cm · 가방에 보관했어요 (판매 전)',record,size:a.size,fish:id,firstDex:!hadDex,firstSize:hadDex&&prevBest===0};
 }

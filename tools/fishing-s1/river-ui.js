@@ -84,7 +84,8 @@ function ssRiverCast(tx){
  if(ssRiver.phase!=='idle')return;
  const x=ssRiverValidX(tx);
  ssRiverCastAt=ssRiver.t;
- ssRiver.lure={x,y:ssRiverSurface()+4,vy:0,drop:0};ssRiver.phase='lure';ssRiver.idleLureT=0;ssRiver.lastPullT=0;ssRiver.holdT=0;
+ ssRiver.lure={x,y:ssRiverSurface()+4,vy:0,drop:0};ssRiver.phase='lure';
+ for(const f of ssRiver.fish){if(f.state==='leave')continue;if(Math.abs(f.x-x)<ssRiver.W*.3){f.interest=Math.max(f.interest,.2);f.react=1.2;f.dir=x>=f.x?1:-1;}}ssRiver.idleLureT=0;ssRiver.lastPullT=0;ssRiver.holdT=0;
  try{playSound('fish_cast');}catch(_){}
  ssRiverSay(Math.abs(x-tx)>6?'수초·바위를 피해 가까운 물에 떨어졌어요':'찌가 떨어졌어요. 그림자의 반응을 보세요',2.4);ssRiverRender();
 }
@@ -107,7 +108,7 @@ function ssRiverRelease(){
   const pull=ssRiver.holdT;ssRiver.lastPullT=ssRiver.t;
   // 피라미: short pull (not a mash) followed by a stop draws it in.
   if(pull>=.15&&pull<=.7)for(const f of ssRiver.fish){if(f.species!=='river_fish'||f.state==='leave')continue;
-   const d=Math.hypot(f.x-ssRiver.lure.x,f.y-ssRiver.lure.y);if(d<ssRiver.W*.42){f.interest=Math.min(1,f.interest+.36);f.react=.6;}}
+   const d=Math.hypot(f.x-ssRiver.lure.x,f.y-ssRiver.lure.y);if(d<ssRiver.W*.42){f.interest=Math.min(1,f.interest+.5);f.react=.6;}}
  }
 }
 function ssRiverHook(){
@@ -204,17 +205,17 @@ function ssRiverResume(){ssRiver.paused=false;ssRiver.card=null;ssRiver.ready=.9
 function ssRiverTickLure(dt){
  const L=ssRiver.lure,s=ssRiverLive(),surf=ssRiverSurface(),bot=ssRiverBottom();
  if(ssRiver.hold){ssRiver.holdT+=dt;L.x-=dt*ssRiver.W*.13;L.y=Math.max(surf+6,L.y-dt*12);}
- else{L.y=Math.min(bot-8,L.y+dt*30);L.x-=dt*ssRiver.W*s.flow*.55;}
+ else{L.y=Math.min(bot-8,L.y+dt*30);if(L.x>ssRiver.W*.3)L.x=Math.max(ssRiver.W*.3,L.x-dt*ssRiver.W*s.flow*.55);} // drift stops short of the bank: no automatic retrieve
  if(L.x<ssRiverBankX()+8){ssRiver.lure=null;ssRiver.phase='idle';ssRiverSay('찌가 발밑까지 돌아왔어요');ssRiverRender();return;}
  const quietFor=ssRiver.hold?0:ssRiver.t-ssRiver.lastPullT;
  let anyInterest=false;
  for(const f of ssRiver.fish){
   if(f.state==='leave')continue;
   const dx=L.x-f.x,dy=L.y-f.y,d=Math.hypot(dx,dy),R=ssRiver.W*(f.species==='carp'?.3:.42);
-  if(f.species==='perch'&&ssRiver.hold&&d<ssRiver.W*.45&&Math.abs(dy)<ssRiver.H*.28&&dx*f.dir>0){f.interest+=dt*.7;f.react=.4;}
+  if(f.species==='perch'&&ssRiver.hold&&d<ssRiver.W*.45&&Math.abs(dy)<ssRiver.H*.28&&dx*f.dir>0){f.interest+=dt*.9;f.react=.4;}
   else if(f.species==='carp'&&d<R){
    if(ssRiver.hold){f.interest=Math.max(0,f.interest-dt*.5);if(f.interest===0&&ssRiver.holdT>.8){f.state='leave';f.dir=dx>0?-1:1;}}
-   else if(quietFor>.8&&(L.y>bot-ssRiver.H*.2||s.flow>.1)){f.interest+=dt*.24;f.react=.3;}
+   else if(quietFor>.8&&(L.y>bot-ssRiver.H*.2||s.flow>.1)){f.interest+=dt*.34;f.react=.3;}
   }
   else if(f.species==='river_fish'&&ssRiver.hold&&ssRiver.holdT>1&&d<R)f.interest=Math.max(0,f.interest-dt*.3);
   if(!ssRiver.hold&&f.species!=='carp'&&quietFor>3)f.interest=Math.max(0,f.interest-dt*.06);
@@ -327,7 +328,11 @@ function ssRiverDraw(){
   c.fillStyle=species==='carp'?'#10222a':'#132a33';c.beginPath();c.ellipse(0,0,len/2,h/2,0,0,Math.PI*2);c.fill();
   c.beginPath();c.moveTo(-len/2+2,0);c.lineTo(-len/2-len*.28,-h*.55);c.lineTo(-len/2-len*.28,h*.55);c.fill();c.restore();
  };
- if(ssRiver.phase!=='fight'&&ssRiver.phase!=='result')for(const f of ssRiver.fish)drawFish(f.x,f.y,f.size,f.dir,f.species,.62+Math.min(.3,f.interest*.3),f.react>0||f.interest>.3,0);
+ if(ssRiver.phase!=='fight'&&ssRiver.phase!=='result')for(const f of ssRiver.fish){drawFish(f.x,f.y,f.size,f.dir,f.species,.62+Math.min(.3,f.interest*.3),f.react>0||f.interest>.3,0);
+  // interest made visible: ? when a shadow looks, ! and a faint trail when it follows the lure
+  if(ssRiver.lure&&f.state!=='leave'&&(f.interest>.15||f.react>.8)){const follow=f.interest>.5,len=12+f.size/450*58;
+   if(follow){c.save();c.strokeStyle='#fff3b088';c.setLineDash([3,4]);c.lineWidth=1.5;c.beginPath();c.moveTo(f.x,f.y);c.lineTo(ssRiver.lure.x,ssRiver.lure.y);c.stroke();c.restore();}
+   c.font='900 15px system-ui';c.textAlign='center';c.fillStyle=follow?'#ffe28a':'#e8f6ff';c.fillText(follow?'!':'?',f.x,f.y-len*.42-6);}}
  // line + lure / bobber
  const L=ssRiver.lure;
  if(L&&ssRiver.phase!=='fight'){
@@ -355,8 +360,14 @@ function ssRiverDraw(){
   drawFish(fx,fy,f.size,dir,f.fish,.95,ph==='gap'||ph==='loose',bend);
   if(ph==='hold'&&ssRiver.hold){c.fillStyle='#c9b58d88';for(let i=0;i<5;i++)c.fillRect(fx-14+i*7+Math.sin(t*9+i)*3,bot-4-((t*30+i*9)%14),3,3);}
   // distance track (no numeric tension)
-  c.fillStyle='#0b1f2799';c.fillRect(12,H-20,W-24,8);c.fillStyle='#ffe28a';c.fillRect(12,H-20,(W-24)*f.progress/100,8);
-  c.fillStyle='#fff';c.font='bold 10px system-ui';c.textAlign='left';c.fillText('발밑까지',12,H-25);
+  // distance track: bigger bar + label (QA: was 8px / 10px), fish marker at the current distance
+  const bw=W-24,by=H-28,bh=16,pct=f.progress/100;
+  c.fillStyle='#0b1f27cc';c.beginPath();c.roundRect(12,by,bw,bh,8);c.fill();
+  c.fillStyle='#ffe28a';c.beginPath();c.roundRect(12,by,Math.max(bh,bw*pct),bh,8);c.fill();
+  c.strokeStyle='#fff3c4';c.lineWidth=2;c.beginPath();c.roundRect(12,by,bw,bh,8);c.stroke();
+  c.fillStyle='#10303a';c.beginPath();c.ellipse(12+Math.max(bh/2,bw*pct-6),by+bh/2,9,5,0,0,Math.PI*2);c.fill();
+  c.font='900 14px system-ui';c.textAlign='left';c.lineWidth=3;c.strokeStyle='#0b1f27';
+  const ftxt=pct>=.8?'발밑까지 · 거의 다 왔어요':'발밑까지';c.strokeText(ftxt,12,by-6);c.fillStyle='#fff';c.fillText(ftxt,12,by-6);
   // reel indicator
   c.save();c.translate(bank-6,surf-18);c.rotate(ssRiver.hold?t*(f.stall||!['gap','loose'].includes(ph)?30:8):0);c.strokeStyle=f.stall?'#ff8a5c':'#f8e9aa';c.lineWidth=2;c.beginPath();c.arc(0,0,6,0,Math.PI*1.6);c.stroke();c.restore();
  }
@@ -389,7 +400,7 @@ function ssRiverRender(){
   html=`<h3>저장하지 못했어요</h3><p>${ssRiver.lastMsg||'저장 공간을 확인해 주세요.'} 물고기는 아직 줄에 있어요.</p><div class="river-row"><button type="button" data-river="retry">다시 확정</button><button type="button" data-river="close" class="alt">닫기</button></div>`;
  }else if(ssRiver.phase==='result'&&ssRiver.result){
   const x=ssRiver.result,info=LIVING_FISH[x.fish];
-  html=`<div class="river-result">${fcbIconHtml(x.fish,info.name)}<div><h3>${info.name} · ${(x.size/10).toFixed(1)}cm</h3><p>${x.firstDex?'📖 도감에 새로 기록했어요':x.record?'🏅 최고 크기 신기록!':'📖 도감 기록 확인'}</p></div></div>
+  html=`<div class="river-result">${fcbIconHtml(x.fish,info.name)}<div><h3>${info.name} · ${(x.size/10).toFixed(1)}cm</h3><p>${x.firstDex?'📖 도감에 새로 기록했어요':x.firstSize?'📏 도감에 있던 물고기 · 첫 크기 기록이에요':x.record?'🏅 최고 크기 신기록!':'📖 도감 기록 확인'}</p></div></div>
    <ul class="river-facts"><li>🎒 가방에 보관됨 · <b>판매 전</b> (보유 ${w.bag[x.fish]})</li><li>🪙 바람장터 '생활 물품' 탭에서 ${info.price}C에 팔 수 있어요</li><li>🍲 요리: 생선 스튜 = 물고기 1 + 감자 1 (바람장터 요리대)</li></ul>
    <div class="river-row"><button type="button" data-river="keep" class="alt">🍲 요리 재료로 남기기 (남김 ${livingFishKeep(w,x.fish)})</button></div>
    <div class="river-row"><button type="button" data-river="again">계속 낚시</button><button type="button" data-river="exit" class="alt">나가기</button></div>`;

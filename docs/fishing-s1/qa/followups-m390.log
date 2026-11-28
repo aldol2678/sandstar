@@ -1,0 +1,17 @@
+PASS m390: new save: town HUD shows the fishing tip (no wood yet → chop 3 wood) — {"hidden":false,"text":"🎣 선택 · 낚시: 잔빛숲 나무를 베어 원목 3개를 모으면 낚싯대를 만들 수 있어요"}
+PASS m390: with 3 wood the tip points to the gate to make a rod — {"hidden":false,"text":"🎣 선택 · 낚시: 원목 3개가 있어요 · 낚시터 입구에서 낚싯대를 만들어요"}
+PASS m390: 가방 lists 원목 with its count and uses — {"bag":"원목 3개","detail":"× 가방 전체 도구 유물 생활 3 3 3 🌱 6 🪵 3 🪵 원목 생활 · 재료 보유 3개 · 낚싯대 제작 3 · 목수 납품 6 · 집짓기 12 (인벤토리 '재료'의 원목과 같은 개수) 요리 재료 6종 닫기"}
+PASS m390: tip stays inside the screen — {"l":13,"r":228.546875,"t":107,"b":146,"vw":390,"vh":844}
+PASS m390: with a rod the tip sends the player to spots A·B·C — {"hidden":false,"text":"🎣 선택 · 낚시: 낚시터 입구로 가서 자리 A·B·C에서 낚시해요"}
+PASS m390: after the first catch the tip is gone — {"hidden":true,"text":"🎣"}
+PASS m390: spot A opens from the fishing ground — {"open":true,"spot":"A"}
+PASS m390: no input for 20s: the lure stays in the water (no auto-retrieve) — phase lure
+PASS m390: splash/drift makes a shadow show interest (?/! cue drawn at interest > .15) — max interest 0.20
+first-bite times at A (newcomer twitch pattern, s): [2.4,1.2,1.3]
+PASS m390: newcomer pattern gets a bite in every try within 40s — [2.4,1.2,1.3]
+PASS m390: median first bite ≤ 20s — [2.4,1.2,1.3]
+PASS m390: old dex entry with no size: first catch is a first size record, not a new dex entry — {"firstDex":false,"firstSize":true,"record":true}
+PASS m390: a species not in the dex is still a new dex entry — {"firstDex":true,"firstSize":false,"record":true}
+PASS m390: same species again: neither new dex nor first size — {"firstDex":false,"firstSize":false,"record":false}
+PASS m390: no page errors
+15 pass, 0 fail

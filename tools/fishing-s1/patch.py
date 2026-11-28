@@ -71,6 +71,7 @@ CSS = """<style id="river-s1-style">
 .fish-pick.on{outline:3px solid #ffe28a}
 .fish-preview{display:block;margin-top:4px;color:#d6f0c8;font-weight:700}
 .living-sell-note{font-size:11px;opacity:.85}
+.t25-fish-tip{margin-top:6px;font-size:12px;opacity:.95;white-space:normal}
 #app.fish-world-active #ssHubBackdrop{z-index:92}#app.fish-world-active #ssHub{z-index:93}#app.fish-world-active #overlay{z-index:94}
 #app.ss-portal-transition #fishWorldRoot{pointer-events:none!important}
 </style>
@@ -180,6 +181,13 @@ def patch(html):
             "  for(const [item,price] of Object.entries(prices))if(w.bag[item]>0)push(row(`${LIVING_CROPS[item]?.name||LIVING_FISH[item]?.name||LIVING_RECIPES[item]?.name||'채소'} ${w.bag[item]}개 · ${price} 크레딧${LIVING_FISH[item]&&livingFishKeep(w,item)?` · 남김 ${livingFishKeep(w,item)}`:''}`,''));")
     replace("document.querySelectorAll('[data-live-type]').forEach(el=>el.addEventListener('click',()=>{const r=livingAction(el.dataset.liveType,el.dataset.liveTarget,el.dataset.liveItem||undefined);if(r.ok)livingMenu()}));",
             "document.querySelectorAll('[data-live-type]').forEach(el=>el.addEventListener('click',()=>{const r=livingAction(el.dataset.liveType,el.dataset.liveTarget,el.dataset.liveItem||undefined);if(r.ok)livingMenu()}));ssFishKeepWire(document.getElementById('dialog'),()=>livingMenu());")
+
+    # --- QA 1차: wood listed in the bag's 생활 tab, optional fishing tip under the town objective
+    replace("<small>${labels[selected.category]}</small><p>${selected.details}</p>", "<small>${selected.categoryLabel||labels[selected.category]}</small><p>${selected.details}</p>")
+    replace(" return items;\n}\nfunction ssInventoryViewModel(", " {const wd=ssBagWoodEntry();if(wd)items.push(wd);}\n return items;\n}\nfunction ssInventoryViewModel(")
+    replace('<div id="t25Quest" class="t25-quest">✦ <span id="t25QuestText">마을 지도에서 광산 입구를 찾으세요.</span></div>',
+            '<div id="t25Quest" class="t25-quest">✦ <span id="t25QuestText">마을 지도에서 광산 입구를 찾으세요.</span></div><div id="t25FishTip" class="t25-quest t25-fish-tip" hidden>🎣 <span></span></div>')
+    replace("function t25RefreshHUD(){if(!town25dActive)return;", "function t25RefreshHUD(){if(!town25dActive)return;ssFishTownTip();")
 
     # --- forest object: the riverbank becomes a real action spot again
     replace(" ...LIVING_SITES.trees.map(x=>Object.freeze({id:'tree:'+x,type:'tree',x}))\n]);",

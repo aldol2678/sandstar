@@ -89,3 +89,17 @@ function ssFishKitchenDecorate(){
 window.__sandstarFishKeep=Object.freeze({
  state:()=>{const w=game?.livingP0;return w?{keep:{...w.river.keep},free:Object.fromEntries(LIVING_FISH_ORDER.map(f=>[f,livingFishFree(w,f)])),bag:Object.fromEntries(LIVING_FISH_ORDER.map(f=>[f,w.bag[f]])),pick:ssFishCookPick}:null;}
 });
+
+// ---- QA 1차 (여울): 원목이 '가방'에 안 보이고, 새 세이브 안내가 광산만 가리켰다.
+function ssBagWoodEntry(){
+ const n=Math.max(0,Math.floor(Number(game.inv?.wood)||0));if(!n)return null;
+ return {key:'living:wood',id:'wood',category:'living',categoryLabel:'생활 · 재료',name:'원목',count:n,icon:'<span class="ss-item-symbol" aria-hidden="true">🪵</span>',
+  details:`보유 ${n}개 · 낚싯대 제작 3 · 목수 납품 6 · 집짓기 12 (인벤토리 '재료'의 원목과 같은 개수)`};
+}
+function ssFishTownTip(){
+ const el=document.getElementById('t25FishTip');if(!el||!game?.livingP0)return;
+ const w=game.livingP0,wood=Math.floor(Number(game.inv?.wood)||0),show=w.stats.fished===0&&!(w.river?.attempt);
+ el.hidden=!show;if(!show)return;
+ const t=w.rod?'선택 · 낚시: 낚시터 입구로 가서 자리 A·B·C에서 낚시해요':wood>=3?'선택 · 낚시: 원목 3개가 있어요 · 낚시터 입구에서 낚싯대를 만들어요':'선택 · 낚시: 잔빛숲 나무를 베어 원목 3개를 모으면 낚싯대를 만들 수 있어요';
+ const sp=el.querySelector('span');if(sp&&sp.textContent!==t)sp.textContent=t;
+}
