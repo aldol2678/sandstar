@@ -1,0 +1,350 @@
+  const dep=vv.reduce((s,v)=>s+v.depth,0)/3;
+  faces.push({v:vv,c:archLitColor(tri,dep),depth:dep});
+ }
+ if(archRenderer==='webgl'&&archGl){
+  const gl=archGl;gl.viewport(0,0,archGpuCanvas.width,archGpuCanvas.height);gl.clearColor(.052,.115,.157,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const data=new Float32Array(faces.length*3*6);let i=0;
+  for(const f of faces)for(const v of f.v){data[i++]=v.x/archW*2-1;data[i++]=1-v.y/archH*2;data[i++]=Math.min(.99,v.depth/85*2-1);data[i++]=f.c[0]/255;data[i++]=f.c[1]/255;data[i++]=f.c[2]/255;}
+  gl.useProgram(archProgram);gl.bindBuffer(gl.ARRAY_BUFFER,archBuffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(archGlPosition);gl.vertexAttribPointer(archGlPosition,3,gl.FLOAT,false,24,0);
+  gl.enableVertexAttribArray(archGlColor);gl.vertexAttribPointer(archGlColor,3,gl.FLOAT,false,24,12);
+  gl.drawArrays(gl.TRIANGLES,0,faces.length*3);
+ }else if(archCpuCtx){
+  const c=archCpuCtx;c.setTransform(archDpr,0,0,archDpr,0,0);c.fillStyle='#0e2533';c.fillRect(0,0,archW,archH);
+  const g=c.createLinearGradient(0,0,0,archH);g.addColorStop(0,'#102d40');g.addColorStop(1,'#10232b');c.fillStyle=g;c.fillRect(0,0,archW,archH);
+  faces.sort((a,b)=>b.depth-a.depth);
+  for(const f of faces){c.beginPath();c.moveTo(f.v[0].x,f.v[0].y);c.lineTo(f.v[1].x,f.v[1].y);c.lineTo(f.v[2].x,f.v[2].y);c.closePath();c.fillStyle=`rgb(${f.c.join(',')})`;c.fill();}
+ }
+}
+function archJoystickSet(e){let r=$('archPad').getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width*.36),dy=(e.clientY-r.top-r.height/2)/(r.height*.36),d=Math.max(1,Math.hypot(dx,dy));archJoy={x:dx/d,y:dy/d};}
+$('archPad').addEventListener('pointerdown',e=>{if(!archWorldActive||m25bBusy||archJoyPointer!==null)return;e.preventDefault();archJoyPointer=e.pointerId;try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}archJoystickSet(e);});
+$('archPad').addEventListener('pointermove',e=>{if(archWorldActive&&archJoyPointer===e.pointerId){e.preventDefault();archJoystickSet(e);}});
+for(const typ of ['pointerup','pointercancel','lostpointercapture'])$('archPad').addEventListener(typ,e=>{if(archJoyPointer===e.pointerId){archJoyPointer=null;archJoy={x:0,y:0};}});
+function archPointerDown(e){if(!archWorldActive||archDrag||m25bBusy)return;e.preventDefault();archDrag={id:e.pointerId,x:e.clientX,y:e.clientY};try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){};}
+function archPointerMove(e){if(!archWorldActive||m25bBusy||!archDrag||archDrag.id!==e.pointerId)return;e.preventDefault();let dx=e.clientX-archDrag.x,dy=e.clientY-archDrag.y;archYaw-=dx*.007;archPitch=Math.max(.16,Math.min(.85,archPitch-dy*.003));archDrag.x=e.clientX;archDrag.y=e.clientY;}
+function archPointerEnd(e){if(archDrag?.id===e.pointerId)archDrag=null;}
+for(const c of [archGpuCanvas,archFallbackCanvas]){
+ c.addEventListener('pointerdown',archPointerDown);c.addEventListener('pointermove',archPointerMove);
+ for(const ev of ['pointerup','pointercancel','lostpointercapture'])c.addEventListener(ev,archPointerEnd);
+}
+window.addEventListener('keydown',e=>{
+ if(!archWorldActive||m25bBusy)return;const k=e.key.toLowerCase();
+ if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e',' ','escape','q','r'].includes(k)){
+  e.preventDefault();e.stopImmediatePropagation();
+  if(['e',' '].includes(k)&&!e.repeat)archWorldAction();
+  else if(k==='escape'&&!e.repeat)archWorldTryExit();
+  else if(k==='q'&&!e.repeat){archYaw-=.32;}
+  else if(k==='r'&&!e.repeat){archYaw+=.32;}
+  else if(!['e',' ','escape','q','r'].includes(k))archKeys.add(k);
+ }
+},true);
+window.addEventListener('keyup',e=>{if(!archWorldActive)return;let k=e.key.toLowerCase();archKeys.delete(k);if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',archWorldClearInput);
+window.addEventListener('resize',()=>{if(archWorldActive){archWorldResize();archWorldDraw();}});
+window.__sandstarArchWorld={
+ state:()=>({worldId:archWorldActive?ARCH_WORLD_ID:ssRegion,active:archWorldActive,player:{...archPlayer},yaw:archYaw,renderer:archRenderer,entryCount:game?.archWorldV1?.entryCount||0,nearExit:archWorldNearExit(),nearExhibit:archWorldNearExhibit(),frames:archFrame,saveKey:SAVE_KEY}),
+ enter:archWorldTryEnter,exit:archWorldTryExit,action:archWorldAction,
+ blocked:archWorldBlocked,portalX:ARCH_FOREST_GATE_X,
+ testMove:(x,z)=>{if(!archWorldActive||archWorldBlocked(x,z))return false;archPlayer.x=x;archPlayer.z=z;game.archWorldV1.position={x,z};archWorldRefreshHud();archWorldDraw();return true},
+ setYaw:y=>{if(!Number.isFinite(y))return false;archYaw=y;archWorldDraw();return true},
+ render:archWorldDraw,geometry:()=>({staticTriangles:archStatic.length,renderer:archRenderer})
+};
+
+// SANDSTAR M2.3 — independently rendered full-scene 2.5D village.
+// WorldForge 0.1-compatible manifest and renderer-neutral runtime port.
+// Offline Canvas2D isometric renderer (PlayCanvas/GPU integration NOT claimed).
+const T25_ID='village_hub_01';
+const t25Root=$('town25dRoot'),t25Canvas=$('town25dCanvas'),t25Ctx=t25Canvas.getContext('2d',{alpha:false});
+let town25dActive=false,town25dEngine=null,town25dRenderer=null,town25dPlayer={x:.3,z:3.6},t25V={x:0,z:0},t25Move={x:0,z:0},t25Keys=new Set(),t25Joy={x:0,y:0},t25Pointer=null,t25TapCandidates=[],t25ToastEnd=0,t25Elapsed=0,t25Frames=0,t25W=0,t25H=0,t25Dpr=1,t25SavedTick=0,t25LastRegion='',t25LastAction='',t25TrafficLock=false,t25Camera={x:0,z:0};
+const T25_TARGETS=Object.freeze([
+ {id:'market',type:'service',x:-6.2,z:.2,title:'바람장터',label:'🛒 상점 이용',hint:'물품 거래 · 기존 장터 메뉴'},
+ {id:'forge',type:'service',x:3.2,z:-.15,title:'작업 대장간',label:'⚒ 대장간 이용',hint:'곡괭이·장비 제작 · 기존 대장간 메뉴'},
+ {id:'mine',type:'gate',x:-7.6,z:5.5,title:'광산 입구',label:'⛏ 광산으로 이동',target:'mine',hint:'2D 채굴 월드'},
+ {id:'forest',type:'gate',x:8.0,z:5.2,title:'잔빛숲 입구',label:'🌿 잔빛숲으로 이동',target:'life_forest_01',hint:'숲·농장·고대 유적'},
+ {id:'harin',type:'npc',x:-.75,z:1.0,title:'목수 하린',label:'🪚 하린과 대화',hint:'마을 이야기'}
+]);
+const t25Hex=(h,delta=0)=>{let s=h.replace('#','');let a=[0,2,4].map(i=>Math.max(0,Math.min(255,parseInt(s.slice(i,i+2),16)+delta)));return '#'+a.map(x=>x.toString(16).padStart(2,'0')).join('')};
+const T25_MAT={soil:'#66998c',road:'#b5b5a0',cobble:'#c5c6a8',wall:'#d7c69a',wood:'#90674f',woodLight:'#b5895e',roof:'#487b76',roofRed:'#a66c60',stone:'#8ba7a0',gold:'#e8cc80',tree:'#3f7663',trunk:'#765d46',blue:'#4f9c9c',door:'#574d45'};
+const t25Ent=[];
+function t25Add(id,name,x,y,z,sx,sy,sz,color,meta={}){
+ t25Ent.push({id,name,type:'sandstar.static',parentId:null,enabled:true,transform:{position:[x,y,z],rotation:[0,0,0,1],scale:[sx,sy,sz]},tags:['town','m23'],components:{'core.primitive':{shape:'box',color}},metadata:meta});
+}
+// Blocks and landmarks describe WorldForge objects, not DOM elements.
+t25Add('floor','마을 보호 지표',0,-.30,0,26,.5,20,'#7fae9b',{nonMining:true});
+t25Add('plaza','도래 중앙광장',0,-.02,.6,15,.10,9,'#b6b59e');
+t25Add('market-body','바람장터 본체',-6.2,1.55,-3.1,5.1,3.1,4.4,'#caba98',{collision:[5.1,4.4]});
+t25Add('market-roof','장터 청록 지붕',-6.2,3.48,-3.1,6.0,.78,5.0,'#487b76');
+t25Add('market-awning','장터 차양',-6.2,2.45,-.7,4.9,.2,1.4,'#d8b978');
+t25Add('market-door','장터 문',-6.2,1.01,-.77,1.45,2.02,.12,'#574d45');
+t25Add('market-counter','장터 진열대',-4.6,.48,.55,1.3,.75,.68,'#ac825f');
+t25Add('forge-body','대장간 본체',3.2,1.50,-3.2,5.6,3.0,4.5,'#a8a89a',{collision:[5.6,4.5]});
+t25Add('forge-roof','대장간 붉은 지붕',3.2,3.44,-3.2,6.4,.78,5.2,'#995f59');
+t25Add('forge-chimney','화로 굴뚝',5.0,4.82,-4.6,.95,2.75,.95,'#6f7f7b');
+t25Add('forge-door','대장간 문',3.2,1.0,-.88,1.4,2.0,.16,'#594b46');
+t25Add('forge-anvil','모루 조형',4.95,.58,.28,1.05,.85,.62,'#4c6268',{collision:[1,.7]});
+t25Add('well-bottom','별샘 작은 우물',-.4,.31,-2.1,1.6,.72,1.6,'#879992',{collision:[1.6,1.6]});
+t25Add('well-water','우물 물',-.4,.68,-2.1,1.12,.07,1.12,'#60b8b3');
+t25Add('notice-board','마을 게시판',-.6,1.06,4.9,1.8,1.5,.32,'#8c6546');
+t25Add('mine-door','광산 출입 받침',-7.6,.22,5.5,2.2,.38,1.75,'#8a7d6e');
+t25Add('mine-left','광산 입구 기둥 좌',-8.6,1.6,5.5,.45,3,.56,'#776c5b');
+t25Add('mine-right','광산 입구 기둥 우',-6.6,1.6,5.5,.45,3,.56,'#776c5b');
+t25Add('mine-top','광산 입구 상단',-7.6,3.20,5.5,2.4,.44,.8,'#a19b80');
+t25Add('forest-door','숲길 출입 받침',8.0,.16,5.2,2.2,.35,1.75,'#7c9473');
+t25Add('forest-left','숲길 입구 기둥 좌',7.0,1.55,5.2,.38,3,.38,'#876746');
+t25Add('forest-right','숲길 입구 기둥 우',9.0,1.55,5.2,.38,3,.38,'#876746');
+t25Add('forest-top','숲길 입구 상단',8.0,3.17,5.2,2.4,.38,.7,'#a78e69');
+for(const [i,x,z] of [[0,-10,-8],[1,-9,-6],[2,10,-8],[3,10,-4],[4,-11,4],[5,11,2],[6,-10,8],[7,11,8]]){
+ t25Add('tree-trunk-'+i,'가로수 줄기',x,.80,z,.48,1.55,.48,'#78684e');
+ t25Add('tree-leaves-'+i,'가로수 잎',x,2.3,z,1.85,1.85,1.85,'#4c8067');
+}
+for(const [i,x,z] of [[0,-2,7],[1,2,7],[2,-4,1.0],[3,6,1.0]])t25Add('lantern-'+i,'가로등',x,1.35,z,.25,2.65,.25,'#87674e');
+// M2.4: reviewed GLB assets baked as faithful Canvas isometric sprite projections for offline QA.
+// Runtime GLB rendering is NOT asserted. Exported PNGs are original-asset-derived, source SHA tracked.
+const T24_GLBS = {};
+T24_GLBS["planter"]={src:"data:image/png;base64,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",anchor:[123, 128],ratio:126.0,originalAsset:"PROP_PLANTER_CAMPUS_001",sourceSha256:"f3ea8d22be93d29f1e7d69330436224696e1ce3c23efd7057fbef32304d4708a",spriteSha256:"e2e9ea77155194691216ad3f9d771d58ac115f2193ca5f94f09629d9a38996f3"};
+T24_GLBS["bench"]={src:"data:image/png;base64,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",anchor:[151, 187],ratio:126.0,originalAsset:"PROP_BENCH_CAMPUS_001",sourceSha256:"765066e241469666dcc7671a994968b63e9899886cd3bb0f315b305995e5a74d",spriteSha256:"9d24369711df39ace2625526269fa1e159c160a78bf798081750c6a1e37f212d"};
+T24_GLBS["streetlamp"]={src:"data:image/png;base64,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",anchor:[42, 488],ratio:126.0,originalAsset:"PROP_STREETLAMP_CAMPUS_001",sourceSha256:"62c81c051fda70edaf155bdb0f68c2accd6f97854fc942bfe758f07a829b0575",spriteSha256:"4026bb07d9763f275bd50d1692afc9929d4bb44a2d03629e71510cf3acb0dfaa"};
+const T24_IMAGES={};for(const [k,v] of Object.entries(T24_GLBS)){let im=new Image();im.decoding='async';im.src=v.src;T24_IMAGES[k]=im;}
+const T24_PROPS=Object.freeze([
+ {id:'bench-south',kind:'bench',x:-2.8,z:6.8,radius:.80},{id:'bench-north',kind:'bench',x:2.7,z:6.8,radius:.80},
+ {id:'planter-market',kind:'planter',x:-4.2,z:2.9,radius:.52},{id:'planter-forge',kind:'planter',x:5.25,z:2.75,radius:.52},{id:'planter-square',kind:'planter',x:.1,z:7.5,radius:.52},
+ {id:'lamp-west',kind:'streetlamp',x:-2,z:7,radius:.18},{id:'lamp-east',kind:'streetlamp',x:2,z:7,radius:.18},{id:'lamp-market',kind:'streetlamp',x:-4,z:1,radius:.18},{id:'lamp-forge',kind:'streetlamp',x:6,z:1,radius:.18}
+]);
+function t24DrawProp(prop){const obj=T24_GLBS[prop.kind],img=T24_IMAGES[prop.kind];if(!obj||!img?.complete||!img?.naturalWidth)return;const loc=t25Project(prop.x,0,prop.z);const scale=t25Scale()/obj.ratio;const anchor=obj.anchor;t25Ctx.drawImage(img,loc.x-anchor[0]*scale,loc.y-anchor[1]*scale,img.naturalWidth*scale,img.naturalHeight*scale);}
+window.__sandstarTownAssetsM24={assets:()=>Object.fromEntries(Object.entries(T24_GLBS).map(([k,a])=>[k,{source:a.originalAsset,sourceSha256:a.sourceSha256,spriteSha256:a.spriteSha256,loaded:T24_IMAGES[k].complete&&T24_IMAGES[k].naturalWidth>0}])), props:()=>T24_PROPS.map(x=>({...x})),saveKey:SAVE_KEY};
+const T25_MANIFEST={schemaVersion:'worldforge/0.1',project:{id:'sandstar',name:'흙별',template:'town-isometric'},world:{id:T25_ID,name:'도래마을 2.5D',units:'meter',upAxis:'Y',handedness:'right',metadata:{view:'isometric-2.5d',rendererPort:'canvas2d-offline',source:'WorldForge/0.1',status:'prototype-assets-m24'}},assets:Object.entries(T24_GLBS).map(([k,a])=>({id:'town-'+k+'-sprite',type:'texture',uri:'embedded:'+k+':png',metadata:{sourceAsset:a.originalAsset,sourceSha256:a.sourceSha256,spriteSha256:a.spriteSha256,bake:'GLB->isometric Canvas sprite',renderStatus:'prototype'}})),zones:[],places:T25_TARGETS.map(t=>({id:'place-'+t.id,name:t.title,type:'sandstar.location',position:[t.x,0,t.z],tags:[t.type]})),paths:[],entities:t25Ent,npcs:[],quests:[],events:[],rules:[],metadata:{baseWorld:'village_hub_01',legacyMarketX:MARKET_X,legacyForgeX:45,protectedFloor:true}};
+function t25ValidateManifest(m){
+ const valid=!!m&&m.schemaVersion==='worldforge/0.1'&&m.world?.id===T25_ID&&m.world?.upAxis==='Y'&&Array.isArray(m.entities)&&m.entities.every(e=>e.id&&Array.isArray(e.transform?.position)&&e.transform.position.length===3);
+ return valid?{valid:true,value:m,diagnostics:[]}:{valid:false,errors:[{code:'INVALID_WORLDFORGE_MANIFEST'}]};
+}
+// Renderer-neutral lifecycle adapter follows ALDOL WorldForge runtime-core's public port contract.
+function t25CreateEngine({renderer,validateManifest,systems=[],scheduler=window,fixedStep=1/60}){
+ let state='created',world=null,frameId=null,lastTime=null,accumulator=0;let diagnostics=[];
+ const entities=new Map();
+ const context={getEntity:id=>entities.has(id)?structuredClone(entities.get(id)):null,getAction:()=>0,setTransform(id,transform){const e=entities.get(id);if(!e)throw Error('E_ENTITY_NOT_FOUND');e.transform=structuredClone(transform);renderer.setTransform?.(id,transform);},diagnose:(severity,code,detail='')=>diagnostics.push({severity,code,detail})};
+ const cancel=()=>{if(frameId!==null)scheduler.cancelAnimationFrame(frameId);frameId=null;lastTime=null;accumulator=0};
+ const tick=time=>{if(state!=='running')return;frameId=null;let dt=lastTime===null?0:Math.max(0,Math.min(.1,(time-lastTime)/1000));lastTime=time;accumulator+=dt;let iter=0;try{while(accumulator>=fixedStep&&iter++<6){for(const sys of systems)sys.fixedUpdate?.(context,fixedStep);accumulator-=fixedStep;}for(const sys of systems)sys.update?.(context,dt);renderer.frame?.(dt);}catch(err){state='failed';diagnostics.push({severity:'ERROR',code:'E_ENGINE_TICK',detail:String(err)});cancel();return;}frameId=scheduler.requestAnimationFrame(tick)};
+ return {get state(){return state},get worldId(){return world?.world?.id||null},get diagnostics(){return structuredClone(diagnostics)},getEntity:context.getEntity,setTransform:context.setTransform,async load(src){if(state!=='created')throw Error('E_ENGINE_LOAD_STATE');state='loading';let r=validateManifest(src);if(!r.valid){state='failed';diagnostics=r.errors;return {ok:false,diagnostics}}world=structuredClone(r.value);for(const e of world.entities)entities.set(e.id,structuredClone(e));try{await renderer.mount(world,{diagnose:context.diagnose});for(const sys of systems)await sys.init?.(context);state='ready';return {ok:true,diagnostics};}catch(err){state='failed';diagnostics.push({severity:'ERROR',code:'E_ENGINE_LOAD',detail:String(err)});return {ok:false,diagnostics}}},start(){if(!['ready','stopped'].includes(state))throw Error('E_ENGINE_START_STATE');state='running';frameId=scheduler.requestAnimationFrame(tick)},pause(){if(state!=='running')return false;cancel();state='paused';return true},resume(){if(state!=='paused')return false;state='running';frameId=scheduler.requestAnimationFrame(tick);return true},stop(){if(!['running','paused','ready'].includes(state))return false;cancel();state='stopped';return true},async dispose(){cancel();await renderer.dispose();entities.clear();world=null;state='disposed'}};
+}
+function t25Project(x,y,z){const scale=t25Scale();const px=(x-z)-(t25Camera.x-t25Camera.z),py=(x+z)-(t25Camera.x+t25Camera.z);return {x:t25W*.5+px*scale,y:t25H*.53+py*scale*.47-y*scale*1.08};}
+function t25Scale(){return Math.max(23,Math.min(35,t25W/28));}
+function t25Poly(pts,color,stroke){if(pts.every(p=>p.x<-100||p.x>t25W+100)&&pts.every(p=>p.y<-100||p.y>t25H+100))return;t25Ctx.beginPath();t25Ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)t25Ctx.lineTo(pts[i].x,pts[i].y);t25Ctx.closePath();t25Ctx.fillStyle=color;t25Ctx.fill();if(stroke){t25Ctx.strokeStyle=stroke;t25Ctx.lineWidth=1;t25Ctx.stroke()}}
+function t25Cuboid(x,y,z,w,h,d,color){
+ const a=t25Project(x-w/2,y-h/2,z-d/2),b=t25Project(x+w/2,y-h/2,z-d/2),c=t25Project(x+w/2,y-h/2,z+d/2),e=t25Project(x-w/2,y-h/2,z+d/2);
+ const A=t25Project(x-w/2,y+h/2,z-d/2),B=t25Project(x+w/2,y+h/2,z-d/2),C=t25Project(x+w/2,y+h/2,z+d/2),E=t25Project(x-w/2,y+h/2,z+d/2);
+ t25Poly([b,c,C,B],t25Hex(color,-36),'#1f363549');t25Poly([e,c,C,E],t25Hex(color,-16),'#173b3849');t25Poly([A,B,C,E],t25Hex(color,14),'#d8e0ba3b');
+}
+function t25Diamond(x,z,r,color){const a=t25Project(x-r,0,z-r),b=t25Project(x+r,0,z-r),c=t25Project(x+r,0,z+r),d=t25Project(x-r,0,z+r);t25Poly([a,b,c,d],color,'#436f622a')}
+function t25Ground(){
+ const c=t25Ctx;c.fillStyle='#8bbdb0';c.fillRect(0,0,t25W,t25H);
+ c.save();c.globalAlpha=.30;c.fillStyle='#b6d8b6';for(let i=0;i<8;i++){const x=((i*181+66+t25Elapsed*1.3)%(t25W+300))-100;const y=40+i%3*21;c.beginPath();c.ellipse(x,y,85,21,0,0,Math.PI*2);c.fill()}c.restore();
+ for(let ix=-14;ix<=14;ix++){for(let iz=-11;iz<=11;iz++){
+  const pt=t25Project(ix,0,iz);if(pt.x<-48||pt.x>t25W+48||pt.y<-48||pt.y>t25H+58)continue;
+  const road=(Math.abs(ix)<=2||Math.abs(iz-2)<=2),plaza=Math.abs(ix)<8&&iz>-1&&iz<5;
+  const jitter=(ix*29+iz*17+ix*iz*7)&7;
+  const col=plaza?(jitter<3?'#bebfa5':'#b5b7a0'):road?(jitter<4?'#c1c0a8':'#b1b8a1'):(jitter<3?'#7baf97':'#83b59d');
+  const p0=t25Project(ix-.5,0,iz-.5),p1=t25Project(ix+.5,0,iz-.5),p2=t25Project(ix+.5,0,iz+.5),p3=t25Project(ix-.5,0,iz+.5);
+  t25Poly([p0,p1,p2,p3],col,plaza?'#ddd6ad28':null);
+ }}
+}
+function t25Label(x,y,z,title,active=false,color='#e7f9db'){
+ const p=t25Project(x,y,z);if(p.x<-130||p.x>t25W+130||p.y<-50||p.y>t25H+50)return;
+ t25Ctx.save();t25Ctx.font='900 12px system-ui';t25Ctx.textAlign='center';const tw=t25Ctx.measureText(title).width+23;t25Ctx.fillStyle=active?'#275b62ee':'#244650c6';t25Ctx.strokeStyle=active?'#ffe6a3':'#a3c9bd90';t25Ctx.lineWidth=active?2:1;
+ t25Ctx.beginPath();t25Ctx.roundRect(p.x-tw/2,p.y-17,tw,29,9);t25Ctx.fill();t25Ctx.stroke();t25Ctx.fillStyle=active?'#ffe6a4':color;t25Ctx.fillText(title,p.x,p.y+2);t25Ctx.restore();t25TapCandidates.push({x:p.x,y:p.y,wx:x,wz:z,name:title});
+}
+function t25Avatar(){
+ const {x,z}=town25dPlayer,pt=t25Project(x,0,z);t25Ctx.save();t25Ctx.fillStyle='#1d393d5a';t25Ctx.beginPath();t25Ctx.ellipse(pt.x,pt.y+6,16,7,0,0,Math.PI*2);t25Ctx.fill();t25Ctx.restore();
+ t25Cuboid(x,.37,z,.62,.75,.49,'#237f83');t25Cuboid(x,1.05,z,.58,.56,.54,'#d6ab86');t25Cuboid(x,1.39,z-.02,.7,.25,.64,'#5c4838');
+ const p=t25Project(x,2.0,z);t25Ctx.font='900 11px system-ui';t25Ctx.textAlign='center';t25Ctx.fillStyle='#fff1c1';t25Ctx.fillText('나',p.x,p.y);
+}
+function t25RendererPort(){
+ let manifest=null,shapes=[];return {backend:'canvas2d-isometric',async mount(m){manifest=m;shapes=m.entities.filter(e=>e.enabled&&e.components?.['core.primitive']);t25Resize();},setTransform(id,t){const obj=shapes.find(s=>s.id===id);if(obj)obj.transform=structuredClone(t)},resize:t25Resize,frame(dt){if(!town25dActive)return;t25Elapsed+=dt;if(++t25Frames%2===0)return;t25Draw(shapes)},async dispose(){manifest=null;shapes=[]}};
+}
+function t25Draw(shapes){
+ if(!town25dActive)return;const r=t25Root.getBoundingClientRect();if(Math.abs(r.width-t25W)>1||Math.abs(r.height-t25H)>1)t25Resize();
+ t25Camera.x+=(town25dPlayer.x-t25Camera.x)*.09;t25Camera.z+=(town25dPlayer.z-t25Camera.z)*.09;
+ const c=t25Ctx;c.setTransform(t25Dpr,0,0,t25Dpr,0,0);t25Ground();t25TapCandidates=[];
+ const items=shapes.slice().filter(e=>e.id!=='floor'&&e.id!=='plaza'&&!e.id.startsWith('lantern-')).map(e=>({e,depth:e.transform.position[0]+e.transform.position[2]+(e.transform.position[1]*.0001)}));items.push(...T24_PROPS.map(prop=>({prop,depth:prop.x+prop.z+.01})));items.push({player:true,depth:town25dPlayer.x+town25dPlayer.z});items.sort((a,b)=>a.depth-b.depth);
+ for(const item of items){if(item.prop){t24DrawProp(item.prop);continue;}if(item.player){t25Avatar();continue;}const {position,scale}=item.e.transform;t25Cuboid(...position,...scale,item.e.components['core.primitive'].color);}
+ for(const target of T25_TARGETS){const near=t25Distance(target)<2.5;t25Label(target.x,target.type==='gate'?3.85:target.type==='npc'?2.0:4.1,target.z,target.title,near);}
+ // M2.4.1: The 2D mine-era building icon sprites are intentionally NOT painted on the 2.5D facades.
+}
+function t25Resize(){const r=t25Root.getBoundingClientRect();t25W=Math.max(1,r.width||window.innerWidth);t25H=Math.max(1,r.height||window.innerHeight);t25Dpr=Math.min(1.6,window.devicePixelRatio||1);t25Canvas.width=Math.round(t25W*t25Dpr);t25Canvas.height=Math.round(t25H*t25Dpr);}
+function t25Blocked(x,z){if(!Number.isFinite(x)||!Number.isFinite(z)||x<-11.7||x>11.7||z<-9.2||z>9.2)return true;
+ const blocks=[[-6.2,-3.1,5.4,4.3],[3.2,-3.2,5.8,4.5],[-.4,-2.1,1.75,1.75],[4.95,.28,1.0,.7]];
+ for(const [bx,bz,w,d] of blocks)if(Math.abs(x-bx)<w/2+.35&&Math.abs(z-bz)<d/2+.35)return true;
+ for(const prop of T24_PROPS)if(Math.hypot(x-prop.x,z-prop.z)<prop.radius+.25)return true;
+ return false;
+}
+function t25Normalize(raw){const def={schema:1,position:{x:.3,z:3.6},entryCount:0,renderer:'worldforge/0.1:canvas2d'};if(!raw||typeof raw!=='object')return def;
+ if(raw.position&&Number.isFinite(raw.position.x)&&Number.isFinite(raw.position.z)&&!t25Blocked(raw.position.x,raw.position.z))def.position={x:raw.position.x,z:raw.position.z};if(Number.isInteger(raw.entryCount))def.entryCount=Math.max(0,Math.min(100000,raw.entryCount));return def;
+}
+function t25Distance(t){return Math.hypot(t.x-town25dPlayer.x,t.z-town25dPlayer.z)}
+function t25Closest(){return [...T25_TARGETS].sort((a,b)=>t25Distance(a)-t25Distance(b))[0]}
+function t25Notify(msg){const el=$('town25dToast');el.textContent=msg;el.classList.add('show');t25ToastEnd=performance.now()+2200;}
+function t25ClearInput(){t25Keys.clear();t25Joy={x:0,y:0};t25Pointer=null;t25Move={x:0,z:0};}
+function t25RefreshHUD(){if(!town25dActive)return;let near=t25Closest();let valid=near&&t25Distance(near)<2.65;$('town25dAction').textContent=valid?near.label:'둘러보기';$('town25dAction').disabled=!valid;$('town25dCoins').textContent='🪙 '+Math.max(0,game?.coins||0);$('town25dSub').textContent=valid?near.hint:'마을 시설에 다가가면 이용할 수 있어요';}
+function t25Activate(){if(town25dActive)return;
+ const state=game.town25dV1=t25Normalize(game?.town25dV1);town25dPlayer={...state.position};t25Camera={...town25dPlayer};t25ClearInput();ssM15ResetHeldInputs();releaseRope();
+ town25dActive=true;t25Root.hidden=false;$('app').classList.add('town-25d-active');t25Resize();
+ if(!town25dEngine||['failed','disposed'].includes(town25dEngine.state)){town25dRenderer=t25RendererPort();const loadingEngine=town25dEngine=t25CreateEngine({renderer:town25dRenderer,validateManifest:t25ValidateManifest});loadingEngine.load(T25_MANIFEST).then(result=>{if(loadingEngine!==town25dEngine)return;if(!result.ok){t25Notify('2.5D 월드 로딩 실패');return;}if(town25dActive&&!paused)loadingEngine.start();}).catch(err=>{console.warn('town world loader rejected',err);t25Notify('2.5D 월드 초기화 실패');});}
+ else if(town25dEngine.state==='paused')town25dEngine.resume();else if(town25dEngine.state==='stopped')town25dEngine.start();
+ t25Draw(t25Ent);t25RefreshHUD();
+}
+function t25Deactivate(){if(!town25dActive)return;t25ClearInput();town25dActive=false;t25Root.hidden=true;$('app').classList.remove('town-25d-active');town25dEngine?.pause();ssM15ResetHeldInputs();last=performance.now();}
+async function t25Travel(t){
+ if(!town25dActive||t25TrafficLock||!t||!t.target||t25Distance(t)>2.65)return false;
+ const gate=t.target==='mine'?SS_M16_PORTALS.townMine:SS_M16_PORTALS.village;
+ t25TrafficLock=true;t25ClearInput();let result=false;
+ try{result=await ssM16RequestTravel(t.target,gate.id,{fromTown:true});}
+ catch(err){console.warn('town portal',err);}
+ finally{t25TrafficLock=false;}
+ if(!result)t25Notify('지역 이동에 실패해 마을에 머물러요');
+ return result;
+}
+function t25Interact(){if(!town25dActive||paused||t25TrafficLock)return false;const target=t25Closest();if(!target||t25Distance(target)>2.65){t25Notify('건물이나 출입구에 가까이 가보세요');return false;}
+ t25LastAction=target.id;
+ if(target.target){t25Travel(target);return true;}
+ if(target.id==='market'){market();return true;}
+ if(target.id==='forge'){forgeMenu();return true;}
+ if(target.id==='harin'){ssM1Talk('harin');return true;}
+ return false;
+}
+function t25Tick(dt,now){const should=ssRegion===T25_ID&&!farmWorldActive&&!archWorldActive&&!ssIsTitle();
+ if(!should){if(town25dActive)t25Deactivate();if(ssRegion!==T25_ID)t25LastRegion=ssRegion;return false;}
+ if(!town25dActive){t25Activate();if(t25LastRegion==='mine')town25dPlayer={x:-7.6,z:5.8};else if(t25LastRegion==='life_forest_01')town25dPlayer={x:8,z:5.4};if(game.town25dV1)game.town25dV1.position={...town25dPlayer};t25LastRegion='';}
+ if(town25dEngine?.state==='ready'&&!paused)town25dEngine.start();else if(town25dEngine?.state==='paused'&&!paused)town25dEngine.resume();else if(town25dEngine?.state==='running'&&paused)town25dEngine.pause();
+ if(now>t25ToastEnd)$('town25dToast').classList.remove('show');
+ if(!paused){let sx=0,sy=0;const key=x=>t25Keys.has(x);if(key('w')||key('arrowup'))sy--;if(key('s')||key('arrowdown'))sy++;if(key('a')||key('arrowleft'))sx--;if(key('d')||key('arrowright'))sx++;
+ sx+=t25Joy.x;sy+=t25Joy.y;const l=Math.hypot(sx,sy);if(l>1){sx/=l;sy/=l;}
+ const tx=(sx+sy)*.70710678*4.75,tz=(sy-sx)*.70710678*4.75;const damp=1-Math.exp(-dt*10);t25V.x+=(tx-t25V.x)*damp;t25V.z+=(tz-t25V.z)*damp;
+ const nx=town25dPlayer.x+t25V.x*dt,nz=town25dPlayer.z+t25V.z*dt;
+ if(!t25Blocked(nx,town25dPlayer.z))town25dPlayer.x=nx;else t25V.x=0;
+ if(!t25Blocked(town25dPlayer.x,nz))town25dPlayer.z=nz;else t25V.z=0;
+ if(game?.town25dV1)game.town25dV1.position={...town25dPlayer};
+ livingWorldTick(Math.max(0,dt));t25SavedTick+=dt;if(t25SavedTick>7){saveGame(true);t25SavedTick=0;}
+ }
+ t25RefreshHUD();return true;
+}
+const t25Pad=$('town25dPad');
+function t25PadMove(e){if(t25Pointer!==e.pointerId)return;const r=t25Pad.getBoundingClientRect();let dx=(e.clientX-r.left-r.width*.5)/(r.width*.35),dy=(e.clientY-r.top-r.height*.5)/(r.height*.35);const len=Math.hypot(dx,dy);if(len>1){dx/=len;dy/=len;}t25Joy={x:dx,y:dy};}
+t25Pad.addEventListener('pointerdown',e=>{if(!town25dActive||ssM16TransitionLocked)return;e.preventDefault();t25Pointer=e.pointerId;t25Pad.setPointerCapture(e.pointerId);t25PadMove(e)});
+t25Pad.addEventListener('pointermove',t25PadMove);
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])t25Pad.addEventListener(ev,e=>{if(e.pointerId===t25Pointer){t25Joy={x:0,y:0};t25Pointer=null}});
+window.addEventListener('keydown',e=>{if(!town25dActive||ssIsTitle()||ssM16TransitionLocked)return;const k=e.key.toLowerCase();const keys=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright','e',' ','escape'];if(!keys.includes(k))return;
+ if(e.target instanceof Element&&e.target.closest('#overlay.open'))return;
+ e.preventDefault();e.stopImmediatePropagation();if(k==='e'||k===' '){if(!e.repeat)t25Interact();}else if(k==='escape'){if(!e.repeat)menu();}else t25Keys.add(k);
+},true);
+window.addEventListener('keyup',e=>{if(!town25dActive)return;const k=e.key.toLowerCase();t25Keys.delete(k);if(['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',t25ClearInput);
+$('town25dAction').addEventListener('click',t25Interact);
+$('town25dBag').addEventListener('click',()=>{t25ClearInput();bagMenu();});
+$('town25dMenu').addEventListener('click',()=>{t25ClearInput();menu();});
+$('town25dCenter').addEventListener('click',()=>{t25Camera={...town25dPlayer};t25Notify('시점을 중앙으로 맞췄어요')});
+t25Canvas.addEventListener('pointerdown',e=>{if(!town25dActive||paused||ssM16TransitionLocked)return;const r=t25Canvas.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;const hits=t25TapCandidates.filter(t=>Math.hypot(x-t.x,y-t.y)<38).sort((a,b)=>Math.hypot(x-a.x,y-a.y)-Math.hypot(x-b.x,y-b.y));if(hits.length){const target=T25_TARGETS.find(t=>t.x===hits[0].wx&&t.z===hits[0].wz);if(target){if(t25Distance(target)<=2.65)t25Interact();else t25Notify(target.title+'에 조금 더 가까이 가세요');}}});
+window.addEventListener('resize',()=>{if(town25dActive){t25Resize();t25Draw(t25Ent)}});
+window.__sandstarTown25D={manifest:()=>structuredClone(T25_MANIFEST),worldId:T25_ID,state:()=>({active:town25dActive,region:ssRegion,worldId:town25dActive?'village_hub_01':ssRegion,renderer:'WorldForge renderer-port canvas2d isometric',engine:town25dEngine?.state||'unloaded',engineWorldId:town25dEngine?.worldId||null,position:{...town25dPlayer},nearest:t25Closest()?.id,nearDistance:t25Distance(t25Closest()),saveKey:SAVE_KEY,activePortal:t25TrafficLock,frameCount:t25Frames,entities:t25Ent.length,lastAction:t25LastAction}),blocked:t25Blocked,move:(x,z)=>{if(!town25dActive||t25Blocked(x,z))return false;town25dPlayer={x,z};t25RefreshHUD();t25Draw(t25Ent);return true},action:t25Interact,travel:target=>{const t=T25_TARGETS.find(o=>o.target===target);return t?t25Travel(t):false},render:()=>t25Draw(t25Ent)};
+
+window.__sandstarTownM22={worldId:TOWN_WORLD_ID,region:()=>ssRegion,buildings:()=>BUILDING_DATA.map(x=>({...x})),tile:(x,y)=>tile(x,y),write:(x,y,t)=>setTile(x,y,t),surface:(x)=>terrain(x),enter:(target)=>ssM16RequestTravel(target),nearest:()=>ssM16CurrentGate().id,saveKey:SAVE_KEY};
+window.__sandstarPortalM16={get:()=>({current:ssM16CurrentGate().id,region:ssRegion,near:ssM16NearPortal(),locked:ssM16TransitionLocked,travelCount:ssM16TravelCount,lastResult:ssM16LastResult,saveKey:SAVE_KEY,lastTravelAt:ssM16LastTravelAt}),tapTile:ssM16TryPortalTap,request:ssM16RequestTravel,portalFoot:()=>{let a=ssM16CurrentGate();return {x:a.x,y:terrain(a.x)-1}},getSpawn:(region)=>{let a=ssM16ResolveSafeSpawn(region);return a?{...a}:null}};
+window.__sandstarM1={state:()=>({region:ssRegion,story:JSON.parse(JSON.stringify(game?.storyM1||{})),saveKey:SAVE_KEY,ropeMode:ropeABMode,player:p?{x:p.x,y:p.y}:null}),nearby:ssM1NearbyAction,interact:ssM1Act,transition:ssM1Transition,inspectCrystal:ssM1InspectCrystal,repairSpring:ssM1RepairSpring};
+
+let hasSave=readGame();resize();spawnPlayer();updHud();ssSavedWorldAtBoot=hasSave;
+$('app').classList.add('ss-at-title');ssUpdateSummary();ssShowView('ssHome');paused=true;
+requestAnimationFrame(loop);
+// Preserve the loading cover until the world and the menu have actually painted.
+requestAnimationFrame(()=>requestAnimationFrame(()=>{$('ssBootLoader').classList.add('dismissed')}));
+window.addEventListener('resize',resize);
+// ROPE-AB local A/B label is hidden on touch devices; its mode is never saved in world JSON.
+const ropeABIndicator=document.createElement('div');ropeABIndicator.id='ropeABIndicator';
+cv.insertAdjacentElement('afterend',ropeABIndicator);setRopeABMode(ropeABMode);
+window.__sandstarRopeAB={get:()=>({mode:ropeABMode,rightClicks:ropeABRightClicks,fireAttempts:ropeABFireAttempts,rope:{active:rope.active,attached:rope.attached,mode:rope.mode,anchor:rope.anchor?{...rope.anchor}:null},mineTarget:holdTarget}),screen:()=>({x:p.x*T-camera.x,y:(p.y-PLAYER_CENTER_FROM_FEET)*T-camera.y}),set:setRopeABMode,aim:(x,y)=>desktopRopeDirection(x,y)};
+// 2.18-H2: prevent content:// browser chrome and rotation from cutting off HUD.
+function hudSyncVisibleViewport(){
+ const v=window.visualViewport;
+ const h=(v&&Number.isFinite(v.height)&&v.height>100)?v.height:window.innerHeight;
+ if(Number.isFinite(h)&&h>100)document.documentElement.style.setProperty('--play-height',Math.round(h)+'px');
+ requestAnimationFrame(resize);
+}
+if(window.visualViewport)window.visualViewport.addEventListener('resize',hudSyncVisibleViewport);
+window.addEventListener('orientationchange',hudSyncVisibleViewport);
+hudSyncVisibleViewport();
+window.__sandstarTitleP0={state:()=>({title:ssIsTitle(),paused,hasSave:ssSavedWorldAtBoot,worldSeed:game.seed,worldMined:game.mined,worldCoins:game.coins}),open:ssReturnToTitle};
+window.__sandstarHUDH3={
+ snapshot:()=>({pad:hudPadDir?{...hudPadDir}:null,padPointer:hudPadPointerId,mineHeld:hudMineHeld,minePointer:hudMinePointerId,mineCompact:mineIsCompact(),mineActive:stickActive,mineDir:stickDir?{...stickDir}:null,ropeAim:ropePointerAim?.direction||null,ropePadUsed:!!ropePointerAim?.padUsed,ropeInvalid:!!ropePointerAim?.padInvalid,inputs:{...input},viewportHeight:document.getElementById('app').getBoundingClientRect().height}),
+};
+window.__sandstarHUDH2=window.__sandstarHUDH3;
+window.__sandstar213={audio:()=>({enabled:sfxState.enabled,volume:sfxState.volume,ready:sfxState.ready,unsupported:sfxState.unsupported,plays:sfxState.plays,prefKey:SOUND_PREF_KEY}),fx:()=>({pixels:miningPixels.length,pulses:orePulses.length}),testSfx:(name)=>{armAudio();return playSound(name)},prefs:(enabled,volume)=>{setSoundEnabled(enabled);setSoundVolume(volume)}};
+window.__sandstarAffinity={
+ get:()=>({id:game.pickaxeForge.affinity,rank:game.pickaxeForge.rank,advanced:affinityIsAdvanced(),active:equippedAffinity(),bonusOreDrops:game.pickaxeForge.bonusOreDrops||0,oreBonusRate:pickaxeOreBonusRate(),scanRadius:pickaxeScanRadius(),earthStoneBoost:pickaxeAffinityPower('stone'),earthCoalBoost:pickaxeAffinityPower('orecoal'),pickaxeRateStone:miningRate('stone'),pickaxeRateCopper:miningRate('copper'),switches:game.pickaxeForge.affinitySwitches||0}),
+ select:choosePickaxeAffinity,preview:forgeAffinityPanel,rate:(t)=>miningRate(t)
+};
+window.__sandstarP16A1=Object.freeze({status:()=>({motor:p16DrillRank(),spin:p16DrillMotion.spin,heat:p16DrillMotion.heat,overheated:p16DrillMotion.overheated,effective:p16DrillMotion.effective,working:p16DrillMotion.working,saveKey:SAVE_KEY}),next:()=>p16DrillNextRule()?{...p16DrillNextRule()}:null});
+window.__sandstarP16A2=Object.freeze({status:()=>({bit:p16a2BitId(),owned:[...p16a2Bits().owned],motor:p16DrillRank(),spin:p16DrillMotion.spin,heat:p16DrillMotion.heat,saveKey:SAVE_KEY}),rate:t=>p16a2BitPower(t),bits:()=>P16A2_BIT_IDS.map(id=>({id,...P16A2_DRILL_BITS[id]})),preview:()=>p16a2DrillBitsPanel()});
+window.__sandstarP16C1=Object.freeze({
+ status:()=>({rank:p16RopeRank(),saveKey:SAVE_KEY,chainCap:p16RopeChainCap(),chainRemaining:ropeChainRemaining,hangPaused:ropeHangPaused,active:rope.active,swing:rope.mode==='swing',autoFactor:p16RopeRule().auto,manualFactor:p16RopeRule().manual,reelFactor:p16RopeRule().reel}),
+ next:()=>P16_ROPE_DEVICES[p16RopeRank()+1]||null,
+ verify:()=>({climbAuto:p16RopeClimbSpeed(false),climbManual:p16RopeClimbSpeed(true),reel:p16RopeReelSpeed(),ropeMaxSpeed:9.5}),
+ preview:p16RopeForgePanel
+});
+window.__sandstarP16D1=Object.freeze({
+ status:()=>({saveKey:SAVE_KEY,rank:game.pickaxeForge.rank,tool:game.tool,chain:p16DTrace.chain,ore:p16DTrace.ore,
+  hint:p16DHint()?{...p16DTrace.hint}:null,followed:p16DTrace.followed,stepRate:p16DRatePerStep()}),
+ multiplier:(x,y,type)=>p16DPrecisionMultiplier(x,y,type),
+ next:(x,y,type)=>p16DFindNextOre(x,y,type),
+ reset:p16DReset,
+ preview:p16DForgePanel
+});
+window.__sandstarP16A3=Object.freeze({status:()=>({motor:p16DrillRank(),bit:p16a2BitId(),ratio:p16a3BoreRatio(),boreCount:p16a3BoreStats.count,last:p16a3BoreStats.last,saveKey:SAVE_KEY}),next:()=>p16DrillNextRule()?{...p16DrillNextRule()}:null});
+window.__sandstarP15={maxRank:()=>FORGE_MAX_RANK,rankBonus:forgeRankBonus,rules:()=>FORGE_RULES.slice(1).map((r,i)=>({stage:i+1,...r})),affinityStage,secondaryPower:pickaxeSecondaryPower,secondary:()=>equippedSecondary(),summary:()=>({rank:game.pickaxeForge.rank,affinity:game.pickaxeForge.affinity,secondary:game.pickaxeForge.secondary,forgeChance:forgeChance(),saveKey:SAVE_KEY})};
+window.__sandstarForgeVisual={ready:()=>forgeAppearanceReady,tier:()=>forgeAppearanceTier(game.pickaxeForge?.rank||0),forRank:r=>forgeAppearanceTier(r),name:()=>FORGE_APPEARANCE_NAMES[forgeAppearanceTier(game.pickaxeForge?.rank||0)],frames:4,tiers:5,canvas:()=>[forgeAppearanceImage.naturalWidth,forgeAppearanceImage.naturalHeight]};
+window.__sandstarBuildings={nearby:()=>closestBuilding()?.id||null,coordinates:()=>BUILDING_DATA.map(x=>({...x,y:terrain(x.x)-1})),open:enterNearbyBuilding,openMarket:market,openForge:forgeMenu,section:(id)=>{marketSection=id;return market();},forgeSection:(id)=>{forgeSection=id;return forgeMenu();},artReady:()=>Object.values(BUILDING_IMAGES).every(i=>i.complete&&i.naturalWidth===96),debugTerrain:()=>({seed:game.seed,one:noise1(game.seed,14/31),two:noise1(game.seed+1,14/11),three:noise1(game.seed+3,14/5),terrain:terrain(14)})};
+window.__sandstarCharacter={
+ mobility:()=>window.__sandstarMobility.effective(),
+ state:()=>({level:deriveLevelFromTotalXp(game.character.totalXp).level,totalXp:game.character.totalXp,stats:{...game.character.stats},sp:getUnspentSp(),claimedMilestones:[...game.character.claimedMilestones],claimedCellCount:xpClaimBits.reduce((a,b)=>a+b.toString(2).replace(/0/g,'').length,0),relics:game.relics,pickaxeLevel:game.pickaxeLevel}),
+ required:xpRequiredForNext,derive:deriveLevelFromTotalXp,open:characterMenu,allocate:allocateStatPoint,reset:resetStatPoints,
+ cellClaimed:xpCellClaimed,grantDepth:claimMilestoneXp,
+ // Debug test injection changes local in-memory state only; call save explicitly to persist.
+ testXp:n=>{if(!Number.isSafeInteger(n)||n<0||n>MAX_CHARACTER_XP)return false;game.character.totalXp=n;updHud();return true},
+ testSetStat:(k,n)=>{if(!CHARACTER_STAT_IDS.includes(k)||!Number.isInteger(n)||n<0||n>8)return false;game.character.stats[k]=n;return true},
+ snapshot:()=>{prepareCharacterForSave();return JSON.parse(JSON.stringify(game))},save:()=>saveGame(true)
+};
+window.__sandstarMobility={
+ effective:()=>({...mobilityDerived(),ropeLeapRemaining:remainingRopeLeaps(),groundStableSeconds:ropeGroundStableSeconds}),
+ mineRate:t=>miningRate(t),
+ update:dt=>updatePhysics(dt),
+ jump:()=>{requestJump();return true;},
+ ropeCut:()=>cutRopeJump(),
+ // Only for local deterministic QA, not a player-facing override.
+ testSetCharges:n=>{if(!Number.isInteger(n)||n<0||n>mobilityDerived().ropeLeapMax)return false;ropeLeapRemaining=n;ropeGroundStableSeconds=0;return true;},
+ testSetRope:(anchor,targetY)=>{if(!anchor||!Number.isInteger(anchor.x)||!Number.isInteger(anchor.y)||!solid(tile(anchor.x,anchor.y)))return false;
+ const tgt=Number.isFinite(targetY)&&targetY>=1&&targetY<p.y?targetY:p.y;
+ rope={active:true,attached:tgt===p.y,anchor:{x:anchor.x,y:anchor.y,faceX:p.x,faceY:anchor.y+1},targetY:tgt};ropeAscentStartY=tgt<p.y?p.y:null;return true;},
+ testSetDirection:dir=>{if(![-1,0,1].includes(dir))return false;input.left=dir<0;input.right=dir>0;return true;},
+ testSetPlayer:(x,y)=>{if(!Number.isFinite(x)||!Number.isFinite(y)||x<1||x>WW-2||y<1||y>WH-2)return false;
+ releaseRope();p.x=x;p.y=y;p.vx=0;p.vy=0;p.grounded=false;ropeGroundStableSeconds=0;return true;}
+};
+
+window.__sandstarArtifacts={
+ get:()=>({trait:game.character.trait,freeChangeUsed:game.character.traitFreeChangeUsed,level:deriveLevelFromTotalXp(game.character.totalXp).level,slots:artifactSlotsFor(),coins:game.coins,system:JSON.parse(JSON.stringify(game.artifactSystem)),effects:getEffectiveStats(),legacyRelics:game.relics}),
+ trait:selectCharacterTrait,equip:equipArtifact,claim:tryAwardEarnedArtifacts,menu:(tab='artifacts')=>{characterTab=tab;characterMenu();},
+ // Test helpers are not player-facing; they mutate only runtime debug state and never grant inventory directly.
+ testProgress:(k,v)=>{if(!(k in game.artifactSystem.progress)||!Number.isFinite(v)||v<0)return false;game.artifactSystem.progress[k]=v;return true;}
+};
+window.__sandstarVision={
+  state:()=>({radius:effectiveSightRadius(),depth:visionDepth(),fade:visionFade(),visibleCells:visionCache.visible.size,exploredCells:visionExploredBits.reduce((n,b)=>n+b.toString(2).replace(/0/g,'').length,0),saveKey:SAVE_KEY,legacyRelics:game.relics}),
+  visible:(x,y)=>visionVisible(x,y),explored:(x,y)=>isExplored(x,y),solidMemory:(x,y)=>bitRead(visionSolidBits,x,y),
+  reveal:()=>{updateVisionCache(true);return true;},
+  snapshot:()=>{prepareVisionForSave();return {...game.vision};},
+  invalidate:()=>{visionCache.cx=-999;},
+  setPlayer:(x,y)=>{if(!Number.isFinite(x)||!Number.isFinite(y)||x<1||x>WW-2||y<1||y>WH-2)return false;releaseRope();p.x=x;p.y=y;p.vx=p.vy=0;visionCache.cx=-999;updateVisionCache();return true;}
+};
+
+window.__sandstarCavernP12={source:(ax,ay)=>ssCavernSourceV4(ax,ay),at:(x,y)=>ssCavernFeatureV4(x,y),clue:(x,y)=>ssCavernClueAt(x,y),journal:()=>[...(game.cavernDiscoveries||[])],tick:()=>ssCavernCheckDiscovery(),feetOffset:()=>PLAYER_CENTER_FROM_FEET,tilesForVersion:(version,coords)=>{const was=game.worldGenVersion;try{game.worldGenVersion=version;return coords.map(([x,y])=>tile(x,y));}finally{game.worldGenVersion=was;}},featureForVersion:(version,x,y)=>{const was=game.worldGenVersion;try{game.worldGenVersion=version;return ssCavernFeatureV4(x,y);}finally{game.worldGenVersion=was;}}};
+window.__sandstarRopeHangP11={snapshot:()=>({active:rope.active,vertical:rope.mode!=='swing'&&rope.mode!=='pull',paused:ropeHangPaused,autoChain:ropeAutoChain,targetY:rope.targetY,startY:ropeAscentStartY,playerY:p.y,playerX:p.x,attached:rope.attached,reelIn:input.reelIn,reelOut:input.reelOut,ropeAnchor:rope.anchor?{x:rope.anchor.x,y:rope.anchor.y}:null}),toggle:()=>toggleRope()};
+window.__sandstarRopeUX={snapshot:()=>({gesture:ropePointerAim?.gesture||null,direction:ropePointerAim?.direction||null,preview:ropePreviewAnchor?{...ropePreviewAnchor}:null,hint:$('ropeHint').textContent,slop:ROPE_TOUCH_SLOP,hapticsEnabled:ropeHapticsEnabled,pending:ropeReelPending}),direction:(dx,dy,previous='up')=>ropeDirectionFromDrag(dx,dy,previous)};
+window.__sandstarDebug={economy:()=>({reserveLiftMaterials:game.economy.reserveLiftMaterials,reserveForgeMaterials:game.economy.reserveForgeMaterials,pending:liftNeedsRepair(),available:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,sellableOreCount(id)])),liftReservation:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,liftReservedOreCount(id)])),forgeReservation:Object.fromEntries(ORE_SALE_ITEMS.map(([id])=>[id,nextForgeReserveOreCount(id)])),sold:game.economy.totalOreSold,earned:game.economy.totalCreditsEarned,metrics:JSON.parse(JSON.stringify(balanceStats())),next:forgeRule()?.items||[]}),liftArt:()=>({ready:liftDoorSprites.ready,failed:liftDoorSprites.failed,width:LIFT_SPRITE_WIDTH,height:LIFT_SPRITE_HEIGHT,open:liftDoorSprites.open.naturalWidth,locked:liftDoorSprites.locked.naturalWidth}),feedback:()=>miningFeedbackState(),tap:(x,y)=>tileAction(x,y,true),sprite:()=>({sizePixels:PLAYER_DRAW_SIZE,collisionHeightTiles:PLAYER_HEIGHT,reachTiles:effectiveMineReach(),ready:minerSpriteReady,toolsReady:minerToolsReady,animation:animName,frame:currentMinerFrame(),mining:isMiningAnimationActive(),direction:currentMiningDirection(),visualFacing:minerVisualFacing(),tool:game.tool,canvasSize:[cv.width,cv.height]}),get:()=>({x:p.x,y:p.y,seed:game.seed,mined:game.mined,coins:game.coins,inv:game.inv,edits:Object.keys(game.edits).length,pickaxeLevel:game.pickaxeLevel||1,tool:game.tool,oreFinds:game.oreFinds,relics:game.relics,worldGenVersion:game.worldGenVersion,forge:{...game.pickaxeForge},saveOkay}),teleport:(x,y)=>{releaseRope();ropeChainRemaining=p16RopeChainCap();ropeGroundStableSeconds=0;ropeGrabCooldown=0;ropeSnap=null;p.x=x;p.y=y;p.vy=0;p.vx=0;jumpBuffer=0;coyoteTime=0;airLeapControl=false},mine:(x,y)=>{doMine(x,y,999);updHud()},canReach:(x,y)=>canReach(x,y),collides:(x,y)=>collides(x,y),tile:(x,y)=>tile(x,y),setTool:(tool)=>{if(TOOL_INFO[tool]){game.unlockedTools.push(tool);game.tool=tool;updHud()}},setCoins:(n)=>{game.coins=n;updHud()},resources:()=>({layerVersion:game.resourceLayerVersion,stock:{titanium:game.inv.titanium||0,starshard:game.inv.starshard||0},prices:ORE_SALE_ITEMS.filter(a=>a[0]==='titanium'||a[0]==='starshard').map(a=>({id:a[0],price:a[2]})),assets:window.__sandstarDuriOreArt.mapping()}),getProgress:()=>({key:holdLast,progress:holdProgress}),getStick:()=>({active:stickActive,dir:stickDir}),mobility:()=>({rope:{...rope},ropeJumpUsed:remainingRopeLeaps()===0,ropeLeapRemaining:remainingRopeLeaps(),ropeLeapMax:mobilityDerived().ropeLeapMax,ropeGroundStableSeconds,ropeGrabCooldown,ropeSnap:!!ropeSnap,vy:p.vy,vx:p.vx,grounded:p.grounded,jumpBuffer,coyoteTime,airLeapControl,ropeAim,ropeHold,ropeHoldTime,pointerDirection:ropePointerAim?.direction||null,candidate:ropeCandidate,transport:JSON.parse(JSON.stringify(game.transport)),nearby:nearbyStation?.id||null}),rope:()=>toggleRope(),fireRopeAim:dir=>fireDirectionalRope(dir),startSwing:dir=>startRopeSwing(dir),reel:delta=>adjustRopeLength(delta),transfer:dir=>transferRope(dir),chain:()=>({remaining:ropeChainRemaining,window:ropeChainWindow,limit:ROPE_CHAIN_MAX}),findAimAnchor:dir=>findDirectionalRopeAnchor(dir),findAnchor:()=>findRopeAnchor(),nearStation:()=>closestStation()?.id||null,stationMenu:()=>stationMenu(),travel:(id)=>travelStation(id),rescue:()=>rescuePlayer(),grantRepair:()=>{game.inv.stone+=STATION_COST.stone;game.inv.copper+=STATION_COST.copper;game.coins+=STATION_COST.coins;},aim:(dx,dy)=>setStickDirection(dx,dy),releaseAim:()=>stopMineStick(),holdMine:(dt)=>mineHold(dt),save:()=>saveGame(true)};
+})();
+</script>
+</body>
+</html>
