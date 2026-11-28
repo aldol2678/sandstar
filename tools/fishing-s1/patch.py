@@ -56,6 +56,7 @@ CSS = """<style id="river-s1-style">
 .river-dex img{width:32px;height:32px;image-rendering:pixelated}
 .river-dex i{font-style:normal;font-size:20px;line-height:32px}
 .river-dex small{color:#a6ccca}
+.river-flowlog{margin:6px 0;color:#d8e5d8}.river-flowlog ul{margin:4px 0;padding-left:18px}
 @media (min-width:700px){#riverOverlay{padding-left:max(12px,calc(50% - 300px));padding-right:max(12px,calc(50% - 300px))}}
 @media (orientation:landscape) and (max-height:500px){.river-stage{min-height:150px}.river-hint{min-height:1.4em}#riverHold{min-height:52px!important}}
 #fishWorldCanvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
@@ -87,6 +88,7 @@ MARKUP = """ <section id="riverOverlay" role="dialog" aria-modal="true" aria-lab
    <p>작은 그림자는 짧게 당겼다 멈추기, 중간 그림자는 지나가는 길 앞에서 당기기, 큰 그림자는 조용히 흘리기에 반응해요.</p>
    <p>걸린 뒤에는 틈에 감고, 몸을 꺾거나 버티면 손을 떼세요. 손을 떼도 진도는 줄지 않지만, 가만히 두면 잡히지 않아요.</p>
    <p>PC: 스페이스·F 감기 · 1/2/3 자리 · R 회수 · Esc 나가기</p>
+   <div id="riverFlowLog" class="river-flowlog"></div>
    <label><input id="riverAssist" type="checkbox"> 자동 걸기 보조 (기록·보상 동일)</label></details>
  </section>
  <section id="fishWorldRoot" class="farm-world fish-world" aria-label="도래 낚시터" hidden>

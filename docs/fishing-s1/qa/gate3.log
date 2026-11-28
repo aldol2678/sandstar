@@ -1,4 +1,4 @@
-== Gate 3 pc 2026-11-28T02:59:50.763Z http://127.0.0.1:8761/
+== Gate 3 pc 2026-11-28T03:47:34.845Z http://127.0.0.1:8761/
 recipes {"bread":{"needs":{"wheat":2},"energy":25,"wood":0},"soup":{"needs":{"carrot":2},"energy":35,"wood":0},"stew":{"needs":{"fish":1,"potato":1},"energy":50,"wood":0}}
 PASS pc: cooking away from the counter refused — 요리대 가까이에서 만들 수 있어요
 PASS pc: walk to village kitchen counter
@@ -9,7 +9,7 @@ PASS pc: stew blocked with reason when bag is empty — 재료 부족 · 물고�
 PASS pc: engine also refuses stew with reason — 재료가 부족해요: 물고기 1개 더 필요 (보유 0/1) · 감자 1개 더 필요 (보유 0/1)
 PASS pc: farmed wheat/carrot/potato 3 each — {"w":3,"c":3,"p":3}
 PASS pc: no errors before fixture
-PASS pc: fixture loaded (perch 1, energy 40) — {"perch":1,"energy":40.13249166666668}
+PASS pc: fixture loaded (perch 1, energy 40) — {"perch":1,"energy":40.13151666666665}
 PASS pc: bread enabled with ingredients
 PASS pc: cooked bread -> bag +1, counted
 PASS pc: soup enabled with ingredients
@@ -29,7 +29,7 @@ PASS pc: eating with no bread refused — 먹을 요리가 없어요
 PASS pc: dishes, counts and buff survive reload — {"bag":{"seed":6,"crop":0,"seed_wheat":3,"seed_potato":3,"seed_carrot":3,"sapling":0,"wheat":1,"potato":2,"carrot":1,"river_fish":0,"perch":0,"carp":0,"bread":0,"soup":0,"stew":1},"counts":{"harvested":{"wheat":1,"potato":1,"carrot":1,"crop":0},"cooked":{"bread":1,"soup":1,"stew":1},"delivered":{}},"cooked":3,"buff":"harvest"}
 PASS pc: energy survives reload — 100 -> 100
 PASS pc: no page/console errors, no failed requests
-== Gate 3 m390 2026-11-28T03:00:05.040Z http://127.0.0.1:8761/
+== Gate 3 m390 2026-11-28T03:47:49.393Z http://127.0.0.1:8761/
 recipes {"bread":{"needs":{"wheat":2},"energy":25,"wood":0},"soup":{"needs":{"carrot":2},"energy":35,"wood":0},"stew":{"needs":{"fish":1,"potato":1},"energy":50,"wood":0}}
 PASS m390: cooking away from the counter refused — 요리대 가까이에서 만들 수 있어요
 PASS m390: walk to village kitchen counter
@@ -40,7 +40,7 @@ PASS m390: stew blocked with reason when bag is empty — 재료 부족 · 물�
 PASS m390: engine also refuses stew with reason — 재료가 부족해요: 물고기 1개 더 필요 (보유 0/1) · 감자 1개 더 필요 (보유 0/1)
 PASS m390: farmed wheat/carrot/potato 3 each — {"w":3,"c":3,"p":3}
 PASS m390: no errors before fixture
-PASS m390: fixture loaded (perch 1, energy 40) — {"perch":1,"energy":40.13249999999995}
+PASS m390: fixture loaded (perch 1, energy 40) — {"perch":1,"energy":40.131516666666634}
 PASS m390: bread enabled with ingredients
 PASS m390: cooked bread -> bag +1, counted
 PASS m390: soup enabled with ingredients

@@ -2,19 +2,19 @@ PASS m390: default build: no QA hooks (no time skip, no scene probe/focus) — {
 PASS m390: walk to the farm gate
 PASS m390: enter farm_01 through the gate button — 🌾 농장으로 이동
 PASS m390: wheat: walk next to plot:34
-PASS m390: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":0.7954999999998607,"watered":true,"crop":"wheat","stage":1,"wateredAt":0.8788999999998603}
+PASS m390: wheat: plant + water with the action button — 🌱 밀 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":0.8724999999998605,"watered":true,"crop":"wheat","stage":1,"wateredAt":0.9724999999998606}
 PASS m390: potato: walk next to plot:37
-PASS m390: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.0287999999998605,"watered":true,"crop":"potato","stage":1,"wateredAt":1.0954999999998607}
+PASS m390: potato: plant + water with the action button — 🌱 감자 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.1724999999998607,"watered":true,"crop":"potato","stage":1,"wateredAt":1.2724999999998607}
 PASS m390: carrot: walk next to plot:40
-PASS m390: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.26219999999986,"watered":true,"crop":"carrot","stage":1,"wateredAt":1.3287999999998599}
+PASS m390: carrot: plant + water with the action button — 🌱 당근 심기 → 💧 물 주기 (1/3단계) · {"plantedAt":1.472499999999861,"watered":true,"crop":"carrot","stage":1,"wateredAt":1.572499999999861}
 PASS m390: wheat: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS m390: potato: grew 1 → 2 → 3 on the game clock — [1,2,3]
 PASS m390: carrot: grew 1 → 2 → 3 on the game clock — [1,2,3]
-real time from first plant to all ripe: 81 s
+real time from first plant to all ripe: 82 s
 PASS m390: wheat: harvest → +3 wheat, plot empty — 🌾 수확하기 · 0→3
 PASS m390: potato: harvest → +3 potato, plot empty — 🌾 수확하기 · 0→3
 PASS m390: carrot: harvest → +3 carrot, plot empty — 🌾 수확하기 · 0→3
-PASS m390: energy was spent on the loop (plant 4 · water 2 · harvest 4) and regenerates — 100.0 → 70.8 after 81 s
+PASS m390: energy was spent on the loop (plant 4 · water 2 · harvest 4) and regenerates — 100.0 → 70.8 after 82 s
 PASS m390: walk to the farm exit
 farm exit via #farmWorldAction ("🚪 마을로 돌아가기")
 PASS m390: walk to the village kitchen counter

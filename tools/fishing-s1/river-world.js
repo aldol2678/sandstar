@@ -183,6 +183,7 @@ function fishingWorldTick(dt){
   // Shared life clock: this world's own loop advances it while no fishing view or menu is open
   // (the fishing view advances it itself while active), so it never runs twice.
   livingWorldTick(Math.max(0,dt));
+  ssRiverFlowTick(Math.max(0,dt),performance.now()-fwLastEnter>2600); // let the arrival notice read first
  }
  fwHudTimer+=dt;if(fwHudTimer>.25){fwHudTimer=0;fishingWorldRefreshHud();}
  if(fwFrame%270===0&&!riverOpen){game.fishingWorldV1.position={x:fwPlayer.x,y:fwPlayer.y};saveGame(true);}
@@ -297,7 +298,10 @@ function fw3Build(){
  for(let i=0;i<22;i++){const r=fw3Box(.07,.9+((i*37)%5)/10,.07,0x3e7a46,14.15+(i%6)*.2,.35,13.4+Math.floor(i/6)*.95+((i*13)%4)/10);r.rotation.z=(((i*7)%5)-2)*.06;}
  // C: rocks + current streaks
  for(const [x,z,r,y] of [[24.2,20,.62,.2],[21.2,18.3,.45,0],[24.6,17.6,.42,0],[22.6,17.2,.35,-.05]]){const m=new T.Mesh(new T.IcosahedronGeometry(r,0),fw3Mat(0x8a8a7d));m.position.set(x,y,z);m.scale.y=.7;st.scene.add(m);}
- for(let i=0;i<7;i++){const m=fw3Box(.7,.02,.05,0xe8fbff,20.5+i*.6,-.1,17.4+(i%4)*.3);m.material.transparent=true;m.material.opacity=.7;st.flow.push(m);}
+ for(let i=0;i<12;i++){const m=fw3Box(.7,.02,.05,0xe8fbff,20.5+(i*.53)%4.5,-.1,17.2+(i%5)*.3);m.material.transparent=true;m.material.opacity=.7;st.flow.push(m);}
+ st.cGlow=fw3Plane(19.6,16.4,26.4,19,-.115,0xbff3ea,{transparent:true,opacity:.0,depthWrite:false,flatShading:false});
+ st.ripples=[];for(let i=0;i<3;i++){const m=new T.Mesh(new T.RingGeometry(.5,.58,32),new T.MeshBasicMaterial({color:0xf3fffb,transparent:true,opacity:0,depthWrite:false}));m.rotation.x=-Math.PI/2;m.position.set(19.5+i*2.2,-.09,6.6+i*1.4);st.scene.add(m);st.ripples.push(m);}
+ st.aClear=fw3Plane(14,11.5,18.5,17,-.11,0xd8fff4,{transparent:true,opacity:0,depthWrite:false,flatShading:false});
  // trees
  for(const [x,z] of [[6,4],[9,3.2],[4,18],[8,19.4],[10.5,6.5],[-2,8],[0,15],[31,6],[32,14],[18,-2],[24,-1.5],[20,22],[27,22.5]]){
   fw3Box(.3,1.3,.3,0x5a3f28,x,.65,z);const f=new T.Mesh(new T.IcosahedronGeometry(1,0),fw3Mat(0x3f7a4f));f.position.set(x,1.9,z);st.scene.add(f);
@@ -359,7 +363,11 @@ function fw3Render(){
  for(const [id,ring] of Object.entries(st.rings)){const on=id===near,k=1+(on?.12:.05)*Math.sin(t*4);ring.scale.set(k,k,k);ring.material.emissiveIntensity=on?1.1:.45;ring.material.color.set(att&&att.spot===id?0xffb48a:0xfff0b8);}
  st.camera.updateMatrixWorld();fw3PlaceLabels(near,att);
  for(const f of st.fish){const a=t*f.sp+f.ph;f.m.position.x=f.cx+Math.cos(a)*f.r;f.m.position.z=f.cz+Math.sin(a*1.3)*f.r*.6;f.m.rotation.z=-a;}
- for(const m of st.flow){m.position.x+=.03;if(m.position.x>25)m.position.x=20.5;}
+ const fstage=game?.livingP0?.river?.flow?.stage||0,fspeed=[.015,.03,.045,.045][fstage],fcount=[4,7,12,12][fstage];
+ st.flow.forEach((m,i)=>{m.visible=i<fcount;m.material.opacity=fstage?.75:.35;m.position.x+=fspeed;if(m.position.x>25)m.position.x=20.5;});
+ st.cGlow.material.opacity=fstage>=2?.22:fstage>=1?.14:0;
+ st.ripples.forEach((m,i)=>{const k=(t*.45+i/3)%1;m.visible=fstage>=2;m.scale.set(1+k*3,1+k*3,1);m.material.opacity=(1-k)*.6;});
+ st.aClear.material.opacity=fstage>=3?.2:0;st.flowStage=fstage;
  st.water.position.y=-.12+Math.sin(t*1.2)*.015;
  st.renderer.render(st.scene,st.camera);
 }
@@ -393,7 +401,7 @@ function fw3Render(){
  window.addEventListener('resize',()=>{if(fishingWorldActive){fishingWorldResize();fishingWorldDraw();}});
 })();
 window.__sandstarFishingWorld=Object.freeze({
- state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,labels:fw3?.labelState||null,
+ state:()=>({worldId:fishingWorldActive?FISH_WORLD_ID:ssRegion,active:fishingWorldActive,player:{...fwPlayer},renderer:fwRenderer,yaw:fwYaw,pitch:fwPitch,labels:fw3?.labelState||null,flow:JSON.parse(JSON.stringify(game?.livingP0?.river?.flow||null)),drawnFlowStage:fw3?.flowStage??null,
   frameMs:fwFrameMs.length?(()=>{const a=[...fwFrameMs].sort((x,y)=>x-y);return {median:+a[a.length>>1].toFixed(1),p90:+a[Math.floor(a.length*.9)].toFixed(1),n:a.length};})():null,nearSpot:fishingWorldNearSpot(),nearGate:fishingWorldNearGate(),
   action:document.getElementById('fishWorldAction')?.textContent||'',saved:JSON.parse(JSON.stringify(game?.fishingWorldV1||null)),spots:FW_SPOTS,gate:FW_GATE}),
  testMove:(x,y)=>{if(!fishingWorldActive||fishingWorldBlocked(x,y))return false;fwPlayer.x=x;fwPlayer.y=y;game.fishingWorldV1.position={x,y};fishingWorldRefreshHud();fishingWorldDraw();return true;},

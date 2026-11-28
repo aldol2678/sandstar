@@ -10,7 +10,7 @@ function ssRiverSurface(){return ssRiver.H*.2;}
 function ssRiverBottom(){return ssRiver.H*RIVER_SPOTS[ssRiver.spot].bottom;}
 function ssRiverBankX(){return ssRiver.W*.13;}
 function ssRiverSpawn(initial){
- const s=RIVER_SPOTS[ssRiver.spot],species=ssRiverPick(s.weights),[lo,hi]=RIVER_FISH_SIZE[species];
+ const s=ssRiverLive(),species=ssRiverPick(s.weights),[lo,hi]=RIVER_FISH_SIZE[species];
  const size=Math.round(lo+(hi-lo)*Math.pow(Math.random(),s.bias));
  const top=ssRiverSurface()+18,bot=ssRiverBottom()-10;
  const y=species==='carp'?ssRiverRand(bot-ssRiver.H*.12,bot):species==='perch'?ssRiverRand(top+(bot-top)*.3,top+(bot-top)*.7):ssRiverRand(top,top+(bot-top)*.55);
@@ -202,7 +202,7 @@ function ssRiverPause(reason){
 }
 function ssRiverResume(){ssRiver.paused=false;ssRiver.card=null;ssRiver.ready=.9;ssRiverSay('준비…',.9);ssRiverRender();}
 function ssRiverTickLure(dt){
- const L=ssRiver.lure,s=RIVER_SPOTS[ssRiver.spot],surf=ssRiverSurface(),bot=ssRiverBottom();
+ const L=ssRiver.lure,s=ssRiverLive(),surf=ssRiverSurface(),bot=ssRiverBottom();
  if(ssRiver.hold){ssRiver.holdT+=dt;L.x-=dt*ssRiver.W*.13;L.y=Math.max(surf+6,L.y-dt*12);}
  else{L.y=Math.min(bot-8,L.y+dt*30);L.x-=dt*ssRiver.W*s.flow*.55;}
  if(L.x<ssRiverBankX()+8){ssRiver.lure=null;ssRiver.phase='idle';ssRiverSay('찌가 발밑까지 돌아왔어요');ssRiverRender();return;}
@@ -233,7 +233,7 @@ function ssRiverTickFish(dt){
   if(f.state==='leave'){f.x+=f.dir*f.speed*2.2*dt;continue;}
   if(ssRiver.bite&&ssRiver.bite.fish===f){f.x+=(L.x-f.x)*Math.min(1,dt*6);f.y+=(L.y-f.y)*Math.min(1,dt*6);continue;}
   if(L&&f.interest>.25){
-   const dx=L.x-f.x,dy=L.y-f.y,d=Math.hypot(dx,dy)||1,sp=f.speed*(.6+f.interest*1.2);
+   const dx=L.x-f.x,dy=L.y-f.y,d=Math.hypot(dx,dy)||1,sp=f.speed*(.6+f.interest*1.2)*ssRiverLive().approach;
    f.dir=dx>=0?1:-1;f.x+=dx/d*sp*dt;f.y+=dy/d*sp*dt*.8;
   }else{
    if(!L)f.interest=Math.max(0,f.interest-dt*.2);
@@ -259,6 +259,7 @@ function ssRiverLoop(now){
   // energy, tree regrowth, food buffs, NPC cooldowns) advances here instead: active time only,
   // never while the pause/resume card is up, and never twice.
   livingWorldTick(dt);
+  if(fishingWorldActive)ssRiverFlowTick(dt,false);
   if(ssRiver.ready>0){ssRiver.ready=Math.max(0,ssRiver.ready-dt);}
   else{
    if(ssRiver.phase==='lure'&&ssRiver.lure)ssRiverTickLure(dt);
@@ -286,7 +287,7 @@ function ssRiverSyncButton(){
  const rt=ssRiverEl('riverRetrieve');if(rt)rt.disabled=ssRiver.phase!=='lure';
 }
 function ssRiverDraw(){
- const cv=ssRiverEl('riverCanvas');if(!cv)return;const c=cv.getContext('2d'),W=ssRiver.W,H=ssRiver.H,s=RIVER_SPOTS[ssRiver.spot];
+ const cv=ssRiverEl('riverCanvas');if(!cv)return;const c=cv.getContext('2d'),W=ssRiver.W,H=ssRiver.H,s=ssRiverLive();
  c.setTransform(ssRiver.dpr,0,0,ssRiver.dpr,0,0);
  const surf=ssRiverSurface(),bot=ssRiverBottom(),bank=ssRiverBankX(),t=ssRiver.t;
  const art=ssRiverAView();
@@ -300,6 +301,7 @@ function ssRiverDraw(){
  for(let i=0;i<9;i++){const yy=surf+12+i*(bot-surf-20)/9,off=((t*s.flow*W*.9+i*53)%(W+80));c.beginPath();c.moveTo(W-off,yy);c.lineTo(W-off+18+s.flow*120,yy);c.stroke();}
  c.fillStyle='#ffffff55';for(let x=0;x<W;x+=22){c.fillRect((x+t*12)%W,surf-1+Math.sin(x+t*2)*1.5,10,2);}
  }
+ ssRiverFlowOverlay(c,W,H,surf,bot,t,s);
  // blocked zones (weeds / rock)
  for(const [a,b] of s.blocks){const A=a*W,B=b*W;
   if(art){const w=Math.min(48,Math.max(19,(B-A)*.72));for(let x=A;x<B;x+=w*.72)c.drawImage(ssRiverImage('prop-reeds'),x-w*.11,bot-w*.82,w,w*.87);}
@@ -394,6 +396,7 @@ function ssRiverRender(){
  }
  card.innerHTML=html;card.hidden=!html;
  ssRiverEl('riverDex').innerHTML=ssRiverDexHtml();
+ {const fl=ssRiverEl('riverFlowLog');if(fl)fl.innerHTML=ssRiverFlowLogHtml();}
  ssRiverEl('riverAssist').checked=!!r.assist;
  ssRiverSyncButton();
 }
@@ -462,7 +465,7 @@ function ssRiverDrawWorld(){
 }
 window.__sandstarRiver=Object.freeze({
  isOpen:()=>ssRiverIsOpen,open:()=>ssRiverOpen(),close:()=>ssRiverClose(),
- state:()=>({open:ssRiverIsOpen,spot:ssRiver.spot,phase:ssRiver.phase,paused:ssRiver.paused,card:ssRiver.card,ready:ssRiver.ready,hint:ssRiverEl('riverHint')?.textContent||'',
+ state:()=>({open:ssRiverIsOpen,spot:ssRiver.spot,live:(()=>{const l=ssRiverLive();return {flow:l.flow,approach:l.approach,clear:l.clear,stage:l.stage};})(),phase:ssRiver.phase,paused:ssRiver.paused,card:ssRiver.card,ready:ssRiver.ready,hint:ssRiverEl('riverHint')?.textContent||'',
   W:ssRiver.W,H:ssRiver.H,surface:ssRiverSurface(),lure:ssRiver.lure?{x:ssRiver.lure.x,y:ssRiver.lure.y}:null,
   fish:ssRiver.fish.map(f=>({id:f.id,species:f.species,size:f.size,x:f.x,y:f.y,dir:f.dir,interest:f.interest,state:f.state})),
   fight:ssRiver.fight?{fish:ssRiver.fight.fish,progress:ssRiver.fight.progress,strain:ssRiver.fight.strain,stall:ssRiver.fight.stall,phase:RIVER_FIGHT[ssRiver.fight.fish].phases[ssRiver.fight.pi][0]}:null,
@@ -470,3 +473,40 @@ window.__sandstarRiver=Object.freeze({
   saved:JSON.parse(JSON.stringify(game?.livingP0?.river||null))}),
  spots:RIVER_SPOTS
 });
+
+// ---------- 별샘 물길 단계 (shared by the fishing ground and the fishing view) ----------
+let ssRiverFlowSaveT=0;
+function ssRiverFlowStageNow(){
+ const r=ssRiverState();if(!r)return 0;
+ return livingRiverFlowStage(r,!!game.storyM1?.springRepaired,game.fishingWorldV1?.entryCount||0);
+}
+function ssRiverLive(){return livingRiverSpotLive(ssRiver.spot,ssRiverState()?.flow?.stage||0);}
+// dt of active time only; notify=true lets the fishing ground show a first-seen notice
+function ssRiverFlowTick(dt,notify){
+ const r=ssRiverState();if(!r)return;
+ const repaired=!!game.storyM1?.springRepaired;
+ if(repaired&&dt>0)r.flow.active=Math.min(1e7,r.flow.active+dt);
+ const st=ssRiverFlowStageNow();let changed=false;
+ if(st>r.flow.stage){r.flow.stage=st;if(st===2)r.flow.stage2Entry=game.fishingWorldV1?.entryCount||0;changed=true;}
+ if(notify&&r.flow.seen<r.flow.stage){r.flow.seen=r.flow.stage;changed=true;fishingWorldToast(RIVER_FLOW_NOTES[r.flow.stage]);}
+ ssRiverFlowSaveT+=dt;
+ if(changed||ssRiverFlowSaveT>10){ssRiverFlowSaveT=0;saveGame(true);}
+}
+function ssRiverFlowLogHtml(){
+ const f=ssRiverState()?.flow;if(!f)return '';
+ const notes=f.seen>0?RIVER_FLOW_NOTES.slice(1,f.seen+1):[RIVER_FLOW_NOTES[0]];
+ return '<b>물길 관찰 기록</b><ul>'+notes.map(n=>`<li>${n}</li>`).join('')+'</ul>';
+}
+function ssRiverFlowOverlay(c,W,H,surf,bot,t,s){
+ const st=s.stage||0;
+ if(ssRiver.spot==='C'&&st>=1){ // livelier, lighter current where the spring water arrives
+  c.save();c.globalAlpha=st>=2?.22:.15;c.fillStyle='#bff3ea';c.fillRect(0,surf,W,(bot-surf)*.45);c.restore();
+  c.strokeStyle='#ffffff66';c.lineWidth=1.5;for(let i=0;i<5;i++){const yy=surf+8+i*10,off=((t*W*.35+i*67)%(W+60));c.beginPath();c.moveTo(W-off,yy);c.lineTo(W-off+34,yy);c.stroke();}
+ }
+ if(ssRiver.spot==='B'&&st>=2){ // ripple traces on the surface
+  c.strokeStyle='#f3fffb88';c.lineWidth=1.5;for(let i=0;i<3;i++){const k=((t*.5+i/3)%1),x=W*(.35+i*.22),r=8+k*36;c.globalAlpha=1-k;c.beginPath();c.ellipse(x,surf+3,r,r*.28,0,0,Math.PI*2);c.stroke();}c.globalAlpha=1;
+ }
+ if(ssRiver.spot==='A'&&s.clear){ // clearer water: lift the gloom a little
+  c.save();c.globalAlpha=.16;const g=c.createLinearGradient(0,surf,0,bot);g.addColorStop(0,'#d8fff4');g.addColorStop(1,'#9fe0d0');c.fillStyle=g;c.fillRect(0,surf,W,bot-surf);c.restore();
+ }
+}

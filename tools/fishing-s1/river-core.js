@@ -27,10 +27,43 @@ const RIVER_HINTS=Object.freeze({
  carp:'큰 그림자는 당기지 말고 바닥 가까이 조용히 흘려 두세요.'
 });
 const RIVER_BITE_WINDOW=2.6;
-function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false,keep:{river_fish:0,perch:0,carp:0}};}
+function livingRiverFresh(){return {schema:1,best:{river_fish:0,perch:0,carp:0},spots:{A:0,B:0,C:0},attempt:null,done:[],assist:false,keep:{river_fish:0,perch:0,carp:0},flow:livingRiverFlowFresh()};}
 // 남길 수량 (v0.4 4절): fish the player keeps back. Selling, cooking and the fisher's delivery only
 // use the fish above this count, so a kept fish is never consumed behind a "kept" label.
 const RIVER_KEEP_MAX=99;
+// 별샘 물길 (v0.4 4절 '별샘과 돌아올 이유'). Stage 0 until the 잔빛숲 spring is repaired; then
+// 1: only the connected stretch (C 물살) changes, 2: after 180s of active fishing-ground time ripples
+// reach B, 3: after 480s and a later visit (re-entry) A clears. Only active time counts (walking in the
+// fishing ground or an unpaused fishing view); being away or closing the app neither adds nor costs.
+// No new species: the same three fish shift a little in mix and approach.
+const RIVER_FLOW_STAGE2_SEC=180,RIVER_FLOW_STAGE3_SEC=480;
+function livingRiverFlowFresh(){return {active:0,stage:0,stage2Entry:0,seen:0};}
+function livingRiverFlowNormalize(raw){
+ const f=livingRiverFlowFresh();if(!raw||typeof raw!=='object'||Array.isArray(raw))return f;
+ f.active=Number.isFinite(raw.active)&&raw.active>=0?Math.min(raw.active,1e7):0;
+ for(const k of ['stage','seen'])f[k]=Math.min(3,livingInt(raw[k]));
+ f.stage2Entry=livingInt(raw.stage2Entry);if(f.seen>f.stage)f.seen=f.stage;return f;
+}
+function livingRiverFlowStage(river,repaired,entryCount){
+ if(!repaired)return 0;
+ const f=river.flow;let st=Math.max(1,f.stage);
+ if(st<2&&f.active>=RIVER_FLOW_STAGE2_SEC)st=2;
+ if(st===2&&f.active>=RIVER_FLOW_STAGE3_SEC&&entryCount>f.stage2Entry)st=3;
+ return st;
+}
+function livingRiverSpotLive(id,stage){
+ const s=RIVER_SPOTS[id],w={...s.weights};let flow=s.flow,approach=1,clear=0;
+ if(id==='C'){flow=stage>=2?.2:stage>=1?.18:.13;if(stage>=1){w.perch+=8;w.river_fish=Math.max(10,w.river_fish-4);}}
+ if(id==='B'&&stage>=2)approach=1.15;
+ if(id==='A'&&stage>=3){w.carp+=6;clear=1;}
+ return {...s,flow,weights:w,approach,clear,stage};
+}
+const RIVER_FLOW_NOTES=Object.freeze([
+ 'C 물살이 약해요. 잔빛숲 별샘과 이어져 있는 것 같아요.',
+ '별샘 물길이 C 물살까지 닿았어요. 물살이 조금 세졌어요.',
+ 'B 깊은 소에 잔물결 흔적이 번져요. 큰 그림자가 더 잘 다가와요.',
+ '다시 와 보니 A 강가 물이 한결 맑아졌어요.'
+]);
 function livingFishKeep(state,id){return Math.min(RIVER_KEEP_MAX,livingInt(state?.river?.keep?.[id]));}
 function livingFishFree(state,id){return Math.max(0,livingInt(state?.bag?.[id])-livingFishKeep(state,id));}
 function livingFreeBag(state){const b={...state.bag};for(const id of LIVING_FISH_ORDER)b[id]=livingFishFree(state,id);return b;}
@@ -46,6 +79,7 @@ function livingRiverNormalize(raw){
  if(Array.isArray(raw.done))r.done=raw.done.filter(id=>typeof id==='string'&&/^[\w-]{4,64}$/.test(id)).slice(-32);
  if(r.attempt&&r.done.includes(r.attempt.id))r.attempt=null;
  r.assist=raw.assist===true;
+ r.flow=livingRiverFlowNormalize(raw.flow);
  if(raw.keep&&typeof raw.keep==='object')for(const id of Object.keys(r.keep))r.keep[id]=Math.min(RIVER_KEEP_MAX,livingInt(raw.keep[id]));
  return r;
 }

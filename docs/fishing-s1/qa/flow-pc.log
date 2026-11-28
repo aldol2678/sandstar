@@ -1,0 +1,16 @@
+PASS pc: spring not repaired → stage 0, no active time — {"active":0,"stage":0,"stage2Entry":0,"seen":0}
+PASS pc: C before repair: weaker current (flow 0.13) — {"flow":0.13,"approach":1,"clear":0,"stage":0}
+PASS pc: observation log shows the pre-repair note
+PASS pc: repaired → stage 1 and the first-seen notice once — {"flow":{"active":7.471700000000068,"stage":1,"stage2Entry":0,"seen":1},"toast1":"별샘 물길이 C 물살까지 닿았어요. 물살이 조금 세졌어요."}
+PASS pc: active time grows in the fishing ground (~3s per 3s) — +3.03
+PASS pc: C after repair: livelier current (flow 0.18) and more perch in the mix — {"flow":0.18,"approach":1,"clear":0,"stage":1}
+PASS pc: active time grows while fishing (~3s per 3s) — +3.00
+PASS pc: no active time while the pause card is up — 14.79 → 14.79
+PASS pc: while closed nothing accrues; stored time is the last save (≤10s behind) — live 16.2 · stored 16.4 → 16.4 after 4s closed
+PASS pc: 180s active → stage 2 (B ripples), stage2Entry = this visit, one notice — {"flow":{"active":186.32829999999993,"stage":2,"stage2Entry":5,"seen":2},"toast2":"B 깊은 소에 잔물결 흔적이 번져요. 큰 그림자가 더 잘 다가와요."}
+PASS pc: B at stage 2: shadows approach 15% faster — {"flow":0.02,"approach":1.15,"clear":0,"stage":2}
+PASS pc: 480s but the same visit → still stage 2 — {"active":506.8147000000002,"stage":2,"stage2Entry":5,"seen":2}
+PASS pc: a later visit → stage 3 (A clearer), one notice — {"flow":{"active":511.62410000000017,"stage":3,"stage2Entry":5,"seen":3},"entry":6,"toast3":"다시 와 보니 A 강가 물이 한결 맑아졌어요."}
+PASS pc: A at stage 3: clear water flag; log lists stages 1–3 — {"live":{"flow":0.05,"approach":1,"clear":1,"stage":3},"log3":"물길 관찰 기록별샘 물길이 C 물살까지 닿았어요. 물살이 조금 세졌어요.B 깊은 소에 잔물결 흔적이 번져요. 큰 그림자가 더 잘 다가와요.다시 와 보니 A 강가 물이 한결 맑아졌어요."}
+PASS pc: no page errors
+15 pass, 0 fail
